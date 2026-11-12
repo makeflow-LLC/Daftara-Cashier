@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- أيقونة دفترة كاشير (متجهة: لا صور PNG، حجم أصغر). سطران من الدفتر وباركود. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M41,27h26a14,14 0,0 1,14 14v26a14,14 0,0 1,-14 14h-26a14,14 0,0 1,-14 -14v-26a14,14 0,0 1,14 -14z"/>
+    <path android:fillColor="#D7D3D3"
+        android:pathData="M40,38h28a3,3 0,0 1,0 6h-28a3,3 0,0 1,0 -6z"/>
+    <path android:fillColor="#2A996C"
+        android:pathData="M40,49h17a3,3 0,0 1,0 6h-17a3,3 0,0 1,0 -6z"/>
+    <path android:strokeColor="#0E7A51" android:strokeWidth="2.6" android:strokeLineCap="round"
+        android:pathData="M38.5,61v9M43,61v9M46.5,61v9M51.5,61v9M55,61v9M60,61v9M63.5,61v9M68.5,61v9"/>
+</vector>

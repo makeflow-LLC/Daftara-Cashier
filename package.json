@@ -1,0 +1,28 @@
+{
+  "name": "daftara-cashier",
+  "private": true,
+  "type": "module",
+  "description": "دفترة كاشير — نقطة بيع ومخزون وفواتير للمحلات الصغيرة، تعمل بلا إنترنت. من MakeFlow.",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "www": "node scripts/build-www.mjs www",
+    "serve": "npm run www && node scripts/serve.mjs www 8080",
+    "sync": "npm run www && cap sync android",
+    "apk": "npm run sync && cd android && ./gradlew assembleDirectRelease",
+    "aab": "npm run sync && cd android && ./gradlew bundlePlayRelease"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.6.2",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.6.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.6.2",
+    "dexie": "4.4.7",
+    "fake-indexeddb": "6.2.8"
+  },
+  "version": "0.1.0"
+}

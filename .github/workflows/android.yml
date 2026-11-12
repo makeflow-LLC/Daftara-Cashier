@@ -1,0 +1,164 @@
+# يختبر ويبني دفترة كاشير مع كل دفعة (push):
+#   1) اختبارات منطق الأعمال والمزامنة (node --test) واختبارات مخطط Supabase على Postgres حقيقي
+#   2) بناء APK (direct و play) و AAB، وتقرير الحجم في ملخص التشغيل
+#   3) تشغيل الـ APK على محاكي أندرويد (الإعداد الأول، الرئيسية، شاشة البيع، بقاء البيانات)
+#   4) نسخة تجريبية للتثبيت على الجوال: Releases → preview (رابط ثابت، تُستبدل مع كل بناء ناجح)
+#
+# أسرار المستودع (Settings → Secrets and variables → Actions):
+#   SUPABASE_URL, SUPABASE_ANON_KEY        للمزامنة (بدونهما يعمل التطبيق على الجهاز فقط)
+#   ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+#                                          مفتاح التوقيع الرسمي (بدونه: مفتاح التجربة preview.keystore)
+name: Android
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Unit tests (domain, store, sync)
+        run: npm test
+      - name: Supabase schema tests (RLS, last-write-wins, append-only)
+        run: bash supabase/tests/run.sh
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - name: Web assets + Capacitor sync
+        run: npm run sync
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      - name: Signing key from secrets
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        if: env.KEYSTORE_B64 != ''
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          {
+            echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks"
+            echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+            echo "KEY_ALIAS=$KEY_ALIAS"
+            echo "KEY_PASSWORD=$KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+      - name: Build APK (direct, play) and AAB (play)
+        working-directory: android
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+        run: ./gradlew assembleDirectRelease assemblePlayRelease bundlePlayRelease --no-daemon --stacktrace
+      - run: |
+          cp android/app/build/outputs/apk/direct/release/app-direct-release.apk daftara-cashier.apk
+          cp android/app/build/outputs/apk/play/release/app-play-release.apk daftara-cashier-play.apk
+          cp android/app/build/outputs/bundle/playRelease/app-play-release.aab daftara-cashier.aab
+      - name: App size report
+        run: |
+          kb() { echo $(( ($(stat -c %s "$1") + 1023) / 1024 )); }
+          {
+            echo "## حجم التطبيق — بناء ${{ github.run_number }}"
+            echo ""
+            echo "| الملف | الحجم |"
+            echo "| --- | --- |"
+            echo "| daftara-cashier.apk (direct) | $(kb daftara-cashier.apk) KB |"
+            echo "| daftara-cashier-play.apk | $(kb daftara-cashier-play.apk) KB |"
+            echo "| daftara-cashier.aab | $(kb daftara-cashier.aab) KB |"
+            echo ""
+            echo "### داخل الـ APK (مضغوط)"
+            echo '```'
+            unzip -v daftara-cashier.apk | awk 'NR>3 && $1 ~ /^[0-9]+$/ {split($8,p,"/"); k=p[1]; if (k ~ /^classes/) k="dex"; c[k]+=$3} END {for (k in c) printf "%-28s %6d KB\n", k, c[k]/1024}' | sort -k2 -n -r
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "APK_SIZE_KB=$(kb daftara-cashier.apk)"
+      - name: Permissions of the APK
+        run: |
+          AAPT2="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)aapt2"
+          "$AAPT2" dump permissions daftara-cashier.apk
+          "$AAPT2" dump badging daftara-cashier.apk | grep -E "^(package|sdkVersion|targetSdkVersion|application-label)"
+      - uses: actions/upload-artifact@v4
+        with:
+          retention-days: 7
+          name: daftara-cashier-apk
+          path: |
+            daftara-cashier.apk
+            daftara-cashier-play.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          retention-days: 7
+          name: daftara-cashier-aab
+          path: daftara-cashier.aab
+
+  smoke-test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: daftara-cashier-apk
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          profile: pixel_5
+          disable-animations: true
+          script: bash scripts/emulator-smoke.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          retention-days: 7
+          name: emulator-screenshot
+          path: screenshot.png
+
+  # نسخة تجريبية للجوال: رابط ثابت لآخر بناء ناجح
+  #   https://github.com/<repo>/releases/download/preview/daftara-cashier.apk
+  preview:
+    needs: [build, smoke-test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: daftara-cashier-apk
+      - name: Publish the preview APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release delete preview --cleanup-tag --yes || true
+          gh release create preview daftara-cashier.apk \
+            --target "${{ github.sha }}" --prerelease \
+            --title "دفترة كاشير — نسخة تجريبية ${{ github.run_number }}" \
+            --notes "نسخة تجريبية للاختبار (بناء ${{ github.run_number }}، فرع ${{ github.ref_name }}). حمّل daftara-cashier.apk على الجوال وثبّته؛ كل نسخة تجريبية جديدة تُثبَّت فوق السابقة دون حذف البيانات."

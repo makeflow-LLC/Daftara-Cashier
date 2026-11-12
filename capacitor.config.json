@@ -1,0 +1,8 @@
+{
+  "appId": "com.makeflow.daftara.cashier",
+  "appName": "دفترة كاشير",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#0e7a51"
+  }
+}

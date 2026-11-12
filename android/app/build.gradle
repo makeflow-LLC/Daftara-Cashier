@@ -1,0 +1,89 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace = "com.makeflow.daftara.cashier"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "com.makeflow.daftara.cashier"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        // في GitHub Actions يأخذ رقم البناء، فكل APK جديد يُثبَّت كتحديث فوق السابق
+        versionCode((System.getenv("VERSION_CODE") ?: "1") as Integer)
+        versionName "0.1." + (System.getenv("VERSION_CODE") ?: "0")
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    // توقيع ثابت لكل نسخة (نفس المفتاح دائمًا، وإلا رفض أندرويد التحديث فوق القديم).
+    // المفتاح لا يوجد في المستودع: GitHub Actions يأخذه من أسرار المستودع (KEYSTORE_FILE وأخواته).
+    // بدونه تُوقَّع النسخ التجريبية بمفتاح preview.keystore الموجود هنا: ثابت بين البناءات فتُثبَّت
+    // كل نسخة تجريبية فوق السابقة دون حذف البيانات. هذا المفتاح للتجربة فقط، لا للتوزيع أبدًا.
+    def releaseKey = System.getenv("KEYSTORE_FILE")
+    signingConfigs {
+        release {
+            if (releaseKey) {
+                storeFile file(releaseKey)
+                storePassword System.getenv("KEYSTORE_PASSWORD")
+                keyAlias System.getenv("KEY_ALIAS")
+                keyPassword System.getenv("KEY_PASSWORD")
+            } else {
+                storeFile file("preview.keystore")
+                storePassword "daftara-preview"
+                keyAlias "preview"
+                keyPassword "daftara-preview"
+            }
+        }
+    }
+    // نسختان من نفس الكود، الفرق في وحدة الدفع/التفعيل فقط (المرحلة 9):
+    //  direct — APK من makeflow.tech، التفعيل يدويًا من MakeFlow (cashier_licenses على Supabase)
+    //  play   — Google Play، الاشتراك عبر Google Play Billing
+    flavorDimensions = ["dist"]
+    productFlavors {
+        direct { dimension "dist" }
+        play { dimension "dist" }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            // R8 يضغط الكود ويحذف الموارد غير المستعملة: تطبيق أصغر على الجوالات الرخيصة
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    buildFeatures {
+        buildConfig true
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

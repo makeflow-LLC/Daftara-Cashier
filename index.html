@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>دفترة كاشير</title>
+<meta name="theme-color" content="#0e7a51">
+<meta name="description" content="نقطة بيع ومخزون وفواتير للمحلات الصغيرة — تعمل بلا إنترنت.">
+<script>
+  // المظهر قبل أول رسم حتى لا تومض الشاشة بيضاء في الوضع الليلي
+  try { var p = JSON.parse(localStorage.getItem('cashier-prefs') || '{}'); if (p.theme === 'light' || p.theme === 'dark') document.documentElement.dataset.theme = p.theme; } catch (e) {}
+</script>
+<script>
+  // WebView قديم جدًا (أقدم من Chrome 80) لا يشغّل التطبيق: رسالة واضحة بدل شاشة بيضاء
+  window.__oldWebView = (function () { try { new Function('var a = {}; return a?.b ?? 1'); return !('noModule' in document.createElement('script')); } catch (e) { return true; } })();
+</script>
+<link rel="stylesheet" href="styles/app.css">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<!-- شاشة البيع تُحمَّل مع التطبيق فتفتح فورًا -->
+<link rel="modulepreload" href="src/features/sale/sale.js">
+<script src="vendor/dexie.min.js"></script>
+<script src="config.js"></script>
+<script type="module" src="src/main.js"></script>
+</head>
+<body class="has-tabbar">
+<div id="splash" class="splash" aria-hidden="true">
+  <svg viewBox="0 0 120 120" width="88" height="88"><rect x="10" y="10" width="100" height="100" rx="28" fill="#fff"/><rect x="30" y="34" width="60" height="10" rx="5" fill="#d7d3d3"/><rect x="30" y="54" width="44" height="10" rx="5" fill="#2a996c"/><path d="M32 74v16M41 74v16M47 74v16M57 74v16M64 74v16M73 74v16M80 74v16M88 74v16" stroke="#0e7a51" stroke-width="4.5" stroke-linecap="round"/></svg>
+  <div class="splash-name">دفترة كاشير</div>
+  <div class="splash-by">أحد منتجات <b>MakeFlow</b></div>
+</div>
+<main id="view" class="view"></main>
+<script>
+  if (window.__oldWebView) {
+    document.getElementById('splash').style.display = 'none';
+    document.getElementById('view').innerHTML = '<div class="fatal"><h1>حدّث «Android System WebView»</h1><p>افتح متجر Google Play، ابحث عن Android System WebView واضغط تحديث، ثم افتح دفترة كاشير من جديد.</p></div>';
+  }
+</script>
+<div id="chrome"></div>
+</body>
+</html>

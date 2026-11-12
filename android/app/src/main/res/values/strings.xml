@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">دفترة كاشير</string>
+    <string name="title_activity_main">دفترة كاشير</string>
+    <string name="package_name">com.makeflow.daftara.cashier</string>
+    <string name="custom_url_scheme">com.makeflow.daftara.cashier</string>
+</resources>

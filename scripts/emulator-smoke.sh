@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# اختبار دخان على محاكي أندرويد (من .github/workflows/android.yml):
+# يثبّت الـ APK، يقيس زمن الفتح، يمر بالإعداد الأول، ويفتح شاشة البيع من الزر العائم.
+set -euo pipefail
+PKG=com.makeflow.daftara.cashier
+on_exit() {
+  adb exec-out screencap -p > screenshot.png || true
+  echo "--- on screen:"; grep -o 'text="[^"]*"' ui.xml 2>/dev/null | sort -u | head -40 || true
+  echo "--- logcat:"; adb logcat -d | grep -iE "Capacitor|chromium|FATAL|AndroidRuntime" | tail -n 60 || true
+}
+trap on_exit EXIT
+
+dump() {
+  adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || true
+  adb shell cat /sdcard/ui.xml > ui.xml 2>/dev/null || true
+}
+
+# يضغط على أول عنصر نصّه (أو وصفه) يحتوي $1، كما يراه UiAutomator داخل الـ WebView
+tap() {
+  for _ in $(seq 1 15); do
+    dump
+    xy=$(python3 - "$1" <<'PY'
+import re, sys
+xml = open('ui.xml', encoding='utf-8', errors='ignore').read()
+want = sys.argv[1]
+exact, partial = [], []
+for node in re.findall(r'<node [^>]*>', xml):
+    t = re.search(r' text="([^"]*)"', node); d = re.search(r'content-desc="([^"]*)"', node)
+    labels = ((t.group(1) if t else ''), (d.group(1) if d else ''))
+    b = re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', node)
+    if not b: continue
+    x1, y1, x2, y2 = map(int, b.groups())
+    if x2 <= x1 or y2 <= y1: continue
+    hit = ((x1 + x2) // 2, (y1 + y2) // 2)
+    if want in labels: exact.append(hit)
+    elif any(want in l for l in labels): partial.append(hit)
+for x, y in exact[:1] or partial[:1]:
+    print(x, y)
+PY
+)
+    if [ -n "$xy" ]; then echo "tap '$1' at $xy"; adb shell input tap $xy; return 0; fi
+    sleep 2
+  done
+  echo "::error::'$1' not found on screen"; return 1
+}
+
+expect() {
+  for _ in $(seq 1 10); do dump; grep -q "$1" ui.xml && { echo "OK: $1"; return 0; }; sleep 2; done
+  echo "::error::'$1' not on screen"; return 1
+}
+
+hide_kb() {
+  sleep 1
+  if adb shell dumpsys input_method | grep -q 'mInputShown=true'; then adb shell input keyevent 4; sleep 1; fi
+}
+
+adb install -r daftara-cashier.apk
+echo "--- cold start:"
+adb shell am start -W -n $PKG/.MainActivity | tee start.txt
+echo "COLD_START_MS=$(grep -o 'TotalTime: [0-9]*' start.txt | grep -o '[0-9]*')"
+sleep 6
+
+# 1) الإعداد الأول: اسم المحل ثم النوع
+expect 'أهلًا بك في دفترة كاشير'
+tap 'اسم المحل' || true
+adb shell input text 'Shop1'
+hide_kb
+tap 'التالي'
+expect 'ما نوع محلك'
+tap 'بقالة'
+
+# 2) الرئيسية
+expect 'مبيعات اليوم'
+expect 'Shop1'
+
+# 3) شاشة البيع من الزر العائم
+tap 'بيع جديد'
+expect 'السلة فارغة'
+adb shell input keyevent 4
+expect 'مبيعات اليوم'
+
+# 4) البيانات باقية بعد إغلاق التطبيق وفتحه
+adb shell am force-stop $PKG
+adb shell am start -W -n $PKG/.MainActivity | tee start2.txt
+echo "WARM_START_MS=$(grep -o 'TotalTime: [0-9]*' start2.txt | grep -o '[0-9]*')"
+sleep 4
+expect 'Shop1'
+echo "smoke test passed"
