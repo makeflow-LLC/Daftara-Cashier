@@ -265,7 +265,7 @@ body.has-tabbar .view{padding-bottom:calc(var(--tabbar-h) + 36px + var(--sab))}
   position:fixed;z-index:60;left:var(--space-3);right:var(--space-3);
   bottom:calc(var(--sab) + var(--tabbar-h) + 26px);
   display:flex;align-items:center;gap:var(--space-2);
-  min-height:52px;padding:8px 8px 8px 16px;padding-inline-start:16px;
+  min-height:52px;padding:8px 16px 8px 8px;
   border-radius:var(--radius-md);background:#262624;color:#fff;box-shadow:var(--shadow-lg);
   transform:translateY(20px);opacity:0;pointer-events:none;transition:transform .2s ease,opacity .2s ease;
 }
@@ -277,8 +277,8 @@ body.has-tabbar .view{padding-bottom:calc(var(--tabbar-h) + 36px + var(--sab))}
 .toast-undo:active{background:rgba(255,255,255,.12)}
 body:not(.has-tabbar) .toast{bottom:calc(var(--sab) + 90px)}
 
-.sheet-wrap{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-end;justify-content:center}
-.sheet-backdrop{position:absolute;inset:0;background:rgba(45,43,43,.42);opacity:0;transition:opacity .18s ease}
+.sheet-wrap{position:fixed;top:0;right:0;bottom:0;left:0;z-index:50;display:flex;align-items:flex-end;justify-content:center}
+.sheet-backdrop{position:absolute;top:0;right:0;bottom:0;left:0;background:rgba(45,43,43,.42);opacity:0;transition:opacity .18s ease}
 .sheet{
   position:relative;width:100%;max-width:560px;max-height:88vh;overflow-y:auto;
   padding:var(--space-2) var(--space-4) calc(var(--space-4) + var(--sab));
@@ -326,7 +326,7 @@ body:not(.has-tabbar) .toast{bottom:calc(var(--sab) + 90px)}
 }
 .search-row:focus-within{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-100)}
 .search-row .ic{color:var(--color-muted)}
-.search-row .input{border:0;box-shadow:none;padding-inline:0;background:transparent}
+.search-row .input{border:0;box-shadow:none;padding-left:0;padding-right:0;background:transparent}
 .cart{flex:1}
 .paybar{
   position:sticky;bottom:0;display:flex;align-items:center;gap:var(--space-3);
@@ -339,7 +339,7 @@ body:not(.has-tabbar) .toast{bottom:calc(var(--sab) + 90px)}
 
 /* ---------------- 14. متفرقات ---------------- */
 .splash{
-  position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-3);
+  position:fixed;top:0;right:0;bottom:0;left:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-3);
   background:var(--grad-brand);color:#fff;transition:opacity .25s ease;
 }
 .splash.gone{opacity:0;pointer-events:none}

@@ -30,6 +30,13 @@ function append(el, children) {
   }
 }
 
+/** يستبدل محتوى العنصر (بديل replaceChildren غير الموجود في WebView أقدم من Chrome 86). */
+export function fill(el, ...children) {
+  clear(el);
+  append(el, children);
+  return el;
+}
+
 export function clear(el) {
   while (el.firstChild) el.removeChild(el.firstChild);
   return el;

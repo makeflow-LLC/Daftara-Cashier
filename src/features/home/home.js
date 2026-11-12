@@ -1,5 +1,5 @@
 // الرئيسية: مبيعات اليوم وربحه، عدد الفواتير، النقد في الدرج، وأهم التنبيهات.
-import { h, num } from '../../ui/dom.js';
+import { h, num, fill } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { header, money, stat, section, row, syncBadge, emptyState } from '../../ui/components.js';
 import { app } from '../../core/app.js';
@@ -31,7 +31,7 @@ export function renderHome(el) {
   async function paint() {
     const s = await todaySummary(app.db);
     const showProfit = app.can('see_profit');
-    kpis.replaceChildren(
+    fill(kpis, 
       h('div', { class: 'hero-card' },
         logo(40),
         h('div', { class: 'hero-label' }, 'مبيعات اليوم'),
@@ -52,7 +52,7 @@ export function renderHome(el) {
       ...a.low.slice(0, 3).map((p) => row({ icon: 'box', title: p.name, sub: 'المخزون منخفض', tone: 'warn' })),
       ...a.expiring.slice(0, 3).map((p) => row({ icon: 'alert', title: p.name, sub: `ينتهي ${p.expiry_date}`, tone: 'warn' })),
     ];
-    alerts.replaceChildren(items.length
+    fill(alerts, items.length
       ? h('div', { class: 'list' }, ...items)
       : emptyState('check', 'لا تنبيهات الآن', 'ننبهك هنا حين ينخفض مخزون صنف أو يقترب انتهاؤه.'));
   }

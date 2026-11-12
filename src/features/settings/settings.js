@@ -1,5 +1,5 @@
 // الإعدادات: بيانات المحل، الميزات، العملات، طرق الدفع، المزامنة، المظهر.
-import { h, num } from '../../ui/dom.js';
+import { h, num, fill } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { header, section, row, switchRow, field, input, button, card } from '../../ui/components.js';
 import { toast, openSheet } from '../../ui/overlay.js';
@@ -66,7 +66,7 @@ export function renderShopProfile(el) {
 export function renderFeatures(el) {
   const list = h('div', { class: 'list' });
   function paint() {
-    list.replaceChildren(...Object.entries(FEATURES).map(([key, def]) =>
+    fill(list, ...Object.entries(FEATURES).map(([key, def]) =>
       switchRow({
         title: def.name, sub: def.hint, checked: app.features[key],
         onchange: (on) => setFeature(key, on),
@@ -93,7 +93,7 @@ export function renderFeatures(el) {
             await app.store.patch('shops', app.shop.id, { shop_type: k });
             await app.loadShop();
             toast(`نوع المحل: ${t.name}`);
-            el.replaceChildren(); renderFeatures(el);
+            fill(el); renderFeatures(el);
           },
         }, icon(t.icon, 18), t.name)))),
     ),
@@ -138,7 +138,7 @@ export function renderPayments(el) {
   const kinds = { cash: 'نقدًا', transfer: 'تحويل / محفظة', credit: 'آجل (دين على الزبون)' };
   async function paint() {
     const methods = (await app.db.payment_methods.orderBy('sort').toArray()).filter((m) => !m.deleted);
-    list.replaceChildren(...methods.map((m) => row({
+    fill(list, ...methods.map((m) => row({
       icon: m.kind === 'cash' ? 'cash' : m.kind === 'credit' ? 'user' : 'wallet',
       title: m.name,
       sub: `${kinds[m.kind]}${m.fee_bp ? ` — رسوم ${formatDecimal(m.fee_bp, 2, { trim: true })}%` : ''}${m.active ? '' : ' — موقوفة'}`,
@@ -154,7 +154,7 @@ export function renderPayments(el) {
     let kind = m.kind;
     let active = m.active;
     const kindChips = h('div', { class: 'chips' });
-    const paintKinds = () => kindChips.replaceChildren(...Object.entries(kinds).map(([k, label]) =>
+    const paintKinds = () => fill(kindChips, ...Object.entries(kinds).map(([k, label]) =>
       h('button', { class: `chip ${kind === k ? 'on' : ''}`, type: 'button', onclick: () => { kind = k; paintKinds(); } }, label)));
     paintKinds();
     const sheet = openSheet((close) => h('form', {
@@ -199,7 +199,7 @@ export function renderSync(el) {
   };
   function paint(s) {
     const [ic, title, sub] = states[s.state] || states.idle;
-    box.replaceChildren(card(
+    fill(box, card(
       h('div', { class: `sync-card sync-${s.state}` }, icon(ic, 32), h('div', null, h('strong', null, title), sub ? h('p', { class: 'muted' }, sub) : null)),
       h('div', { class: 'list' },
         row({ title: 'بانتظار الرفع', end: num(String(s.pending || 0)) }),
@@ -224,7 +224,7 @@ export function renderAppearance(el) {
   const prefs = readPrefs();
   const themes = { auto: 'تلقائي (حسب الجوال)', light: 'فاتح', dark: 'ليلي' };
   const chips = h('div', { class: 'chips' });
-  const paintChips = () => chips.replaceChildren(...Object.entries(themes).map(([k, label]) =>
+  const paintChips = () => fill(chips, ...Object.entries(themes).map(([k, label]) =>
     h('button', { class: `chip ${prefs.theme === k ? 'on' : ''}`, type: 'button', onclick: () => { prefs.theme = k; savePrefs(prefs); applyTheme(k); paintChips(); } }, label)));
   paintChips();
   el.append(

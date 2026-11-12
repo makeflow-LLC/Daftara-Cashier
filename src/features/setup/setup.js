@@ -1,5 +1,5 @@
 // الإعداد الأول: اسم المحل ثم نوعه (ضغطة واحدة تنشئ كل شيء). يعمل بلا إنترنت.
-import { h } from '../../ui/dom.js';
+import { h, fill } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { field, input, button } from '../../ui/components.js';
 import { toast } from '../../ui/overlay.js';
@@ -29,7 +29,7 @@ export function renderSetup(el) {
       }
       stepType();
     }
-    el.replaceChildren(h('div', { class: 'setup' },
+    fill(el, h('div', { class: 'setup' },
       hero('أهلًا بك في دفترة كاشير', 'بيع، مخزون، فواتير وأرباح — يعمل بلا إنترنت.'),
       h('form', { class: 'setup-body', onsubmit: next },
         field('اسم المحل', nameIn),
@@ -58,7 +58,7 @@ export function renderSetup(el) {
         toast('لم يُحفظ المحل، حاول مرة أخرى', { kind: 'error' });
       }
     }
-    el.replaceChildren(h('div', { class: 'setup' },
+    fill(el, h('div', { class: 'setup' },
       hero('ما نوع محلك؟', 'نُظهر لك ما يناسبه فقط، وتغيّره متى شئت من الإعدادات.'),
       h('div', { class: 'setup-body' },
         h('div', { class: 'type-grid' },

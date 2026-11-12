@@ -1,5 +1,5 @@
 // مكوّنات نظام التصميم المشتركة. كل شاشة تُبنى منها، فيبقى الشكل واحدًا في كل الوحدات.
-import { h, num } from './dom.js';
+import { h, num, fill } from './dom.js';
 import { icon } from './icons.js';
 import { bus } from '../core/bus.js';
 import { app } from '../core/app.js';
@@ -95,7 +95,7 @@ export function syncBadge() {
     let [ic, text, tone] = map[s.state] || map.idle;
     if (s.state === 'synced' && s.pending) { ic = 'cloudUp'; text = `${s.pending} للرفع`; tone = 'muted'; }
     el.className = `sync-badge sync-${tone}`;
-    el.replaceChildren(icon(ic, 16), h('span', null, text));
+    fill(el, icon(ic, 16), h('span', null, text));
   }
   paint(app.sync?.status || { state: 'idle', pending: 0 });
   // يلغي الاشتراك وحده حين تُغلق الشاشة التي تحمله
