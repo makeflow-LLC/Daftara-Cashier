@@ -102,7 +102,7 @@ jobs:
         run: |
           AAPT2="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)aapt2"
           "$AAPT2" dump permissions daftara-cashier.apk
-          "$AAPT2" dump badging daftara-cashier.apk | grep -E "^(package|sdkVersion|targetSdkVersion|application-label)"
+          "$AAPT2" dump badging daftara-cashier.apk | grep -E "^(package|sdkVersion|targetSdkVersion|application-label:)"
       - uses: actions/upload-artifact@v4
         with:
           retention-days: 7
