@@ -262,6 +262,7 @@ create table if not exists public.cashier_invoice_lines (  -- إضافة فقط
   discount bigint not null default 0,
   total bigint not null,
   unit_cost bigint not null default 0,
+  position smallint not null default 0,            -- ترتيب السطر كما في السلة
   created_at timestamptz not null default now(), server_seq bigint, server_at timestamptz
 );
 create index if not exists cashier_invoice_lines_invoice on public.cashier_invoice_lines (shop_id, invoice_id);

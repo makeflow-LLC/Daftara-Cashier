@@ -13,6 +13,8 @@ import { startScheduler } from '../sync/scheduler.js';
 import { createMediaSync } from '../sync/media.js';
 import { createMedia } from './media.js';
 import { createProductRepo } from '../features/products/repo.js';
+import { createSaleRepo } from '../features/sale/repo.js';
+import { createCustomerRepo } from '../features/customers/repo.js';
 
 const clock = makeClock();
 
@@ -74,6 +76,8 @@ export const app = {
     const deps = { db: app.db, store: app.store, getContext: () => app.ctx };
     app.products = createProductRepo(deps);
     app.media = createMedia(deps);
+    app.sales = createSaleRepo({ ...deps, clock });
+    app.customers = createCustomerRepo(deps);
     if (app.ctx.shopId) await app.loadShop();
     app.startSync();
     bus.on('data', async (e) => {

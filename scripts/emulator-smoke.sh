@@ -126,7 +126,30 @@ dump; grep -q 'Milk' ui.xml && echo "OK: product listed" || { echo "::error::pro
 adb shell input keyevent 4
 sleep 2
 
-# 5) البيانات باقية بعد إغلاق التطبيق وفتحه
+# 5) بيع: الباركود في البحث، ثم الدفع نقدًا
+tap 'بيع جديد'
+expect 'السلة فارغة'
+sleep 2
+tap_edit
+adb shell input text '6291003000017'
+adb shell input keyevent 66
+hide_kb
+expect 'Milk'
+tap 'ادفع'
+expect 'المطلوب'
+tap 'نقدًا'
+expect 'المبلغ المستلم'
+hide_kb
+tap 'تم الدفع'
+expect 'تم البيع'
+expect 'A-0001'
+tap 'بيع جديد'
+adb shell input keyevent 4
+sleep 2
+expect 'مبيعات اليوم'
+dump; grep -q '25.00' ui.xml && echo "OK: home shows today's sales" || { echo "::error::home sales not updated"; exit 1; }
+
+# 6) البيانات باقية بعد إغلاق التطبيق وفتحه
 adb shell am force-stop $PKG
 adb shell am start -W -n $PKG/.MainActivity | tee start2.txt
 echo "WARM_START_MS=$(grep -o 'TotalTime: [0-9]*' start2.txt | grep -o '[0-9]*')"

@@ -48,6 +48,18 @@ Nothing else needs to change.
 - Shared barcode catalog: naming a real barcode queues `{barcode, name}`; it is sent after sync, and
   unknown scans get a suggested name. Internal barcodes (EAN-13 starting with 2) are never shared.
 
+## Sale screen and payments (milestone 2)
+
+- `src/domain/cart.js` — pure: lines (pieces, packs, fractional units), line and invoice discounts,
+  totals and profit after transfer fees, split payments, cash change, credit validation, `buildSale`
+  and `buildReturn` (refund share of the invoice discount, never more than sold). Fully unit-tested.
+- `src/features/sale/` — POS screen (inline camera window over the native preview, search, quick items,
+  steppers, line editor, discount, customer, hold/resume, crash-safe current cart), pay sheet
+  (cash with change and foreign currency, transfer methods with fee %, credit, split), returns.
+- A sale is one transaction: invoice + lines + payments + stock movements + customer credit entry.
+  Invoice numbers come from a per-device counter (`A-0001`, returns `A-R0001`).
+- Migration `0002` adds `cashier_invoice_lines.position` (run it if you already ran `0001`).
+
 ## Data rules (non-negotiable)
 
 - **Money** is an integer in the smallest unit (agorot for ₪). **Quantities** are integers ×1000.

@@ -39,7 +39,7 @@ export const TABLES = [
     total: 0, cost_total: 0, fee_total: 0, paid: 0, note: null, attachment_path: null, created_by: null, ...LWW } },
   { name: 'invoice_lines', remote: 'cashier_invoice_lines', mode: 'append', columns: {
     id: null, shop_id: null, invoice_id: null, product_id: null, unit_id: null, name: '', unit: null,
-    unit_factor: 1000, qty: 0, unit_price: 0, discount: 0, total: 0, unit_cost: 0, ...APPEND } },
+    unit_factor: 1000, qty: 0, unit_price: 0, discount: 0, total: 0, unit_cost: 0, position: 0, ...APPEND } },
   { name: 'payments', remote: 'cashier_payments', mode: 'append', columns: {
     id: null, shop_id: null, invoice_id: null, customer_id: null, supplier_id: null, cash_session_id: null,
     direction: 'in', method_id: null, method_kind: 'cash', amount: 0, fee: 0, currency: 'ILS',

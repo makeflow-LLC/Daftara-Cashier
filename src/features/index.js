@@ -1,6 +1,7 @@
 // سجلّ الوحدات: كل وحدة تضيف شاشاتها هنا. وحدة جديدة = مجلد جديد + سطر هنا، دون لمس الوحدات الأخرى.
 import { renderHome } from './home/home.js';
 import { renderSale } from './sale/sale.js';
+import { renderReturns } from './sale/returns.js';
 import { renderProducts } from './products/products.js';
 import { renderProductForm } from './products/form.js';
 import { renderRapidAdd } from './products/rapid.js';
@@ -13,7 +14,13 @@ import {
 
 export const MODULES = [
   { id: 'home', routes: [{ path: '/', tab: 'home', render: renderHome }] },
-  { id: 'sale', routes: [{ path: '/sale', chrome: false, render: renderSale }] },
+  {
+    id: 'sale',
+    routes: [
+      { path: '/sale', chrome: false, render: renderSale },
+      { path: '/sale/returns', chrome: false, render: renderReturns },
+    ],
+  },
   {
     id: 'products',
     routes: [

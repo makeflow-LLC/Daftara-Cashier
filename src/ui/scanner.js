@@ -196,3 +196,83 @@ export function scanOnce(title = 'امسح الباركود') {
   });
 }
 
+
+/**
+ * مسح داخل الشاشة (شاشة البيع): الكاميرا تظهر في مربع box والسلة ظاهرة تحته.
+ * على أندرويد المعاينة خلف الصفحة: نجعل الصفحة شفافة ونُبقي باقي العناصر بخلفيات معتمة.
+ * يرجع { stop, pause, resume, toggleTorch, torch: boolean } أو null إن لم تتوفر كاميرا.
+ */
+export async function startInlineScanner({ box, onCode, onStatus = () => {} }) {
+  const native = plugin();
+  let paused = false;
+  let stopped = false;
+  let last = { code: '', at: 0 };
+  const listeners = [];
+  let stream = null;
+  let timer = null;
+
+  function handle(raw) {
+    if (stopped || paused) return;
+    const code = normalizeBarcode(raw);
+    if (!code) return;
+    const now = Date.now();
+    if (code === last.code && now - last.at < REPEAT_MS) return;
+    last = { code, at: now };
+    feedback.ok();
+    box.classList.remove('hit'); void box.offsetWidth; box.classList.add('hit');
+    onCode(code);
+  }
+
+  const ctl = {
+    torch: false,
+    pause() { paused = true; },
+    resume() { paused = false; },
+    async toggleTorch() { if (native) { try { await native.toggleTorch(); } catch { /* */ } } },
+    async stop() {
+      if (stopped) return;
+      stopped = true;
+      document.documentElement.classList.remove('scanning-inline');
+      if (native) {
+        for (const l of listeners) { try { l.remove(); } catch { /* */ } }
+        try { await native.stopScan(); } catch { /* */ }
+      }
+      if (timer) clearInterval(timer);
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+      box.querySelector('video')?.remove();
+    },
+  };
+
+  if (native) {
+    try {
+      const perm = await native.requestPermissions();
+      if (perm.camera !== 'granted' && perm.camera !== 'limited') { onStatus('اسمح باستخدام الكاميرا من إعدادات الجوال'); return null; }
+      listeners.push(await native.addListener('barcodesScanned', (e) => { const b = e.barcodes && e.barcodes[0]; if (b) handle(b.rawValue || b.displayValue); }));
+      document.documentElement.classList.add('scanning-inline');
+      await native.startScan({ formats: FORMATS, lensFacing: 'BACK' });
+      try { ctl.torch = (await native.isTorchAvailable()).available; } catch { /* */ }
+      onStatus('');
+      return ctl;
+    } catch (e) {
+      await ctl.stop();
+      onStatus('الماسح يتجهّز لأول مرة (يحتاج إنترنت مرة واحدة). ابحث بالاسم أو اكتب الباركود.');
+      return null;
+    }
+  }
+  const BD = globalThis.BarcodeDetector;
+  if (!BD || !navigator.mediaDevices?.getUserMedia) { onStatus('الكاميرا تعمل في تطبيق الجوال — ابحث بالاسم أو اكتب الباركود'); return null; }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    const video = h('video', { class: 'scan-video', playsinline: true, muted: true, autoplay: true });
+    video.srcObject = stream;
+    box.prepend(video);
+    const det = new BD({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf'] });
+    timer = setInterval(async () => {
+      if (paused || video.readyState < 2) return;
+      try { const r = await det.detect(video); if (r[0]) handle(r[0].rawValue); } catch { /* */ }
+    }, 250);
+    return ctl;
+  } catch {
+    onStatus('لا يمكن فتح الكاميرا — ابحث بالاسم أو اكتب الباركود');
+    return null;
+  }
+}
