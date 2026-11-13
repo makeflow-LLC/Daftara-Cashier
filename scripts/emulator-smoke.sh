@@ -44,6 +44,28 @@ PY
   echo "::error::'$1' not found on screen"; return 1
 }
 
+# يضغط أول حقل كتابة (EditText) على الشاشة — حقول WebView قد لا تظهر بنصها في UiAutomator
+tap_edit() {
+  for _ in $(seq 1 10); do
+    dump
+    xy=$(python3 - <<'PY'
+import re
+xml = open('ui.xml', encoding='utf-8', errors='ignore').read()
+for node in re.findall(r'<node [^>]*>', xml):
+    if 'class="android.widget.EditText"' not in node: continue
+    b = re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', node)
+    if not b: continue
+    x1, y1, x2, y2 = map(int, b.groups())
+    if x2 > x1 and y2 > y1:
+        print((x1 + x2) // 2, (y1 + y2) // 2); break
+PY
+)
+    if [ -n "$xy" ]; then echo "tap edit at $xy"; adb shell input tap $xy; return 0; fi
+    sleep 2
+  done
+  echo "::error::no text field on screen"; return 1
+}
+
 expect() {
   for _ in $(seq 1 10); do dump; grep -q "$1" ui.xml && { echo "OK: $1"; return 0; }; sleep 2; done
   echo "::error::'$1' not on screen"; return 1
@@ -86,9 +108,10 @@ expect 'لا أصناف بعد'
 tap 'إضافة سريعة بالمسح'
 expect 'إضافة سريعة'
 sleep 3
-tap 'اكتب الباركود'
+tap_edit
 adb shell input text '6291003000017'
-adb shell input keyevent 66
+hide_kb
+tap 'تم'
 expect 'حفظ وامسح التالي'
 sleep 1
 adb shell input text 'Milk'
