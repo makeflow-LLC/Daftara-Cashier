@@ -1,0 +1,198 @@
+// الماسح: كاميرا مستمرة بـ Google ML Kit (عبر خدمات Google Play، فلا يكبر التطبيق)، صوت واهتزاز لكل مسح،
+// زر الفلاش، وحقل لكتابة الباركود يدويًا دائمًا (كاميرا معطلة، باركود ممسوح، أو تجربة في المتصفح).
+//
+// على أندرويد تعمل الكاميرا خلف صفحة التطبيق: نجعل الصفحة شفافة في وسطها ونُظهر الإطار فوقها.
+// في المتصفح: BarcodeDetector إن وُجد، وإلا الكتابة اليدوية فقط.
+import { h } from './dom.js';
+import { icon } from './icons.js';
+import { feedback } from './feedback.js';
+import { normalizeBarcode } from '../domain/product.js';
+
+const FORMATS = ['EAN_13', 'EAN_8', 'UPC_A', 'UPC_E', 'CODE_128', 'CODE_39', 'CODE_93', 'ITF', 'CODABAR'];
+const REPEAT_MS = 1600; // نفس الباركود أمام الكاميرا لا يُحسب مرتين
+let active = null;
+
+function plugin() {
+  return globalThis.Capacitor?.isNativePlatform?.() ? globalThis.Capacitor.Plugins.BarcodeScanner : null;
+}
+
+/**
+ * يفتح الماسح. onCode(code) يُستدعى لكل باركود جديد؛ إن أرجع وعدًا يتوقف المسح حتى ينتهي
+ * (مثلًا ورقة إضافة صنف جديد)، ثم يعود وحده. continuous=false: يُغلق بعد أول باركود.
+ * panel: عنصر اختياري يظهر أسفل الإطار (عدّاد، آخر صنف…).
+ */
+export function openScanner({ title = 'امسح الباركود', onCode, continuous = true, panel = null, onClose = null } = {}) {
+  if (active) active.close();
+  const native = plugin();
+  let paused = false;
+  let closed = false;
+  let last = { code: '', at: 0 };
+  let video = null;
+  let stream = null;
+  let detectTimer = null;
+  const listeners = [];
+
+  const status = h('div', { class: 'scan-status' });
+  const manual = h('input', {
+    class: 'input scan-manual-input', type: 'text', inputmode: 'numeric', dir: 'ltr', autocomplete: 'off',
+    placeholder: 'أو اكتب الباركود هنا', enterkeyhint: 'done', 'aria-label': 'اكتب الباركود',
+  });
+  const torchBtn = h('button', { class: 'icon-btn scan-torch', type: 'button', 'aria-label': 'الفلاش', onclick: toggleTorch, hidden: true }, icon('flash'));
+  const frame = h('div', { class: 'scan-frame' }, h('span', { class: 'scan-laser' }));
+  const ui = h('div', { class: 'scanner', role: 'dialog', 'aria-label': title },
+    h('div', { class: 'scan-top' },
+      h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'إغلاق', onclick: () => ctl.close() }, icon('x')),
+      h('div', { class: 'scan-title' }, title),
+      torchBtn,
+    ),
+    frame,
+    status,
+    h('div', { class: 'scan-bottom' },
+      h('form', { class: 'scan-manual', onsubmit: (e) => { e.preventDefault(); const v = manual.value; manual.value = ''; handle(v, true); } },
+        manual, h('button', { class: 'btn btn-primary', type: 'submit' }, icon('check', 20), h('span', null, 'تم'))),
+      panel,
+    ),
+  );
+
+  function say(text, kind = '') {
+    status.textContent = text || '';
+    status.className = `scan-status ${kind}`;
+  }
+
+  async function handle(raw, typed = false) {
+    if (closed || paused) return;
+    const code = normalizeBarcode(raw);
+    if (!code) return;
+    const now = Date.now();
+    if (!typed && code === last.code && now - last.at < REPEAT_MS) return;
+    last = { code, at: now };
+    feedback.ok();
+    flash();
+    if (!continuous) { if (onCode) onCode(code); ctl.close(); return; }
+    const r = onCode && onCode(code);
+    if (r && typeof r.then === 'function') {
+      paused = true;
+      try { await r; } finally { paused = false; last = { code, at: Date.now() }; }
+    }
+  }
+
+  function flash() {
+    frame.classList.remove('hit');
+    void frame.offsetWidth;
+    frame.classList.add('hit');
+  }
+
+  async function toggleTorch() {
+    try { await native.toggleTorch(); torchBtn.classList.toggle('on'); } catch { /* بلا فلاش */ }
+  }
+
+  async function startNative() {
+    try {
+      const perm = await native.requestPermissions();
+      if (perm.camera !== 'granted' && perm.camera !== 'limited') {
+        say('اسمح للتطبيق باستخدام الكاميرا من إعدادات الجوال، أو اكتب الباركود.', 'warn');
+        feedback.error();
+        return;
+      }
+      document.documentElement.classList.add('scanning');
+      listeners.push(await native.addListener('barcodesScanned', (e) => {
+        const b = e.barcodes && e.barcodes[0];
+        if (b) handle(b.rawValue || b.displayValue);
+      }));
+      listeners.push(await native.addListener('scanError', () => say('تعذّرت قراءة الكاميرا، حاول مجددًا', 'warn')));
+      await native.startScan({ formats: FORMATS, lensFacing: 'BACK' });
+      if (closed) { native.stopScan(); return; }
+      try { torchBtn.hidden = !(await native.isTorchAvailable()).available; } catch { /* */ }
+      say('وجّه الكاميرا نحو الباركود');
+    } catch (e) {
+      document.documentElement.classList.remove('scanning');
+      say('الماسح يتجهّز لأول مرة (يحتاج إنترنت مرة واحدة). اكتب الباركود الآن.', 'warn');
+      console.warn('scanner', e);
+    }
+  }
+
+  async function startWeb() {
+    const BD = globalThis.BarcodeDetector;
+    if (!BD || !navigator.mediaDevices?.getUserMedia) {
+      say('اكتب الباركود (الكاميرا تعمل في تطبيق الجوال)');
+      setTimeout(() => manual.focus(), 100);
+      return;
+    }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      if (closed) { stream.getTracks().forEach((t) => t.stop()); return; }
+      video = h('video', { class: 'scan-video', playsinline: true, muted: true, autoplay: true });
+      video.srcObject = stream;
+      ui.prepend(video);
+      const det = new BD({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf'] });
+      detectTimer = setInterval(async () => {
+        if (paused || video.readyState < 2) return;
+        try { const r = await det.detect(video); if (r[0]) handle(r[0].rawValue); } catch { /* إطار غير جاهز */ }
+      }, 250);
+      say('وجّه الكاميرا نحو الباركود');
+    } catch {
+      say('لا يمكن فتح الكاميرا. اكتب الباركود.', 'warn');
+    }
+  }
+
+  const ctl = {
+    el: ui,
+    pause() { paused = true; },
+    resume() { paused = false; },
+    /** يحرّر الكاميرا مؤقتًا (لالتقاط صورة للصنف بكاميرا الجوال) ثم يعيدها. */
+    async suspendCamera() {
+      paused = true;
+      if (native) {
+        document.documentElement.classList.remove('scanning');
+        try { await native.stopScan(); } catch { /* */ }
+      }
+    },
+    async resumeCamera() {
+      if (closed) return;
+      if (native) {
+        try { await native.startScan({ formats: FORMATS, lensFacing: 'BACK' }); document.documentElement.classList.add('scanning'); } catch { /* */ }
+      }
+      paused = false;
+    },
+    say,
+    close() {
+      if (closed) return;
+      closed = true;
+      active = null;
+      document.documentElement.classList.remove('scanning');
+      if (native) {
+        for (const l of listeners) { try { l.remove(); } catch { /* */ } }
+        native.stopScan().catch(() => {});
+      }
+      if (detectTimer) clearInterval(detectTimer);
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+      ui.remove();
+      if (onClose) onClose();
+    },
+  };
+
+  document.body.append(ui);
+  active = ctl;
+  if (native) startNative(); else startWeb();
+  return ctl;
+}
+
+/** لزر الرجوع: يغلق الماسح إن كان مفتوحًا. */
+export function closeScanner() {
+  if (!active) return false;
+  active.close();
+  return true;
+}
+
+export function scannerOpen() {
+  return !!active;
+}
+
+/** مسح باركود واحد (للبحث أو لحقل الباركود). يرجع الكود أو null إن أُغلق. */
+export function scanOnce(title = 'امسح الباركود') {
+  return new Promise((resolve) => {
+    let got = null;
+    openScanner({ title, continuous: false, onCode: (c) => { got = c; }, onClose: () => resolve(got) });
+  });
+}
+

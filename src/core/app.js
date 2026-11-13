@@ -10,6 +10,9 @@ import { resolveFeatures, defaultPaymentMethods, TRIAL_DAYS } from '../domain/fe
 import { createSupabase } from '../sync/supabase.js';
 import { createSyncEngine } from '../sync/engine.js';
 import { startScheduler } from '../sync/scheduler.js';
+import { createMediaSync } from '../sync/media.js';
+import { createMedia } from './media.js';
+import { createProductRepo } from '../features/products/repo.js';
 
 const clock = makeClock();
 
@@ -18,6 +21,9 @@ export const app = {
   store: null,
   sync: null,
   scheduler: null,
+  products: null,
+  media: null,
+  mediaSync: null,
   shop: null,
   features: {},
   ctx: { shopId: null, deviceId: null, prefix: 'A', userId: null, role: 'owner', deviceName: null },
@@ -65,6 +71,9 @@ export const app = {
       db: app.db, clock, getContext: () => app.ctx,
       emit: (e) => bus.emit('data', e),
     });
+    const deps = { db: app.db, store: app.store, getContext: () => app.ctx };
+    app.products = createProductRepo(deps);
+    app.media = createMedia(deps);
     if (app.ctx.shopId) await app.loadShop();
     app.startSync();
     bus.on('data', async (e) => {
@@ -93,7 +102,11 @@ export const app = {
     });
     app.api = api;
     app.sync = createSyncEngine({ db: app.db, api, getContext: () => app.ctx, emit: (e) => bus.emit('data', e) });
-    app.sync.onStatus((s) => bus.emit('sync', s));
+    app.mediaSync = createMediaSync({ db: app.db, api });
+    app.sync.onStatus((s) => {
+      bus.emit('sync', s);
+      if (s.state === 'synced') app.mediaSync.run(); // الصور والكتالوج بعد كل مزامنة ناجحة
+    });
     app.scheduler = startScheduler(app.sync, { bus });
   },
 
@@ -123,6 +136,12 @@ export const app = {
     });
     await app.loadShop();
     return shopId;
+  },
+
+  /** اسم مقترح لباركود من الكتالوج المشترك (null بلا إنترنت أو بلا مزامنة). */
+  async catalogLookup(barcode) {
+    if (!app.mediaSync || navigator.onLine === false) return null;
+    return app.mediaSync.lookup(barcode);
   },
 
   /** يحفظ إعدادات المحل (دمج سطحي داخل settings). */

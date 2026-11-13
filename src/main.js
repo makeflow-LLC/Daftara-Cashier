@@ -7,6 +7,7 @@ import { renderSetup } from './features/setup/setup.js';
 import { readPrefs, applyTheme } from './features/settings/settings.js';
 import { configureFeedback } from './ui/feedback.js';
 import { closeTopSheet, closeAllSheets, toast } from './ui/overlay.js';
+import { closeScanner } from './ui/scanner.js';
 
 async function start() {
   if (window.__oldWebView) return;
@@ -53,6 +54,7 @@ function androidBackButton() {
   if (!App) return;
   App.addListener('backButton', () => {
     if (closeTopSheet()) return;
+    if (closeScanner()) return;
     const hash = location.hash || '#/';
     if (hash === '#/' || hash === '#') App.minimizeApp();
     else history.back();

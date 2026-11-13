@@ -353,6 +353,100 @@ body:not(.has-tabbar) .toast{bottom:calc(var(--sab) + 90px)}
 
 @media (prefers-reduced-motion:reduce){*{transition:none !important;animation:none !important}}
 
+
+/* ---------------- 16. الأصناف ---------------- */
+.product-actions{display:grid;grid-template-columns:1.4fr 1fr;gap:var(--space-2);margin:var(--space-3) 0}
+.product-actions .btn{padding:0 var(--space-2);font-size:15px}
+.product-actions .btn + .btn{margin-top:0}
+.chips-scroll{flex-wrap:nowrap;overflow-x:auto;margin:0 calc(-1 * var(--space-4)) var(--space-2);padding:2px var(--space-4) 6px;scrollbar-width:none}
+.chips-scroll::-webkit-scrollbar{display:none}
+.chips-scroll .chip{flex:none}
+.chip-ghost{background:transparent;border:1.5px dashed var(--neutral-400);color:var(--color-muted)}
+.list-count{margin:var(--space-2) 4px}
+.sentinel{height:1px}
+.thumb{
+  flex:none;display:inline-flex;align-items:center;justify-content:center;border-radius:12px;
+  background:var(--brand-100) center/cover no-repeat;color:var(--brand-700);font-weight:700;font-size:18px;overflow:hidden;
+}
+.thumb.has-img{color:transparent}
+.product-row{gap:var(--space-2)}
+.stock-badge{
+  flex:none;display:flex;flex-direction:column;align-items:center;min-width:52px;padding:4px 8px;border-radius:12px;
+  background:var(--neutral-200);font-weight:700;line-height:1.2;
+}
+.stock-badge small{font-size:11px;font-weight:500;color:var(--color-muted)}
+.stock-low{background:var(--warn-100);color:var(--warn-800)}
+.stock-out{background:var(--danger-100);color:var(--danger-700)}
+
+.product-form{padding-bottom:96px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3)}
+.input-row{display:flex;align-items:center;gap:var(--space-2)}
+.input-row .input{flex:1;min-width:0}
+.input-row .icon-btn{background:var(--brand-100);color:var(--brand-700);border-radius:var(--radius-md);width:52px;height:52px}
+.field-error{display:block;color:var(--danger-700);font-size:13px;font-weight:600;margin:-8px 0 var(--space-2)}
+.margin-hint{margin:-6px 0 var(--space-3)}
+.field-hint.ok{color:var(--brand-700)}
+.field-hint.bad{color:var(--danger-700)}
+.link-btn{background:none;border:0;padding:6px 2px;font-size:14px;color:var(--brand-700);text-decoration:underline;min-height:36px}
+.sticky-save{
+  position:fixed;left:0;right:0;bottom:0;z-index:25;
+  padding:var(--space-2) var(--space-4) calc(var(--space-2) + var(--sab));
+  background:var(--color-bg);box-shadow:0 -1px 0 var(--color-divider);
+}
+.row-add .row-title{color:var(--brand-700)}
+.img-row{display:flex;gap:var(--space-2)}
+.img-tile{
+  position:relative;flex:none;width:96px;height:96px;border-radius:var(--radius-md);
+  background:var(--color-card) center/cover no-repeat;box-shadow:var(--shadow-sm);
+}
+.img-add{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:1.5px dashed var(--neutral-400);box-shadow:none;color:var(--brand-700);font-size:13px;font-weight:600}
+.img-add.has-photo{border-style:solid;color:transparent}
+.img-add.has-photo .ic{opacity:0}
+.logo-tile{width:120px;height:120px;background-size:contain}
+.img-remove{
+  position:absolute;top:4px;left:4px;width:30px;height:30px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);color:#fff;
+}
+.btn-outline.has-photo{background-size:cover;background-position:center;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+
+/* ---------------- 17. الماسح ---------------- */
+/* على أندرويد الكاميرا خلف الصفحة: نخفي محتوى الصفحة ونجعل الخلفية شفافة */
+html.scanning,html.scanning body{background:transparent !important}
+html.scanning #view,html.scanning #chrome{visibility:hidden}
+.scanner{
+  position:fixed;top:0;right:0;bottom:0;left:0;z-index:45;display:flex;flex-direction:column;
+  background:#000;color:#fff;
+}
+html.scanning .scanner{background:transparent}
+.scan-video{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:-1}
+.scan-top{
+  display:flex;align-items:center;gap:var(--space-2);
+  padding:calc(var(--sat) + 8px) var(--space-3) 8px;background:rgba(0,0,0,.55);
+}
+.scan-top .icon-btn{color:#fff}
+.scan-torch.on{background:#fff;color:#111}
+.scan-title{flex:1;font-weight:700;font-size:18px}
+.scan-frame{
+  position:relative;align-self:center;margin:var(--space-6) 0 var(--space-3);
+  width:min(78vw,340px);height:min(42vw,190px);border-radius:18px;
+  box-shadow:0 0 0 2000px rgba(0,0,0,.55);border:3px solid rgba(255,255,255,.9);
+}
+.scan-frame.hit{animation:hit .35s ease}
+@keyframes hit{0%{border-color:#7fe0b3;transform:scale(1.03)}100%{border-color:rgba(255,255,255,.9);transform:none}}
+.scan-laser{position:absolute;left:12px;right:12px;top:50%;height:2px;background:#ff458e;box-shadow:0 0 10px #ff458e;animation:laser 1.6s ease-in-out infinite alternate}
+@keyframes laser{from{transform:translateY(-60px)}to{transform:translateY(60px)}}
+.scan-status{text-align:center;padding:0 var(--space-4);min-height:24px;font-weight:600;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+.scan-status.warn{color:#ffd27a}
+.scan-bottom{margin-top:auto;padding:var(--space-3) var(--space-4) calc(var(--space-3) + var(--sab));background:rgba(0,0,0,.6)}
+.scan-manual{display:flex;gap:var(--space-2)}
+.scan-manual .input{flex:1;min-width:0;background:rgba(255,255,255,.95);color:#111;border:0}
+.scan-manual .btn{flex:none}
+.rapid-panel{margin-top:var(--space-3)}
+.rapid-count{display:flex;align-items:center;gap:6px;font-size:18px;font-weight:700}
+.rapid-count .num{font-size:22px;color:#7fe0b3}
+.rapid-last{color:rgba(255,255,255,.8)}
+.rapid-code{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;margin-bottom:var(--space-3);border-radius:var(--radius-pill);background:var(--brand-100);color:var(--brand-700);font-weight:700}
+
 /* ---------------- 15. الوضع الليلي ---------------- */
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){

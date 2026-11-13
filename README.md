@@ -35,6 +35,19 @@ android/                       Capacitor project, flavors `direct` and `play`
 Adding a module = a new folder in `src/features/` + one entry in `src/features/index.js`.
 Nothing else needs to change.
 
+## Products, images, scanning (milestone 1)
+
+- `src/features/products/` — list (Arabic-normalized search, category chips, chunked rendering, lazy
+  thumbnails), product form (prices, opening stock as a movement, packs, expiry, quick-item, images),
+  rapid-add (continuous scanning, minimal sheet for unknown barcodes), categories. `repo.js` holds the data logic.
+- Scanner: `@capacitor-mlkit/barcode-scanning`, with Gradle substituting the **unbundled** Play-services
+  ML Kit model (`android/build.gradle`) so the APK stays small; manual entry is always available.
+- Images: compressed on device to WebP ≤800px (~100KB) + 160px thumbnail (`src/core/media.js`), kept in
+  the device DB for offline viewing, uploaded to Storage `cashier-media/<shop_id>/products/` after sync
+  (`src/sync/media.js`). Other devices download thumbnails only when a row is visible.
+- Shared barcode catalog: naming a real barcode queues `{barcode, name}`; it is sent after sync, and
+  unknown scans get a suggested name. Internal barcodes (EAN-13 starting with 2) are never shared.
+
 ## Data rules (non-negotiable)
 
 - **Money** is an integer in the smallest unit (agorot for ₪). **Quantities** are integers ×1000.

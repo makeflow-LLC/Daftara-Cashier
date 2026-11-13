@@ -6,7 +6,7 @@ import { applyMovement } from '../domain/stock.js';
 import { uuid } from './ids.js';
 
 export function createStore({ db, clock, getContext, emit = () => {} }) {
-  const TX_TABLES = [...SYNCED, 'outbox', 'stock', 'meta'];
+  const TX_TABLES = [...SYNCED, 'outbox', 'stock', 'meta', 'files'];
 
   async function enqueue(table, id) {
     const key = `${table}:${id}`;

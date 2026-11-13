@@ -79,7 +79,31 @@ expect 'السلة فارغة'
 adb shell input keyevent 4
 expect 'مبيعات اليوم'
 
-# 4) البيانات باقية بعد إغلاق التطبيق وفتحه
+# 4) إضافة سريعة بالمسح (بالكتابة اليدوية: المحاكي بلا باركود حقيقي أمام الكاميرا)
+adb shell pm grant $PKG android.permission.CAMERA || true
+tap 'الأصناف'
+expect 'لا أصناف بعد'
+tap 'إضافة سريعة بالمسح'
+expect 'إضافة سريعة'
+sleep 3
+tap 'اكتب الباركود'
+adb shell input text '6291003000017'
+adb shell input keyevent 66
+expect 'حفظ وامسح التالي'
+sleep 1
+adb shell input text 'Milk'
+adb shell input keyevent 61
+adb shell input text '25'
+adb shell input keyevent 66
+sleep 2
+expect 'Milk'
+tap 'إغلاق'
+expect 'صنف'
+dump; grep -q 'Milk' ui.xml && echo "OK: product listed" || { echo "::error::product not in list"; exit 1; }
+adb shell input keyevent 4
+sleep 2
+
+# 5) البيانات باقية بعد إغلاق التطبيق وفتحه
 adb shell am force-stop $PKG
 adb shell am start -W -n $PKG/.MainActivity | tee start2.txt
 echo "WARM_START_MS=$(grep -o 'TotalTime: [0-9]*' start2.txt | grep -o '[0-9]*')"

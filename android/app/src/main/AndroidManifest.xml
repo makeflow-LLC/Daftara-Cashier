@@ -25,6 +25,11 @@
 
         </activity>
 
+        <!-- نموذج قراءة الباركود من خدمات Google Play (غير مضمَّن في التطبيق): يُنزَّل مع التثبيت فيبقى التطبيق صغيرًا -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="barcode" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -38,6 +43,9 @@
 
     <!-- الإنترنت للمزامنة مع خادم المحل فقط (تعمل بصمت، والتطبيق كامل بدونها) -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- الكاميرا لمسح الباركود وتصوير الأصناف فقط؛ تُطلب عند أول مسح، والصور لا تخرج إلا إلى خادم المحل -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
     <!-- لا إعلانات ولا معرّف إعلاني -->
     <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
 </manifest>

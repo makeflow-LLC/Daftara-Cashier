@@ -10,6 +10,7 @@ import { formatDecimal, normalizeDigits, parseDecimal } from '../../domain/money
 import { app } from '../../core/app.js';
 import { bus } from '../../core/bus.js';
 import { navigate } from '../../core/router.js';
+import { pickImage } from '../../core/media.js';
 
 const go = (p) => () => navigate(p);
 
@@ -21,6 +22,7 @@ export function renderSettings(el) {
       section(null, h('div', { class: 'list' },
         row({ icon: 'store', title: 'بيانات المحل', sub: app.shop?.name, onclick: go('/settings/shop') }),
         row({ icon: 'sliders', title: 'الميزات', sub: `${SHOP_TYPES[app.shop?.shop_type]?.name || ''} — شغّل وأطفئ ما تحتاجه`, onclick: go('/settings/features') }),
+        row({ icon: 'tag', title: 'التصنيفات', sub: 'ألبان، معلبات، منظفات…', onclick: go('/settings/categories') }),
         f.multiCurrency ? row({ icon: 'coins', title: 'العملات وأسعار الصرف', onclick: go('/settings/currencies') }) : null,
         row({ icon: 'wallet', title: 'طرق الدفع', sub: 'نقدًا، تحويل، محافظ، آجل — والرسوم', onclick: go('/settings/payments') }),
       )),
@@ -38,6 +40,21 @@ export function renderShopProfile(el) {
   const name = input({ value: s.name, maxlength: 60 });
   const phone = input({ value: s.phone || '', type: 'tel', inputmode: 'tel', dir: 'ltr', maxlength: 20 });
   const address = input({ value: s.address || '', maxlength: 120 });
+  const logoTile = h('button', { class: 'img-tile img-add logo-tile', type: 'button', onclick: pickLogo }, icon('camera', 26), h('span', null, 'اختر الشعار'));
+  app.media.logoUrl().then((u) => { if (u) { logoTile.style.backgroundImage = `url("${u}")`; logoTile.classList.add('has-photo'); } });
+  async function pickLogo() {
+    const file = await pickImage({ camera: false });
+    if (!file) return;
+    try {
+      const path = await app.media.setLogo(file);
+      await app.store.patch('shops', s.id, { logo_path: path });
+      await app.loadShop();
+      const u = await app.media.logoUrl();
+      logoTile.style.backgroundImage = `url("${u}")`;
+      logoTile.classList.add('has-photo');
+      feedback.ok();
+    } catch { feedback.error(); toast('تعذّرت قراءة الصورة', { kind: 'error' }); }
+  }
   async function save(e) {
     e.preventDefault();
     if (!name.value.trim()) { feedback.error(); toast('اسم المحل مطلوب', { kind: 'error' }); return; }
@@ -57,7 +74,7 @@ export function renderShopProfile(el) {
       field('اسم المحل', name),
       field('رقم الجوال', phone, 'يظهر على الفواتير، ويُرسل منه واتساب'),
       field('العنوان', address),
-      h('p', { class: 'muted small' }, 'الشعار يُضاف مع ميزة الصور في المرحلة 1.'),
+      h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'الشعار (يظهر على الفواتير)'), logoTile),
       button('حفظ', { type: 'submit', block: true, size: 'lg', icon: 'check' }),
     ),
   );

@@ -22,6 +22,13 @@ allprojects {
         google()
         mavenCentral()
     }
+    // ماسح الباركود: نستبدل نسخة ML Kit المضمّنة (~2.5MB لكل معالج) بالنسخة غير المضمّنة من خدمات Google Play
+    // (نفس الواجهة البرمجية تمامًا، والنموذج يُنزَّل مرة واحدة على الجوال). في كل المشاريع حتى تُبنى الإضافة عليها أيضًا.
+    configurations.all {
+        resolutionStrategy.dependencySubstitution {
+            substitute module("com.google.mlkit:barcode-scanning") using module("com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1")
+        }
+    }
 }
 
 task clean(type: Delete) {

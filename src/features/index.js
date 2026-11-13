@@ -2,6 +2,9 @@
 import { renderHome } from './home/home.js';
 import { renderSale } from './sale/sale.js';
 import { renderProducts } from './products/products.js';
+import { renderProductForm } from './products/form.js';
+import { renderRapidAdd } from './products/rapid.js';
+import { renderCategories } from './products/categories.js';
 import { renderCustomers } from './customers/customers.js';
 import {
   renderSettings, renderShopProfile, renderFeatures, renderCurrencies,
@@ -11,7 +14,15 @@ import {
 export const MODULES = [
   { id: 'home', routes: [{ path: '/', tab: 'home', render: renderHome }] },
   { id: 'sale', routes: [{ path: '/sale', chrome: false, render: renderSale }] },
-  { id: 'products', routes: [{ path: '/products', tab: 'products', render: renderProducts }] },
+  {
+    id: 'products',
+    routes: [
+      { path: '/products', tab: 'products', render: renderProducts },
+      { path: '/products/edit', tab: 'products', chrome: false, render: renderProductForm },
+      { path: '/products/rapid', tab: 'products', chrome: false, render: renderRapidAdd },
+      { path: '/settings/categories', tab: 'settings', render: renderCategories },
+    ],
+  },
   { id: 'customers', routes: [{ path: '/customers', tab: 'customers', render: renderCustomers }] },
   {
     id: 'settings',
