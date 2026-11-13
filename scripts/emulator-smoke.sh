@@ -84,8 +84,8 @@ adb shell am start -W -n $PKG/.MainActivity | tee start.txt
 echo "COLD_START_MS=$(grep -o 'TotalTime: [0-9]*' start.txt | grep -o '[0-9]*')"
 sleep 6
 
-# 1) الإعداد الأول: اسم المحل ثم النوع
-expect 'أهلًا بك في دفترة كاشير'
+# 1) الإعداد الأول: اسم المحل ثم النوع (المحاكي قد يتأخر في أول تشغيل للـ WebView: ننتظر حتى دقيقة)
+expect 'أهلًا بك في دفترة كاشير' || { sleep 20; expect 'أهلًا بك في دفترة كاشير'; }
 tap 'اسم المحل' || true
 adb shell input text 'Shop1'
 hide_kb
