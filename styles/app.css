@@ -478,6 +478,19 @@ html.scanning-inline .sale{background:transparent}
 .done-ic.bad{background:linear-gradient(135deg,#e2367f 0%,#aa0b56 100%)}
 .done .btn-wa{margin-top:var(--space-3)}
 
+.rep-hero{margin:var(--space-3) 0}
+.rep-hero .hero-row{gap:var(--space-4);flex-wrap:wrap}
+.rep-row{min-height:48px;gap:var(--space-2)}
+.rep-row .row-title{font-weight:500;font-size:15px}
+.rep-cell{flex:none;width:76px;text-align:left;font-size:13.5px;font-weight:600}
+.rep-head{min-height:36px;background:var(--brand-100);font-size:12.5px;font-weight:700;color:var(--brand-700)}
+.rep-head .rep-cell{font-size:12.5px;font-weight:700}
+.rep-cell.strong{font-size:15px;font-weight:700;color:var(--color-text)}
+.bars{display:flex;align-items:flex-end;gap:4px;height:150px;padding-bottom:26px;overflow-x:auto}
+.bar-col{position:relative;flex:1;min-width:14px;height:100%;display:flex;align-items:flex-end}
+.bar{width:100%;border-radius:6px 6px 0 0;background:var(--grad-brand)}
+.bar-label{position:absolute;bottom:-22px;left:0;right:0;text-align:center;font-size:11px;color:var(--color-muted)}
+
 /* ---------------- 14. متفرقات ---------------- */
 .splash{
   position:fixed;top:0;right:0;bottom:0;left:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-3);

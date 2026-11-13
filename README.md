@@ -96,6 +96,14 @@ Nothing else needs to change.
   optional start-of-day opening cash (suggested from the last closing), closings history.
   Selling never depends on opening the drawer.
 
+## Reports (milestone 7)
+
+- `src/domain/reports.js` — pure: period ranges, `buildReport` (sales, returns, profit, per day, best and
+  least sellers, by category, by payment method), `reportSections` (one model for screen, PDF and Excel;
+  hides profit/cost for non-owners), `reportSheets`.
+- `src/features/reports/` — one page with period chips, daily bars, tables, and PDF / Excel export
+  (`vendor/xlsx.js` is Daftara's library-free xlsx writer, loaded only on export).
+
 ## Data rules (non-negotiable)
 
 - **Money** is an integer in the smallest unit (agorot for ₪). **Quantities** are integers ×1000.

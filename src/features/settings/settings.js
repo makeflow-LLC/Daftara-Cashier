@@ -20,6 +20,7 @@ export function renderSettings(el) {
     header('الإعدادات'),
     h('div', { class: 'page' },
       section(null, h('div', { class: 'list' },
+        row({ icon: 'chart', title: 'التقارير', sub: 'المبيعات والربح والأكثر مبيعًا — PDF و Excel', onclick: go('/reports') }),
         row({ icon: 'cash', title: 'الصندوق', sub: 'النقد في الدرج وإغلاق آخر اليوم', onclick: go('/cash') }),
         row({ icon: 'receipt', title: 'الفواتير', sub: 'كل فواتير البيع والشراء والمرتجع، وإرسالها واتساب', onclick: go('/invoices') }),
         row({ icon: 'box', title: 'المخزون', sub: 'شراء، جرد، تالف، تنبيهات وطلب بضاعة', onclick: go('/inventory') }),

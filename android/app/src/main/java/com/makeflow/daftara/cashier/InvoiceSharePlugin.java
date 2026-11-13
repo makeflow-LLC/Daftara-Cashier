@@ -40,13 +40,14 @@ public class InvoiceSharePlugin extends Plugin {
             Uri uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", file);
 
             boolean sent = false;
-            for (String pkg : WHATSAPP) {
+            boolean chooser = Boolean.TRUE.equals(call.getBoolean("chooser", false));
+            if (!chooser) for (String pkg : WHATSAPP) {
                 Intent i = build(mime, uri, text);
                 i.setPackage(pkg);
                 if (phone != null && !phone.isEmpty()) i.putExtra("jid", phone + "@s.whatsapp.net");
                 try { getActivity().startActivity(i); sent = true; break; } catch (ActivityNotFoundException e) { /* جرّب التالي */ }
             }
-            if (!sent) getActivity().startActivity(Intent.createChooser(build(mime, uri, text), "إرسال الفاتورة"));
+            if (!sent) getActivity().startActivity(Intent.createChooser(build(mime, uri, text), "إرسال"));
             JSObject r = new JSObject();
             r.put("whatsapp", sent);
             call.resolve(r);

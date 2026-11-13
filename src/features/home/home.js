@@ -34,9 +34,9 @@ export function renderHome(el) {
     const drawer = await app.cash.summary();
     const showProfit = app.can('see_profit');
     fill(kpis, 
-      h('div', { class: 'hero-card' },
+      h('div', { class: 'hero-card', onclick: (e) => { if (!e.target.closest('button')) navigate('/reports'); } },
         logo(40),
-        h('div', { class: 'hero-label' }, 'مبيعات اليوم'),
+        h('div', { class: 'hero-label' }, 'مبيعات اليوم — التقارير ›'),
         h('div', { class: 'hero-value' }, money(s.salesTotal)),
         h('div', { class: 'hero-row' },
           showProfit ? h('div', null, h('span', { class: 'hero-mini-label' }, 'الربح'), money(s.profit, undefined, s.profit < 0 ? 'neg' : '')) : null,

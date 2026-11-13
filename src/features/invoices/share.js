@@ -19,10 +19,11 @@ function toBase64(blob) {
   });
 }
 
-async function sendFile(file, phone, caption) {
+/** يرسل ملفًا: إلى واتساب (محادثة الرقم إن وُجد)، أو — مع chooser — قائمة المشاركة ليختار المستخدم أين يحفظه أو يرسله. */
+export async function sendFile(file, phone, caption, { chooser = false } = {}) {
   const native = globalThis.Capacitor?.isNativePlatform?.() ? globalThis.Capacitor.Plugins.InvoiceShare : null;
   if (native) {
-    await native.share({ data: await toBase64(file.blob), mime: file.mime, name: file.name, phone: normalizePhone(phone), text: caption });
+    await native.share({ data: await toBase64(file.blob), mime: file.mime, name: file.name, phone: normalizePhone(phone), text: caption, chooser });
     return;
   }
   const f = new File([file.blob], file.name, { type: file.mime });

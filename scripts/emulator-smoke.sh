@@ -187,7 +187,14 @@ tap 'تم'
 adb shell input keyevent 4
 sleep 2
 
-# 9) البيانات باقية بعد إغلاق التطبيق وفتحه
+# 9) التقارير تفتح من بطاقة الرئيسية
+tap 'مبيعات اليوم'
+expect 'صافي المبيعات'
+expect 'Excel'
+adb shell input keyevent 4
+sleep 2
+
+# 10) البيانات باقية بعد إغلاق التطبيق وفتحه
 adb shell am force-stop $PKG
 adb shell am start -W -n $PKG/.MainActivity | tee start2.txt
 echo "WARM_START_MS=$(grep -o 'TotalTime: [0-9]*' start2.txt | grep -o '[0-9]*')"
