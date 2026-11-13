@@ -9,6 +9,8 @@ import { createSaleRepo } from '../src/features/sale/repo.js';
 import { createCustomerRepo } from '../src/features/customers/repo.js';
 import { createInventoryRepo } from '../src/features/inventory/repo.js';
 import { purchaseLine } from '../src/domain/inventory.js';
+import { createCashRepo } from '../src/features/cash/repo.js';
+import { sessionSummary, closingResult, closingText } from '../src/domain/cash.js';
 import { makeLine } from '../src/domain/cart.js';
 import { makeClock } from '../src/domain/merge.js';
 import { uuid } from '../src/core/ids.js';
@@ -26,7 +28,8 @@ async function setup() {
   await store.put('payment_methods', { name: 'نقدًا', kind: 'cash', sort: 0 });
   const { product } = await products.save({ name: 'حليب', sell_price: 500, cost_price: 400 }, { qty: 20000, packs: [{ name: 'كرتونة', factor: 12000, sell_price: 5500 }] });
   const inventory = createInventoryRepo(deps);
-  return { db, sales, products, customers, inventory, product: await products.get(product.id) };
+  const cash = createCashRepo(deps);
+  return { db, sales, products, customers, inventory, cash, product: await products.get(product.id) };
 }
 
 test('checkout: one atomic write, stock goes down, numbers per device', async () => {
@@ -134,4 +137,40 @@ test('inventory: damage, stock count adjustments and alerts', async () => {
   const a = await inventory.alerts();
   assert.deepEqual(a.low.map((p) => p.name), ['حليب']);
   assert.equal(a.out.length, 0);
+});
+
+test('cash domain: expected drawer, other methods, difference', () => {
+  const P = (method_kind, direction, amount, method_id = null) => ({ method_kind, direction, amount, method_id });
+  const s = sessionSummary({ opening: 10000, payments: [P('cash', 'in', 5000), P('cash', 'out', 1200), P('transfer', 'in', 3000, 'b'), P('transfer', 'in', 700, 'b'), P('credit', 'in', 900)], methodNames: new Map([['b', 'بنك فلسطين']]) });
+  assert.equal(s.expectedCash, 13800);
+  assert.deepEqual(s.methods, [{ key: 'b', name: 'بنك فلسطين', kind: 'transfer', total: 3700 }]);
+  assert.equal(s.credit, 900);
+  assert.deepEqual(closingResult(13800, 13800), { difference: 0, state: 'match' });
+  assert.deepEqual(closingResult(13800, 13500), { difference: -300, state: 'short' });
+  assert.equal(closingResult(13800, 14000).state, 'over');
+  const t = closingText({ shopName: 'بقالة', session: { opened_at: '2026-11-13T06:00:00Z', closed_at: '2026-11-13T20:00:00Z', counted_cash: 13500 }, summary: s });
+  assert.ok(t.includes('عجز في الصندوق: 3.00 ₪') && t.includes('بنك فلسطين: 37.00 ₪'));
+});
+
+test('cash closing: works without opening, then open → sell → pay supplier → close', async () => {
+  const { sales, inventory, cash, product } = await setup();
+  await sales.checkout({ lines: [makeLine(product, { qty: 2000 })], payments: [{ kind: 'cash', amount: 1000 }] });
+  let r = await cash.close(1000);                    // لم يفتح الصندوق: يُحسب من أول اليوم
+  assert.equal(r.state, 'match');
+  assert.equal((await cash.summary()).expectedCash, 0, 'new period starts after closing');
+  await cash.open(5000);
+  await assert.rejects(cash.open(0), /مفتوح من قبل/);
+  await sales.checkout({ lines: [makeLine(product, { qty: 4000 })], payments: [{ kind: 'cash', amount: 2000 }] });
+  const sup = await inventory.saveSupplier({ name: 'مورّد' });
+  await inventory.paySupplier(sup.id, 1500);
+  const s = await cash.summary();
+  assert.deepEqual([s.opening, s.cashIn, s.cashOut, s.expectedCash], [5000, 2000, 1500, 5500]);
+  r = await cash.close(5300);
+  assert.deepEqual([r.state, r.difference], ['short', -200]);
+  const h = await cash.history();
+  assert.equal(h.length, 2);
+  assert.equal(h[0].difference, -200);
+  assert.equal(h[0].counted.cash, 5300);
+  assert.equal((await cash.lastClosed()).counted.cash, 5300);
+  assert.equal(await cash.openSession(), null);
 });

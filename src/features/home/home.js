@@ -31,6 +31,7 @@ export function renderHome(el) {
   async function paint() {
     const s = await todaySummary(app.db);
     const debts = await app.customers.totals();
+    const drawer = await app.cash.summary();
     const showProfit = app.can('see_profit');
     fill(kpis, 
       h('div', { class: 'hero-card' },
@@ -43,7 +44,7 @@ export function renderHome(el) {
         ),
       ),
       h('div', { class: 'stats' },
-        stat('النقد في الدرج', money(s.drawer), { ic: 'cash' }),
+        h('button', { class: 'stat stat-tap', type: 'button', onclick: () => navigate('/cash') }, h('div', { class: 'stat-label' }, icon('cash', 16), 'النقد في الدرج ›'), h('div', { class: 'stat-value' }, money(drawer.expectedCash))),
         h('button', { class: 'stat stat-tap', type: 'button', onclick: () => navigate('/customers') }, h('div', { class: 'stat-label' }, icon('users', 16), 'ديون الزبائن'), h('div', { class: 'stat-value' }, money(debts.total))),
       ),
     );

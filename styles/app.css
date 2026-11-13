@@ -475,6 +475,9 @@ html.scanning-inline .sale{background:transparent}
 .inv-filters{margin:var(--space-3) 0 0}
 .hero-link{display:flex;flex-direction:column;font-size:20px;font-weight:700;color:#fff;text-align:right}
 
+.done-ic.bad{background:linear-gradient(135deg,#e2367f 0%,#aa0b56 100%)}
+.done .btn-wa{margin-top:var(--space-3)}
+
 /* ---------------- 14. متفرقات ---------------- */
 .splash{
   position:fixed;top:0;right:0;bottom:0;left:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-3);

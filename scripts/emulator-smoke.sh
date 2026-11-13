@@ -175,7 +175,19 @@ expect 'اطلب من المورّد'
 adb shell input keyevent 4
 sleep 2
 
-# 8) البيانات باقية بعد إغلاق التطبيق وفتحه
+# 8) إغلاق الصندوق: بيع نقدي 25.00 ← المتوقع 25.00 ← نعدّ 25 ← مطابق
+tap 'النقد في الدرج'
+expect 'يجب أن يكون في الدرج الآن'
+tap 'أغلق الصندوق'
+sleep 2
+adb shell input text '25'
+adb shell input keyevent 66
+expect 'الصندوق مطابق'
+tap 'تم'
+adb shell input keyevent 4
+sleep 2
+
+# 9) البيانات باقية بعد إغلاق التطبيق وفتحه
 adb shell am force-stop $PKG
 adb shell am start -W -n $PKG/.MainActivity | tee start2.txt
 echo "WARM_START_MS=$(grep -o 'TotalTime: [0-9]*' start2.txt | grep -o '[0-9]*')"

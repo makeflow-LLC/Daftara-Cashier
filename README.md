@@ -88,6 +88,14 @@ Nothing else needs to change.
 - Android: `InvoiceSharePlugin` opens WhatsApp (or WhatsApp Business) on the customer's chat with the
   file attached; falls back to the system share sheet.
 
+## Cash closing (milestone 6)
+
+- `src/domain/cash.js` — pure: expected drawer (opening + cash in − cash out), totals per transfer
+  method and credit, closing result (match / over / short), WhatsApp summary text.
+- `src/features/cash/` — drawer screen: live expected cash, close with one number (counted cash),
+  optional start-of-day opening cash (suggested from the last closing), closings history.
+  Selling never depends on opening the drawer.
+
 ## Data rules (non-negotiable)
 
 - **Money** is an integer in the smallest unit (agorot for ₪). **Quantities** are integers ×1000.

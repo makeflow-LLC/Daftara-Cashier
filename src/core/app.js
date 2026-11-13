@@ -16,6 +16,7 @@ import { createProductRepo } from '../features/products/repo.js';
 import { createSaleRepo } from '../features/sale/repo.js';
 import { createCustomerRepo } from '../features/customers/repo.js';
 import { createInventoryRepo } from '../features/inventory/repo.js';
+import { createCashRepo } from '../features/cash/repo.js';
 
 const clock = makeClock();
 
@@ -80,6 +81,7 @@ export const app = {
     app.sales = createSaleRepo({ ...deps, clock });
     app.customers = createCustomerRepo(deps);
     app.inventory = createInventoryRepo({ ...deps, clock });
+    app.cash = createCashRepo({ ...deps, clock });
     if (app.ctx.shopId) await app.loadShop();
     app.startSync();
     bus.on('data', async (e) => {
