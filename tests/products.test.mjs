@@ -170,3 +170,15 @@ test('images: sizes, paths, upload queue and catalog flush', async () => {
   assert.equal(await ms.fetch({ id: 'img3', path: 's/products/missing.webp' }), false);
   assert.equal(await ms.lookup('1'), 'سكر السلطان');
 });
+
+test('scanner zoom: default 2x, clamped to what the camera allows', async () => {
+  const { pickZoom, zoomLevels } = await import('../src/ui/scanner.js');
+  assert.equal(pickZoom(2, 1, 8), 2);
+  assert.equal(pickZoom(3, 1, 2.5), 2.5);
+  assert.equal(pickZoom(2, 1, 1), 1);
+  assert.equal(pickZoom(2, 0.6, 10), 2);
+  assert.equal(pickZoom(2, undefined, undefined), 1);
+  assert.deepEqual(zoomLevels(0.6, 10), [1, 2, 3]);
+  assert.deepEqual(zoomLevels(1, 2), [1, 2]);
+  assert.deepEqual(zoomLevels(1, 1), [1]);
+});

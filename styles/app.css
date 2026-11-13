@@ -822,3 +822,11 @@ body{font-weight:500}
 .adv-toggle .ic:last-child{transition:transform .15s ease;transform:rotate(-90deg)}
 .adv-toggle.open .ic:last-child{transform:rotate(90deg)}
 .adv{animation:pageIn .2s ease both}
+
+/* التكبير والإرشاد داخل نافذة الكاميرا */
+.cam-overlay{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:linear-gradient(transparent,rgba(0,0,0,.6))}
+.cam-hint{color:#fff;font-size:13.5px;font-weight:700;text-shadow:0 1px 3px rgba(0,0,0,.9)}
+.zoom-bar{display:inline-flex;gap:6px;padding:4px;border-radius:999px;background:rgba(0,0,0,.55)}
+.zoom-btn{min-width:46px;height:40px;border-radius:999px;color:#fff;font-family:var(--font-num);font-size:15px;font-weight:700}
+.zoom-btn.on{background:#fff;color:#111}
+.scanner .zoom-bar{align-self:center;margin-bottom:var(--space-2)}

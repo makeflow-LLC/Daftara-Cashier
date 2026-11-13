@@ -14,6 +14,53 @@ const FORMATS = ['EAN_13', 'EAN_8', 'UPC_A', 'UPC_E', 'CODE_128', 'CODE_39', 'CO
 const REPEAT_MS = 1500;
 let active = null;
 
+// ---------- التكبير ----------
+// عدسات الجوالات الرخيصة لا تركّز على القريب (أقل من 10 سم تقريبًا، وبعضها تركيزه ثابت). الحل: تكبير 2×
+// افتراضيًا، فيمسك البائع الجوال على شبر (15–20 سم) حيث الصورة حادّة والباركود يملأ الإطار.
+// الاختيار (1× / 2× / 3×) يُحفظ لكل جوال.
+const ZOOM_KEY = 'cashier-zoom';
+const DEFAULT_ZOOM = 2;
+export const SCAN_HINT = 'أبعد الجوال شبرًا عن الباركود';
+
+function savedZoom() {
+  try { const z = Number(localStorage.getItem(ZOOM_KEY)); return z >= 1 && z <= 5 ? z : DEFAULT_ZOOM; } catch { return DEFAULT_ZOOM; }
+}
+
+/** أقرب مستوى مسموح للمطلوب ضمن حدود الكاميرا (نقي، للاختبار). */
+export function pickZoom(wanted, min, max) {
+  const lo = Number.isFinite(min) && min > 0 ? min : 1;
+  const hi = Number.isFinite(max) && max >= lo ? max : lo;
+  return Math.min(Math.max(wanted, Math.max(1, lo)), hi);
+}
+
+/** المستويات المعروضة: 1× و2× و3× إن كانت الكاميرا تسمح بها. */
+export function zoomLevels(min, max) {
+  return [1, 2, 3].filter((z) => z >= (min || 1) - 0.01 && z <= (max || 1) + 0.01);
+}
+
+/** يطبّق التكبير المحفوظ ويرجع شريط أزرار التكبير (أو null إن لم تدعمه الكاميرا). */
+async function setupZoom(native) {
+  let min = 1, max = 1;
+  try { min = (await native.getMinZoomRatio()).zoomRatio; max = (await native.getMaxZoomRatio()).zoomRatio; } catch { return null; }
+  const levels = zoomLevels(min, max);
+  if (levels.length < 2) return null;
+  let current = pickZoom(savedZoom(), min, max);
+  const bar = h('div', { class: 'zoom-bar', role: 'group', 'aria-label': 'التكبير' });
+  const apply = async (z) => {
+    current = z;
+    try { await native.setZoomRatio({ zoomRatio: z }); } catch { /* */ }
+    try { localStorage.setItem(ZOOM_KEY, String(z)); } catch { /* */ }
+    paint();
+  };
+  const paint = () => {
+    bar.textContent = '';
+    for (const z of levels) bar.append(h('button', { class: `zoom-btn ${Math.abs(current - z) < 0.01 ? 'on' : ''}`, type: 'button', 'aria-label': `تكبير ${z}`, onclick: (e) => { e.stopPropagation(); apply(z); } }, `${z}×`));
+  };
+  try { await native.setZoomRatio({ zoomRatio: current }); } catch { /* */ }
+  paint();
+  return bar;
+}
+
 function plugin() {
   return globalThis.Capacitor?.isNativePlatform?.() ? globalThis.Capacitor.Plugins.BarcodeScanner : null;
 }
@@ -105,7 +152,9 @@ export function openScanner({ title = 'امسح الباركود', onCode, conti
       await native.startScan({ formats: FORMATS, lensFacing: 'BACK' });
       if (closed) { native.stopScan(); return; }
       try { torchBtn.hidden = !(await native.isTorchAvailable()).available; } catch { /* */ }
-      say('وجّه الكاميرا نحو الباركود');
+      const zoom = await setupZoom(native);
+      if (zoom) frame.after(zoom);
+      say(SCAN_HINT);
     } catch (e) {
       document.documentElement.classList.remove('scanning');
       say('الماسح يتجهّز لأول مرة (يحتاج إنترنت مرة واحدة). اكتب الباركود الآن.', 'warn');
@@ -152,7 +201,11 @@ export function openScanner({ title = 'امسح الباركود', onCode, conti
     async resumeCamera() {
       if (closed) return;
       if (native) {
-        try { await native.startScan({ formats: FORMATS, lensFacing: 'BACK' }); document.documentElement.classList.add('scanning'); } catch { /* */ }
+        try {
+          await native.startScan({ formats: FORMATS, lensFacing: 'BACK' });
+          document.documentElement.classList.add('scanning');
+          await native.setZoomRatio({ zoomRatio: savedZoom() });
+        } catch { /* */ }
       }
       paused = false;
     },
@@ -212,6 +265,7 @@ export async function startInlineScanner({ box, onCode, onStatus = () => {} }) {
   const listeners = [];
   let stream = null;
   let timer = null;
+  let overlay = null;
 
   function handle(raw) {
     if (stopped || paused) return;
@@ -241,6 +295,7 @@ export async function startInlineScanner({ box, onCode, onStatus = () => {} }) {
       if (timer) clearInterval(timer);
       if (stream) stream.getTracks().forEach((t) => t.stop());
       box.querySelector('video')?.remove();
+      if (overlay) { overlay.remove(); overlay = null; }
     },
   };
 
@@ -252,6 +307,9 @@ export async function startInlineScanner({ box, onCode, onStatus = () => {} }) {
       document.documentElement.classList.add('scanning-inline');
       await native.startScan({ formats: FORMATS, lensFacing: 'BACK' });
       try { ctl.torch = (await native.isTorchAvailable()).available; } catch { /* */ }
+      const zoom = await setupZoom(native);
+      overlay = h('div', { class: 'cam-overlay' }, h('span', { class: 'cam-hint' }, SCAN_HINT), zoom);
+      box.append(overlay);
       onStatus('');
       return ctl;
     } catch (e) {
