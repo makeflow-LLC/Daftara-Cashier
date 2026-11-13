@@ -147,6 +147,7 @@ expect 'A-0001'
 tap 'بيع جديد'
 adb shell input keyevent 4
 sleep 2
+tap 'الرئيسية'
 expect 'مبيعات اليوم'
 dump; grep -q '25.00' ui.xml && echo "OK: home shows today's sales" || { echo "::error::home sales not updated"; exit 1; }
 
