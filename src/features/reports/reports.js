@@ -115,7 +115,7 @@ export function renderReports(el) {
         s.head.length > 2 ? h('div', { class: 'row rep-row rep-head' }, h('span', { class: 'row-main' }, s.head[0]), ...s.head.slice(1).map((c) => h('span', { class: 'rep-cell' }, c))) : null,
         ...s.rows.map((row) => h('div', { class: 'row rep-row' },
         h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, row[0])),
-        ...row.slice(1).map((c) => h('span', { class: `rep-cell ${row.length === 2 ? 'strong' : ''}` }, num(c))))))));
+        ...row.slice(1).map((c) => h('span', { class: `rep-cell ${row.length === 2 ? 'strong' : ''}` }, num(c)))))));
     fill(body,
       h('div', { class: 'hero-card rep-hero' },
         h('div', { class: 'hero-label' }, `صافي المبيعات — ${rg.label}`),

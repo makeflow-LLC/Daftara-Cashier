@@ -6,10 +6,7 @@
 <title>دفترة كاشير</title>
 <meta name="theme-color" content="#0e7a51">
 <meta name="description" content="نقطة بيع ومخزون وفواتير للمحلات الصغيرة — تعمل بلا إنترنت.">
-<script>
-  // المظهر قبل أول رسم حتى لا تومض الشاشة بيضاء في الوضع الليلي
-  try { var p = JSON.parse(localStorage.getItem('cashier-prefs') || '{}'); if (p.theme === 'light' || p.theme === 'dark') document.documentElement.dataset.theme = p.theme; } catch (e) {}
-</script>
+<meta name="color-scheme" content="only light">
 <script>
   // WebView قديم جدًا (أقدم من Chrome 80) لا يشغّل التطبيق: رسالة واضحة بدل شاشة بيضاء
   window.__oldWebView = (function () { try { new Function('var a = {}; return a?.b ?? 1'); return !('noModule' in document.createElement('script')); } catch (e) { return true; } })();

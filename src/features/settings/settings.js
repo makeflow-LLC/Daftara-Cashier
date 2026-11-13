@@ -35,7 +35,7 @@ export function renderSettings(el) {
       )),
       section(null, h('div', { class: 'list' },
         row({ icon: 'cloud', title: 'المزامنة والنسخ', sub: 'حالة رفع بياناتك', onclick: go('/settings/sync') }),
-        row({ icon: 'sun', title: 'المظهر والأصوات', onclick: go('/settings/appearance') }),
+        row({ icon: 'sun', title: 'الأصوات وشاشة البيع', onclick: go('/settings/appearance') }),
         row({ icon: 'info', title: 'عن التطبيق', end: num(app.info.version), onclick: go('/settings/about') }),
       )),
     ),
@@ -243,15 +243,9 @@ export function renderSync(el) {
 
 export function renderAppearance(el) {
   const prefs = readPrefs();
-  const themes = { auto: 'تلقائي (حسب الجوال)', light: 'فاتح', dark: 'ليلي' };
-  const chips = h('div', { class: 'chips' });
-  const paintChips = () => fill(chips, ...Object.entries(themes).map(([k, label]) =>
-    h('button', { class: `chip ${prefs.theme === k ? 'on' : ''}`, type: 'button', onclick: () => { prefs.theme = k; savePrefs(prefs); applyTheme(k); paintChips(); } }, label)));
-  paintChips();
   el.append(
-    header('المظهر والأصوات', { back: true }),
+    header('الأصوات وشاشة البيع', { back: true }),
     h('div', { class: 'page' },
-      section('المظهر', chips),
       section('شاشة البيع', h('div', { class: 'list' },
         switchRow({ title: 'إظهار الربح أثناء البيع', sub: 'مطفأ: لا يرى الزبون ربحك. الربح يظهر دائمًا في الرئيسية والتقارير.', checked: prefs.saleProfit === true, onchange: (v) => { prefs.saleProfit = v; savePrefs(prefs); } }),
       )),
@@ -285,8 +279,5 @@ export function readPrefs() {
 function savePrefs(p) {
   try { localStorage.setItem(PREFS_KEY, JSON.stringify(p)); } catch { /* وضع خاص */ }
 }
-export function applyTheme(t) {
-  if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
-  else delete document.documentElement.dataset.theme;
-}
-
+/** التطبيق فاتح دائمًا (لا وضع ليلي). */
+export function applyTheme() {}

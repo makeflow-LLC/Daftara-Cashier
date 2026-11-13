@@ -43,3 +43,11 @@ test('CSS works on WebView 80+', () => {
   const css = readFileSync('styles/app.css', 'utf8');
   for (const [re, what] of CSS_BANNED.slice(0, 4)) assert.ok(!re.test(css), `styles/app.css: ${what}`);
 });
+
+test('every source file parses (a syntax error anywhere stops the whole app from opening)', async () => {
+  const { execFileSync } = await import('node:child_process');
+  for (const f of files('src', '.js')) {
+    try { execFileSync(process.execPath, ['--check', f], { stdio: 'pipe' }); }
+    catch (e) { assert.fail(`${f}: ${String(e.stderr).split('\n').slice(0, 4).join(' ')}`); }
+  }
+});
