@@ -76,3 +76,27 @@ test('held carts and current cart survive', async () => {
   await sales.saveCurrent({ lines: [] });
   assert.equal(await sales.loadCurrent(), null);
 });
+
+test('customers: payments, manual debts, statement, totals, Daftara import is idempotent', async () => {
+  const { db, customers } = await setup();
+  const c = await customers.create({ name: 'أم علي', phone: '0599000111' });
+  await customers.addDebt(c.id, 2000, 'خضار');
+  await customers.recordPayment(c.id, 500);
+  await assert.rejects(customers.recordPayment(c.id, 0), (e) => !!e.errors.amount);
+  const full = await customers.get(c.id);
+  assert.equal(full.balance, 1500);
+  assert.deepEqual(full.entries.map((e) => [e.type, e.amount, e.balance]), [['payment', -500, 1500], ['adjustment', 2000, 2000]]);
+  const pay = (await db.payments.toArray()).find((p) => p.customer_id === c.id);
+  assert.equal(pay.method_kind, 'cash');
+  assert.equal(pay.direction, 'in');
+  const list = [{ ref: 'u1', name: 'أبو أحمد', phone: '0599111222', note: null, balance: 3050 }, { ref: 'u2', name: 'بلا دين', phone: null, note: null, balance: 0 }];
+  assert.deepEqual(await customers.importDaftara(list), { added: 2, skipped: 0, total: 3050 });
+  assert.deepEqual(await customers.importDaftara(list), { added: 0, skipped: 2, total: 0 });
+  const t = await customers.totals();
+  assert.deepEqual(t, { total: 4550, count: 2, customers: 3 });
+  assert.equal((await customers.list())[0].name, 'أبو أحمد', 'biggest debt first');
+  await customers.remove(c.id);
+  assert.equal((await customers.totals()).customers, 2);
+  await customers.restore(c.id);
+  assert.equal((await customers.totals()).customers, 3);
+});

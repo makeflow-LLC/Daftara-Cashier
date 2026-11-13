@@ -60,6 +60,16 @@ Nothing else needs to change.
   Invoice numbers come from a per-device counter (`A-0001`, returns `A-R0001`).
 - Migration `0002` adds `cashier_invoice_lines.position` (run it if you already ran `0001`).
 
+## Customers and debts (milestone 3)
+
+- `src/domain/ledger.js` — pure: balance and running statement, oldest unpaid debt, phone → WhatsApp
+  number, reminder and statement texts, Daftara backup parser (decimals → agorot).
+- `src/features/customers/` — list (largest debt first, total owed), customer page (two big buttons:
+  payment received / new debt), statement with invoice receipts, WhatsApp reminder and statement,
+  call, edit/delete with undo, and **Import from Daftara** (pick the Daftara backup JSON; re-importing
+  never duplicates).
+- The scanner counts a barcode once while it stays in view; move away and scan again (or use +) for more.
+
 ## Data rules (non-negotiable)
 
 - **Money** is an integer in the smallest unit (agorot for ₪). **Quantities** are integers ×1000.

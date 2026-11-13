@@ -9,7 +9,9 @@ import { feedback } from './feedback.js';
 import { normalizeBarcode } from '../domain/product.js';
 
 const FORMATS = ['EAN_13', 'EAN_8', 'UPC_A', 'UPC_E', 'CODE_128', 'CODE_39', 'CODE_93', 'ITF', 'CODABAR'];
-const REPEAT_MS = 1600; // نفس الباركود أمام الكاميرا لا يُحسب مرتين
+// الباركود يُحسب مرة واحدة ما دام أمام الكاميرا. ليُحسب ثانية: أبعد الكاميرا عنه (ثانية ونصف) ثم امسحه من جديد،
+// أو زد العدد بزر + في السلة. (كل قراءة له تجدّد المهلة، فالبقاء أمامه لا يكرره أبدًا.)
+const REPEAT_MS = 1500;
 let active = null;
 
 function plugin() {
@@ -64,7 +66,7 @@ export function openScanner({ title = 'امسح الباركود', onCode, conti
     const code = normalizeBarcode(raw);
     if (!code) return;
     const now = Date.now();
-    if (!typed && code === last.code && now - last.at < REPEAT_MS) return;
+    if (!typed && code === last.code && now - last.at < REPEAT_MS) { last.at = now; return; }
     last = { code, at: now };
     feedback.ok();
     flash();
@@ -216,7 +218,7 @@ export async function startInlineScanner({ box, onCode, onStatus = () => {} }) {
     const code = normalizeBarcode(raw);
     if (!code) return;
     const now = Date.now();
-    if (code === last.code && now - last.at < REPEAT_MS) return;
+    if (code === last.code && now - last.at < REPEAT_MS) { last.at = now; return; }
     last = { code, at: now };
     feedback.ok();
     box.classList.remove('hit'); void box.offsetWidth; box.classList.add('hit');

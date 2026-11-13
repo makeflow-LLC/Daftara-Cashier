@@ -148,7 +148,27 @@ tap 'الرئيسية'
 expect 'مبيعات اليوم'
 dump; grep -q '25.00' ui.xml && echo "OK: home shows today's sales" || { echo "::error::home sales not updated"; exit 1; }
 
-# 6) البيانات باقية بعد إغلاق التطبيق وفتحه
+# 6) الزبائن: زبون جديد ودين عليه
+tap 'الزبائن'
+expect 'لا زبائن بعد'
+tap 'زبون جديد'
+sleep 2
+adb shell input text 'Ali'
+adb shell input keyevent 66
+expect 'دين جديد'
+tap 'دين جديد'
+sleep 2
+adb shell input text '20'
+adb shell input keyevent 66
+sleep 2
+expect 'كشف الحساب'
+dump; grep -q '20.00' ui.xml && echo "OK: debt recorded" || { echo "::error::debt not shown"; exit 1; }
+adb shell input keyevent 4
+sleep 2
+tap 'الرئيسية'
+expect 'ديون الزبائن'
+
+# 7) البيانات باقية بعد إغلاق التطبيق وفتحه
 adb shell am force-stop $PKG
 adb shell am start -W -n $PKG/.MainActivity | tee start2.txt
 echo "WARM_START_MS=$(grep -o 'TotalTime: [0-9]*' start2.txt | grep -o '[0-9]*')"

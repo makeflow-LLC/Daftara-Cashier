@@ -30,6 +30,7 @@ export function renderHome(el) {
 
   async function paint() {
     const s = await todaySummary(app.db);
+    const debts = await app.customers.totals();
     const showProfit = app.can('see_profit');
     fill(kpis, 
       h('div', { class: 'hero-card' },
@@ -43,7 +44,7 @@ export function renderHome(el) {
       ),
       h('div', { class: 'stats' },
         stat('النقد في الدرج', money(s.drawer), { ic: 'cash' }),
-        stat('الوردية', h('span', { class: 'stat-text' }, s.sessionOpen ? 'مفتوحة' : 'لم تُفتح بعد'), { ic: 'receipt' }),
+        h('button', { class: 'stat stat-tap', type: 'button', onclick: () => navigate('/customers') }, h('div', { class: 'stat-label' }, icon('users', 16), 'ديون الزبائن'), h('div', { class: 'stat-value' }, money(debts.total))),
       ),
     );
     const a = await stockAlerts(app.db, { expiry: app.feature('expiry') });
@@ -59,7 +60,7 @@ export function renderHome(el) {
 
   paint();
   const off = bus.on('data', (e) => {
-    if (e.tables.some((t) => ['invoices', 'payments', 'cash_sessions', 'movements', 'products'].includes(t))) paint();
+    if (e.tables.some((t) => ['invoices', 'payments', 'cash_sessions', 'movements', 'products', 'customer_entries', 'customers'].includes(t))) paint();
   });
   const offShop = bus.on('shop', paint);
   return () => { off(); offShop(); };

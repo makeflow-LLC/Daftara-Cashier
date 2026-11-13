@@ -6,7 +6,7 @@ import { renderProducts } from './products/products.js';
 import { renderProductForm } from './products/form.js';
 import { renderRapidAdd } from './products/rapid.js';
 import { renderCategories } from './products/categories.js';
-import { renderCustomers } from './customers/customers.js';
+import { renderCustomers, renderCustomer } from './customers/customers.js';
 import {
   renderSettings, renderShopProfile, renderFeatures, renderCurrencies,
   renderPayments, renderSync, renderAppearance, renderAbout,
@@ -30,7 +30,13 @@ export const MODULES = [
       { path: '/settings/categories', tab: 'settings', render: renderCategories },
     ],
   },
-  { id: 'customers', routes: [{ path: '/customers', tab: 'customers', render: renderCustomers }] },
+  {
+    id: 'customers',
+    routes: [
+      { path: '/customers', tab: 'customers', render: renderCustomers },
+      { path: '/customers/view', tab: 'customers', chrome: false, render: renderCustomer },
+    ],
+  },
   {
     id: 'settings',
     routes: [

@@ -439,6 +439,27 @@ html.scanning-inline .sale{background:transparent}
 .rc-foot{text-align:center;font-size:13px;color:#605d5d;padding-top:var(--space-3)}
 .rc-actions{position:sticky;bottom:0;padding-top:var(--space-3);background:var(--color-bg)}
 
+/* ---------------- الزبائن والديون ---------------- */
+.debt-card,.balance-card{position:relative;overflow:hidden;color:#fff;padding:var(--space-4);border-radius:var(--radius-lg);margin-bottom:var(--space-3);background:linear-gradient(135deg,#e2367f 0%,#aa0b56 100%);box-shadow:0 10px 24px rgba(170,11,86,.25)}
+.balance-card.clear{background:var(--grad-brand);box-shadow:0 10px 24px rgba(11,95,99,.28)}
+.debt-card .hero-value,.balance-card .hero-value{margin-bottom:4px}
+.avatar{flex:none;width:42px;height:42px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:var(--brand-100);color:var(--brand-700);font-weight:700;font-size:18px}
+.avatar.owed{background:var(--danger-100);color:var(--danger-700)}
+.row-end.credit{color:var(--brand-700)}
+.big-actions{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);margin-bottom:var(--space-3)}
+.big-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:92px;border-radius:var(--radius-lg);font-weight:700;font-size:17px;color:#fff}
+.big-btn:active{filter:brightness(.92)}
+.big-btn.pay{background:var(--grad-brand);box-shadow:var(--shadow-brand)}
+.big-btn.debt{background:linear-gradient(135deg,#e2367f 0%,#aa0b56 100%);box-shadow:0 8px 20px rgba(170,11,86,.25)}
+.mini-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-2)}
+.mini-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:64px;border-radius:var(--radius-md);background:var(--color-card);box-shadow:var(--shadow-sm);font-size:13px;font-weight:600;color:var(--brand-700)}
+.mini-btn:disabled{opacity:.4}
+.mini-btn:active{background:var(--brand-100)}
+.ic-debt{background:var(--danger-100);color:var(--danger-700)}
+.steps{margin:0 0 var(--space-4);padding-right:var(--space-4);line-height:1.9}
+.stat-tap{text-align:right}
+.stat-tap:active{background:var(--color-press)}
+
 /* ---------------- 14. متفرقات ---------------- */
 .splash{
   position:fixed;top:0;right:0;bottom:0;left:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-3);
