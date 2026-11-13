@@ -460,6 +460,13 @@ html.scanning-inline .sale{background:transparent}
 .stat-tap{text-align:right}
 .stat-tap:active{background:var(--color-press)}
 
+.inv-actions{margin:0 0 var(--space-3)}
+.inv-actions .quick-brand{color:#fff}
+.inv-value{margin-bottom:var(--space-4)}
+.inv-value .stat-value{font-size:17px}
+.check{flex:none;width:30px;height:30px;border-radius:8px;border:2px solid var(--neutral-400);display:inline-flex;align-items:center;justify-content:center;color:#fff}
+.check.on{background:var(--brand);border-color:var(--brand)}
+
 /* ---------------- 14. متفرقات ---------------- */
 .splash{
   position:fixed;top:0;right:0;bottom:0;left:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-3);

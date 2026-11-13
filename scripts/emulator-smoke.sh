@@ -168,7 +168,14 @@ sleep 2
 tap 'الرئيسية'
 expect 'ديون الزبائن'
 
-# 7) البيانات باقية بعد إغلاق التطبيق وفتحه
+# 7) المخزون: الصفحة تفتح وتعرض التنبيهات (Milk بيع منه 1 بلا رصيد ← نفد)
+tap 'المخزون'
+expect 'التنبيهات'
+expect 'اطلب من المورّد'
+adb shell input keyevent 4
+sleep 2
+
+# 8) البيانات باقية بعد إغلاق التطبيق وفتحه
 adb shell am force-stop $PKG
 adb shell am start -W -n $PKG/.MainActivity | tee start2.txt
 echo "WARM_START_MS=$(grep -o 'TotalTime: [0-9]*' start2.txt | grep -o '[0-9]*')"

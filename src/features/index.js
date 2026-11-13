@@ -7,6 +7,10 @@ import { renderProductForm } from './products/form.js';
 import { renderRapidAdd } from './products/rapid.js';
 import { renderCategories } from './products/categories.js';
 import { renderCustomers, renderCustomer } from './customers/customers.js';
+import { renderInventory } from './inventory/hub.js';
+import { renderPurchase } from './inventory/purchase.js';
+import { renderSuppliers, renderSupplier } from './inventory/suppliers.js';
+import { renderCount } from './inventory/count.js';
 import {
   renderSettings, renderShopProfile, renderFeatures, renderCurrencies,
   renderPayments, renderSync, renderAppearance, renderAbout,
@@ -35,6 +39,16 @@ export const MODULES = [
     routes: [
       { path: '/customers', tab: 'customers', render: renderCustomers },
       { path: '/customers/view', tab: 'customers', chrome: false, render: renderCustomer },
+    ],
+  },
+  {
+    id: 'inventory',
+    routes: [
+      { path: '/inventory', tab: 'settings', chrome: false, render: renderInventory },
+      { path: '/inventory/purchase', chrome: false, render: renderPurchase },
+      { path: '/inventory/count', chrome: false, render: renderCount },
+      { path: '/suppliers', chrome: false, render: renderSuppliers },
+      { path: '/suppliers/view', chrome: false, render: renderSupplier },
     ],
   },
   {

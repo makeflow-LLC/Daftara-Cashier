@@ -7,6 +7,8 @@ import { createStore } from '../src/core/store.js';
 import { createProductRepo } from '../src/features/products/repo.js';
 import { createSaleRepo } from '../src/features/sale/repo.js';
 import { createCustomerRepo } from '../src/features/customers/repo.js';
+import { createInventoryRepo } from '../src/features/inventory/repo.js';
+import { purchaseLine } from '../src/domain/inventory.js';
 import { makeLine } from '../src/domain/cart.js';
 import { makeClock } from '../src/domain/merge.js';
 import { uuid } from '../src/core/ids.js';
@@ -23,7 +25,8 @@ async function setup() {
   const customers = createCustomerRepo(deps);
   await store.put('payment_methods', { name: 'نقدًا', kind: 'cash', sort: 0 });
   const { product } = await products.save({ name: 'حليب', sell_price: 500, cost_price: 400 }, { qty: 20000, packs: [{ name: 'كرتونة', factor: 12000, sell_price: 5500 }] });
-  return { db, sales, products, customers, product: await products.get(product.id) };
+  const inventory = createInventoryRepo(deps);
+  return { db, sales, products, customers, inventory, product: await products.get(product.id) };
 }
 
 test('checkout: one atomic write, stock goes down, numbers per device', async () => {
@@ -99,4 +102,36 @@ test('customers: payments, manual debts, statement, totals, Daftara import is id
   assert.equal((await customers.totals()).customers, 2);
   await customers.restore(c.id);
   assert.equal((await customers.totals()).customers, 3);
+});
+
+test('inventory: purchase updates stock and weighted cost, supplier balance, payment', async () => {
+  const { db, inventory, product } = await setup();   // 20 قطعة بتكلفة 4.00
+  const sup = await inventory.saveSupplier({ name: 'أبو سامي', phone: '0599222333' });
+  const r = await inventory.savePurchase({ lines: [purchaseLine(product, { qty: 20000, unitCost: 500 })], supplierId: sup.id, paid: 'credit' });
+  assert.equal(r.invoice.number, 'B-P0001');
+  const s = await db.stock.get(product.id);
+  assert.equal(s.qty, 40000);
+  assert.equal(s.avgCost, 450);
+  assert.equal((await db.products.get(product.id)).cost_price, 450, 'product cost follows the average');
+  assert.equal((await db.price_history.toArray()).filter((h) => h.reason === 'purchase').length, 1);
+  assert.equal((await inventory.supplier(sup.id)).balance, 10000);
+  await inventory.paySupplier(sup.id, 4000);
+  assert.equal((await inventory.supplier(sup.id)).balance, 6000);
+  assert.deepEqual(await inventory.supplierTotals(), { total: 6000, count: 1 });
+  await assert.rejects(inventory.savePurchase({ lines: [purchaseLine(product)], paid: 'credit' }), /اختر المورّد/);
+  assert.equal(await db.invoices.count(), 1, 'failed purchase saved nothing');
+});
+
+test('inventory: damage, stock count adjustments and alerts', async () => {
+  const { db, inventory, product } = await setup();
+  await inventory.damage(product.id, 2000, 'مكسور');
+  assert.equal((await db.stock.get(product.id)).qty, 18000);
+  const res = await inventory.applyCount([{ product_id: product.id, name: product.name, recorded: 18000, actual: 15000, unit_cost: 400 }]);
+  assert.deepEqual(res, { diffValue: -1200, changed: 1, counted: 1 });
+  assert.equal((await db.stock.get(product.id)).qty, 15000);
+  assert.equal((await db.stock_counts.toArray())[0].diff_value, -1200);
+  await inventory.applyCount([{ product_id: product.id, name: product.name, recorded: 15000, actual: 3000, unit_cost: 400 }]);
+  const a = await inventory.alerts();
+  assert.deepEqual(a.low.map((p) => p.name), ['حليب']);
+  assert.equal(a.out.length, 0);
 });

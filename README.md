@@ -70,6 +70,15 @@ Nothing else needs to change.
   never duplicates).
 - The scanner counts a barcode once while it stays in view; move away and scan again (or use +) for more.
 
+## Inventory (milestone 4)
+
+- `src/domain/inventory.js` — pure: purchase invoices (packs → base units, per-unit cost), alerts
+  (out, low, expiring ≤30 days, dead ≥60 days), suggested reorder quantity and WhatsApp text, stock count diffs.
+- `src/features/inventory/` — hub (actions, stock value, alerts, reorder to supplier), purchase screen
+  (scan/search, qty + cost, new product inline, paper-invoice photo, cash or on account), suppliers
+  (balances, pay, statement), stock count (scan → actual → adjustments + difference value), damage.
+- A purchase sets each product's cost to the new weighted average and logs it in price history.
+
 ## Data rules (non-negotiable)
 
 - **Money** is an integer in the smallest unit (agorot for ₪). **Quantities** are integers ×1000.

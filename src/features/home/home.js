@@ -4,7 +4,7 @@ import { icon } from '../../ui/icons.js';
 import { header, money, stat, section, row, syncBadge, emptyState } from '../../ui/components.js';
 import { app } from '../../core/app.js';
 import { bus } from '../../core/bus.js';
-import { todaySummary, stockAlerts } from '../../core/queries.js';
+import { todaySummary } from '../../core/queries.js';
 import { navigate } from '../../core/router.js';
 import { logo } from '../setup/setup.js';
 
@@ -20,9 +20,9 @@ export function renderHome(el) {
       kpis,
       h('div', { class: 'quick' },
         quick('scan', 'بيع جديد', () => navigate('/sale'), 'brand'),
-        quick('box', 'الأصناف', () => navigate('/products')),
+        quick('truck', 'شراء بضاعة', () => navigate('/inventory/purchase')),
+        quick('box', 'المخزون', () => navigate('/inventory')),
         quick('users', 'الزبائن والديون', () => navigate('/customers')),
-        quick('sliders', 'الإعدادات', () => navigate('/settings')),
       ),
       section('تنبيهات', alerts),
     ),
@@ -47,14 +47,14 @@ export function renderHome(el) {
         h('button', { class: 'stat stat-tap', type: 'button', onclick: () => navigate('/customers') }, h('div', { class: 'stat-label' }, icon('users', 16), 'ديون الزبائن'), h('div', { class: 'stat-value' }, money(debts.total))),
       ),
     );
-    const a = await stockAlerts(app.db, { expiry: app.feature('expiry') });
+    const a = await app.inventory.alerts({ expiry: app.feature('expiry') });
     const items = [
       ...a.out.slice(0, 3).map((p) => row({ icon: 'alert', title: p.name, sub: 'نفد من المخزون', tone: 'danger' })),
       ...a.low.slice(0, 3).map((p) => row({ icon: 'box', title: p.name, sub: 'المخزون منخفض', tone: 'warn' })),
       ...a.expiring.slice(0, 3).map((p) => row({ icon: 'alert', title: p.name, sub: `ينتهي ${p.expiry_date}`, tone: 'warn' })),
     ];
     fill(alerts, items.length
-      ? h('div', { class: 'list' }, ...items)
+      ? h('div', null, h('div', { class: 'list' }, ...items), h('button', { class: 'btn btn-text', type: 'button', onclick: () => navigate('/inventory') }, 'كل التنبيهات وطلب البضاعة'))
       : emptyState('check', 'لا تنبيهات الآن', 'ننبهك هنا حين ينخفض مخزون صنف أو يقترب انتهاؤه.'));
   }
 

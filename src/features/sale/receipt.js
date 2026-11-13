@@ -13,6 +13,7 @@ const TITLES = { sale: 'فاتورة بيع', sale_return: 'فاتورة مرت�
 export async function buildReceipt(invoiceId) {
   const { invoice, lines } = await app.sales.invoice(invoiceId);
   const cur = invoice.currency;
+  const supplier = invoice.supplier_id ? await app.db.suppliers.get(invoice.supplier_id) : null;
   const [payments, methods, customer, logo] = await Promise.all([
     app.db.payments.where('invoice_id').equals(invoiceId).toArray(),
     app.db.payment_methods.toArray(),
@@ -35,6 +36,7 @@ export async function buildReceipt(invoiceId) {
       num(`${when.toLocaleDateString('en-GB')} ${when.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`),
     ),
     customer ? h('div', { class: 'rc-cust' }, 'الزبون: ', customer.name) : null,
+    supplier ? h('div', { class: 'rc-cust' }, 'المورّد: ', supplier.name) : null,
     h('div', { class: 'rc-lines' }, ...lines.map((l) => h('div', { class: 'rc-line' },
       h('div', { class: 'rc-name' }, l.name),
       h('div', { class: 'rc-calc' },
@@ -46,9 +48,10 @@ export async function buildReceipt(invoiceId) {
       invoice.discount ? kv('المجموع', money(invoice.subtotal, cur)) : null,
       invoice.discount ? kv('الخصم', money(-invoice.discount, cur)) : null,
       kv('الإجمالي', money(invoice.total, cur), 'rc-total'),
+      invoice.type === 'purchase' && invoice.paid < invoice.total ? kv('على الحساب', money(invoice.total - invoice.paid, cur)) : null,
       ...payments.map((p) => kv(p.method_kind === 'credit' ? 'آجل (على الحساب)' : (methodName.get(p.method_id) || 'نقدًا'), money(p.amount, cur))),
     ),
-    h('div', { class: 'rc-foot' }, 'شكرًا لتعاملكم معنا'),
+    invoice.type === 'sale' ? h('div', { class: 'rc-foot' }, 'شكرًا لتعاملكم معنا') : null,
   );
 }
 
