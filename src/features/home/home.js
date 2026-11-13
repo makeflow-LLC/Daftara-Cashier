@@ -39,7 +39,7 @@ export function renderHome(el) {
         h('div', { class: 'hero-value' }, money(s.salesTotal)),
         h('div', { class: 'hero-row' },
           showProfit ? h('div', null, h('span', { class: 'hero-mini-label' }, 'الربح'), money(s.profit, undefined, s.profit < 0 ? 'neg' : '')) : null,
-          h('div', null, h('span', { class: 'hero-mini-label' }, 'الفواتير'), num(String(s.invoiceCount))),
+          h('button', { class: 'hero-link', type: 'button', onclick: () => navigate('/invoices?range=today') }, h('span', { class: 'hero-mini-label' }, 'الفواتير ›'), num(String(s.invoiceCount))),
         ),
       ),
       h('div', { class: 'stats' },

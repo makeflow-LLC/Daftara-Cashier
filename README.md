@@ -79,6 +79,15 @@ Nothing else needs to change.
   (balances, pay, statement), stock count (scan → actual → adjustments + difference value), damage.
 - A purchase sets each product's cost to the new weighted average and logs it in price history.
 
+## Invoices and sharing (milestone 5)
+
+- `src/domain/invoice.js` — pure: one receipt model (no cost/profit) for screen, image, text and PDF;
+  WhatsApp text; invoice history filter (number, party, product, type, date); `pdfFromJpeg` (no library).
+- `src/features/invoices/` — canvas renderer (device shapes the Arabic), share (image / PDF / text),
+  history screen. The receipt sheet has an optional one-tap «أرسل واتساب».
+- Android: `InvoiceSharePlugin` opens WhatsApp (or WhatsApp Business) on the customer's chat with the
+  file attached; falls back to the system share sheet.
+
 ## Data rules (non-negotiable)
 
 - **Money** is an integer in the smallest unit (agorot for ₪). **Quantities** are integers ×1000.

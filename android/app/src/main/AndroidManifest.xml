@@ -46,6 +46,11 @@
     <!-- الكاميرا لمسح الباركود وتصوير الأصناف فقط؛ تُطلب عند أول مسح، والصور لا تخرج إلا إلى خادم المحل -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <!-- إرسال الفاتورة إلى واتساب (العادي أو للأعمال) مباشرة -->
+    <queries>
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
+    </queries>
     <!-- لا إعلانات ولا معرّف إعلاني -->
     <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
 </manifest>

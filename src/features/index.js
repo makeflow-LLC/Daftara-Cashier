@@ -7,6 +7,7 @@ import { renderProductForm } from './products/form.js';
 import { renderRapidAdd } from './products/rapid.js';
 import { renderCategories } from './products/categories.js';
 import { renderCustomers, renderCustomer } from './customers/customers.js';
+import { renderInvoices } from './invoices/history.js';
 import { renderInventory } from './inventory/hub.js';
 import { renderPurchase } from './inventory/purchase.js';
 import { renderSuppliers, renderSupplier } from './inventory/suppliers.js';
@@ -41,6 +42,7 @@ export const MODULES = [
       { path: '/customers/view', tab: 'customers', chrome: false, render: renderCustomer },
     ],
   },
+  { id: 'invoices', routes: [{ path: '/invoices', tab: 'settings', chrome: false, render: renderInvoices }] },
   {
     id: 'inventory',
     routes: [
