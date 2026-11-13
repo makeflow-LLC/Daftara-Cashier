@@ -25,6 +25,7 @@ export function renderSettings(el) {
         row({ icon: 'receipt', title: 'الفواتير', sub: 'كل فواتير البيع والشراء والمرتجع، وإرسالها واتساب', onclick: go('/invoices') }),
         row({ icon: 'box', title: 'المخزون', sub: 'شراء، جرد، تالف، تنبيهات وطلب بضاعة', onclick: go('/inventory') }),
         row({ icon: 'truck', title: 'الموردون', sub: 'ما عليك لكل مورّد', onclick: go('/suppliers') }),
+        row({ icon: 'sliders', title: 'أدوات', sub: 'استيراد من Excel، تحديث الأسعار، ملصقات، نسخة احتياطية', onclick: go('/tools') }),
       )),
       section(null, h('div', { class: 'list' },
         row({ icon: 'store', title: 'بيانات المحل', sub: app.shop?.name, onclick: go('/settings/shop') }),

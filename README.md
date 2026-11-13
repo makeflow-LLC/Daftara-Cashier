@@ -104,6 +104,15 @@ Nothing else needs to change.
 - `src/features/reports/` — one page with period chips, daily bars, tables, and PDF / Excel export
   (`vendor/xlsx.js` is Daftara's library-free xlsx writer, loaded only on export).
 
+## Tools (milestone 8)
+
+- `src/domain/files.js` — pure, no libraries: inflate (RFC 1951), zip reader, xlsx reader (first sheet),
+  CSV parser. `src/domain/tools.js` — import column guessing and row conversion, bulk price changes with
+  rounding, EAN-13/EAN-8 module encoding for labels, backup validation.
+- `src/features/tools/` — Excel/CSV import with a column-mapping screen, products export, bulk price
+  update with preview and undo (price history batch), A4 label sheets (3×8) as multi-page PDF,
+  backup and restore (`src/core/backup.js`; images are not included).
+
 ## Data rules (non-negotiable)
 
 - **Money** is an integer in the smallest unit (agorot for ₪). **Quantities** are integers ×1000.

@@ -33,7 +33,7 @@ export function renderProducts(el) {
   const body = h('div');
 
   el.append(
-    header('الأصناف', { actions: [iconButton('scan', 'ابحث بالمسح', findByScan), syncBadge()] }),
+    header('الأصناف', { actions: [iconButton('sliders', 'أدوات: استيراد، أسعار، ملصقات', () => navigate('/tools')), iconButton('scan', 'ابحث بالمسح', findByScan), syncBadge()] }),
     h('div', { class: 'page' },
       h('div', { class: 'search-row' }, icon('search', 20), search),
       h('div', { class: 'product-actions' },
