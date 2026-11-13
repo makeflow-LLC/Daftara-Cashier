@@ -320,7 +320,7 @@ body:not(.has-tabbar) .toast{bottom:calc(var(--sab) + 90px)}
 }
 .scan-box .scan-laser{top:50%}
 .scan-box.hit{box-shadow:inset 0 0 0 4px #7fe0b3}
-.sale-cam{margin:0;border-radius:0;border-left:var(--space-4) solid var(--color-bg);border-right:var(--space-4) solid var(--color-bg)}
+.sale-cam{margin:0;border-radius:0;height:34vh;min-height:210px;max-height:320px}
 /* الكاميرا خلف الصفحة (أندرويد): كل شيء معتم إلا مربع الكاميرا */
 html.scanning-inline,html.scanning-inline body{background:transparent !important}
 html.scanning-inline .sale-cam{background:transparent}
@@ -419,6 +419,25 @@ html.scanning-inline .sale{background:transparent}
 .row-end.owed{color:var(--danger-700)}
 .sheet-search{margin:0 0 var(--space-3)}
 .picker-list{max-height:50vh;overflow-y:auto}
+
+/* الفاتورة */
+.receipt{background:#fff;color:#201e1d;border-radius:var(--radius-md);padding:var(--space-4) var(--space-3);box-shadow:var(--shadow-sm);font-size:15px}
+.rc-head{text-align:center;padding-bottom:var(--space-2);border-bottom:1px dashed #bab6b6}
+.rc-logo{width:56px;height:56px;object-fit:contain;margin:0 auto 4px;display:block}
+.rc-shop{font-size:20px;font-weight:700}
+.rc-sub{font-size:13px;color:#605d5d}
+.rc-meta{display:flex;justify-content:space-between;gap:var(--space-2);padding:var(--space-2) 0;font-weight:700;font-size:14px}
+.rc-cust{font-size:14px;padding-bottom:var(--space-2)}
+.rc-lines{border-top:1px dashed #bab6b6;border-bottom:1px dashed #bab6b6;padding:var(--space-1) 0}
+.rc-line{padding:5px 0}
+.rc-name{font-weight:600}
+.rc-calc{display:flex;justify-content:space-between;color:#605d5d;font-size:14px}
+.rc-calc > .num{color:#201e1d;font-weight:700}
+.rc-totals{padding-top:var(--space-2)}
+.rc-kv{display:flex;justify-content:space-between;padding:2px 0;font-size:14px;color:#605d5d}
+.rc-total{font-size:22px;font-weight:700;color:#201e1d;padding:4px 0}
+.rc-foot{text-align:center;font-size:13px;color:#605d5d;padding-top:var(--space-3)}
+.rc-actions{position:sticky;bottom:0;padding-top:var(--space-3);background:var(--color-bg)}
 
 /* ---------------- 14. متفرقات ---------------- */
 .splash{

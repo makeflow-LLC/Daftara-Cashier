@@ -24,7 +24,7 @@ export function renderSettings(el) {
         row({ icon: 'sliders', title: 'الميزات', sub: `${SHOP_TYPES[app.shop?.shop_type]?.name || ''} — شغّل وأطفئ ما تحتاجه`, onclick: go('/settings/features') }),
         row({ icon: 'tag', title: 'التصنيفات', sub: 'ألبان، معلبات، منظفات…', onclick: go('/settings/categories') }),
         f.multiCurrency ? row({ icon: 'coins', title: 'العملات وأسعار الصرف', onclick: go('/settings/currencies') }) : null,
-        row({ icon: 'wallet', title: 'طرق الدفع', sub: 'نقدًا، تحويل، محافظ، آجل — والرسوم', onclick: go('/settings/payments') }),
+        row({ icon: 'wallet', title: 'طرق الدفع', sub: 'نقدًا، تحويل، محافظ، آجل', onclick: go('/settings/payments') }),
       )),
       section(null, h('div', { class: 'list' },
         row({ icon: 'cloud', title: 'المزامنة والنسخ', sub: 'حالة رفع بياناتك', onclick: go('/settings/sync') }),
@@ -158,7 +158,7 @@ export function renderPayments(el) {
     fill(list, ...methods.map((m) => row({
       icon: m.kind === 'cash' ? 'cash' : m.kind === 'credit' ? 'user' : 'wallet',
       title: m.name,
-      sub: `${kinds[m.kind]}${m.fee_bp ? ` — رسوم ${formatDecimal(m.fee_bp, 2, { trim: true })}%` : ''}${m.active ? '' : ' — موقوفة'}`,
+      sub: `${kinds[m.kind]}${m.active ? '' : ' — موقوفة'}`,
       tone: m.active ? '' : 'muted',
       onclick: () => edit(m),
     })));
@@ -167,7 +167,6 @@ export function renderPayments(el) {
     const isNew = !m;
     m = m || { name: '', kind: 'transfer', fee_bp: 0, active: true, sort: 99 };
     const name = input({ value: m.name, maxlength: 40, placeholder: 'مثال: بنك فلسطين، جوال باي' });
-    const fee = input({ value: m.fee_bp ? formatDecimal(m.fee_bp, 2, { trim: true, group: false }) : '', inputmode: 'decimal', dir: 'ltr', placeholder: '0' });
     let kind = m.kind;
     let active = m.active;
     const kindChips = h('div', { class: 'chips' });
@@ -177,9 +176,8 @@ export function renderPayments(el) {
     const sheet = openSheet((close) => h('form', {
       onsubmit: async (e) => {
         e.preventDefault();
-        const bp = fee.value.trim() ? parseDecimal(fee.value, 2) : 0;
-        if (!name.value.trim() || bp === null || bp < 0 || bp > 10000) { feedback.error(); toast('تحقق من الاسم والنسبة', { kind: 'error' }); return; }
-        await app.store.put('payment_methods', { ...m, name: name.value.trim(), kind, fee_bp: bp, active });
+        if (!name.value.trim()) { feedback.error(); toast('اكتب اسم طريقة الدفع', { kind: 'error' }); return; }
+        await app.store.put('payment_methods', { ...m, name: name.value.trim(), kind, fee_bp: 0, active });
         feedback.ok();
         close();
         paint();
@@ -187,7 +185,6 @@ export function renderPayments(el) {
     },
       field('الاسم', name),
       h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'النوع'), kindChips),
-      field('رسوم التحويل %', fee, 'تُخصم من الربح، مثلًا 1.5'),
       isNew ? null : switchRow({ title: 'مفعّلة', checked: active, onchange: (v) => { active = v; } }),
       button('حفظ', { type: 'submit', block: true, size: 'lg', icon: 'check' }),
     ), { title: isNew ? 'طريقة دفع جديدة' : 'تعديل طريقة الدفع' });
@@ -248,6 +245,9 @@ export function renderAppearance(el) {
     header('المظهر والأصوات', { back: true }),
     h('div', { class: 'page' },
       section('المظهر', chips),
+      section('شاشة البيع', h('div', { class: 'list' },
+        switchRow({ title: 'إظهار الربح أثناء البيع', sub: 'مطفأ: لا يرى الزبون ربحك. الربح يظهر دائمًا في الرئيسية والتقارير.', checked: prefs.saleProfit === true, onchange: (v) => { prefs.saleProfit = v; savePrefs(prefs); } }),
+      )),
       section('عند المسح', h('div', { class: 'list' },
         switchRow({ title: 'صوت', checked: prefs.sound, onchange: (v) => { prefs.sound = v; savePrefs(prefs); configureFeedback({ sound: v }); feedback.ok(); } }),
         switchRow({ title: 'اهتزاز', checked: prefs.vibrate, onchange: (v) => { prefs.vibrate = v; savePrefs(prefs); configureFeedback({ vibrate: v }); feedback.ok(); } }),

@@ -10,6 +10,7 @@ import { matchesInvoiceNumber } from '../../domain/numbering.js';
 import { netLineTotals } from '../../domain/cart.js';
 import { divRound } from '../../domain/money.js';
 import { app } from '../../core/app.js';
+import { showReceipt } from './receipt.js';
 
 export function renderReturns(el) {
   const q = input({ type: 'search', placeholder: 'رقم الفاتورة، مثل 42', inputmode: 'search', autocomplete: 'off' });
@@ -86,6 +87,7 @@ export function renderReturns(el) {
             close();
             toast(`سُجّل المرتجع ${r.invoice.number}${refund === 'cash' ? ' — رُد للزبون نقدًا' : ' — خُصم من دينه'}`, { kind: 'ok', ms: 4000 });
             load();
+            showReceipt(r.invoice.id, { doneLabel: 'تم', doneIcon: 'check' });
           } catch (e) { feedback.error(); toast(e.message, { kind: 'error' }); }
         },
       }),

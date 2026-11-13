@@ -139,10 +139,7 @@ expect 'Milk'
 tap 'ادفع'
 expect 'المطلوب'
 tap 'نقدًا'
-expect 'المبلغ المستلم'
-hide_kb
-tap 'تم الدفع'
-expect 'تم البيع'
+expect 'فاتورة بيع'
 expect 'A-0001'
 tap 'بيع جديد'
 adb shell input keyevent 4

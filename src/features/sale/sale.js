@@ -16,13 +16,16 @@ import { bus } from '../../core/bus.js';
 import { navigate } from '../../core/router.js';
 import { productThumb } from '../products/thumb.js';
 import { openPay } from './pay.js';
+import { showReceipt } from './receipt.js';
+import { readPrefs } from '../settings/settings.js';
 
 const PREF = 'cashier-sale-camera';
 
 export function renderSale(el) {
   const t0 = performance.now();
   const base = app.shop?.base_currency || 'ILS';
-  const showProfit = app.can('see_profit');
+  // الربح خاص بصاحب المحل: لا يظهر في شاشة البيع إلا إن فعّله من الإعدادات (الزبون قد يرى الشاشة)
+  const showProfit = app.can('see_profit') && readPrefs().saleProfit === true;
   let cart = { lines: [], discount: null, customer: null };
   let products = null;          // تُحمَّل بعد الرسم (لا تؤخر فتح الشاشة)
   let scanner = null;
@@ -332,24 +335,16 @@ export function renderSale(el) {
         cart = { lines: [], discount: null, customer: null };
         changed();
         feedback.ok();
-        done(r, customer);
+        done(r);
       },
       onClose: () => { if (scanner) scanner.resume(); },
     });
   }
 
-  function done(r, customer) {
+  // بعد الدفع: الفاتورة نفسها (بلا ربح — قد يراها الزبون)، وزر واحد لبيع جديد
+  function done(r) {
     if (scanner) scanner.pause();
-    openSheet((close) => h('div', { class: 'done' },
-      h('div', { class: 'done-ic' }, icon('check', 40)),
-      h('div', { class: 'done-title' }, 'تم البيع'),
-      h('div', { class: 'done-num num' }, r.invoice.number),
-      h('div', { class: 'done-total' }, money(r.invoice.total, base)),
-      r.change ? h('div', { class: 'done-change' }, h('span', null, 'الباقي للزبون'), money(r.change, base)) : null,
-      customer && r.invoice.paid < r.invoice.total ? h('div', { class: 'muted' }, `على حساب ${customer.name}: `, num(formatMoney(r.invoice.total - r.invoice.paid, base))) : null,
-      showProfit ? h('div', { class: 'muted small' }, 'ربح هذه الفاتورة: ', num(formatMoney(r.profit, base))) : null,
-      button('بيع جديد', { block: true, size: 'lg', icon: 'scan', onclick: close }),
-    ), { title: null, onClose: () => { if (scanner) scanner.resume(); search.blur(); } });
+    showReceipt(r.invoice.id, { onClose: () => { if (scanner) scanner.resume(); search.blur(); } });
   }
 
   // ---------- البدء ----------
