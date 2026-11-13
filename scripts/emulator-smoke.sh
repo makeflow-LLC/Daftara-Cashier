@@ -77,6 +77,8 @@ hide_kb() {
 }
 
 adb install -r daftara-cashier.apk
+# الكاميرا تُطلب عند فتح شاشة البيع؛ نمنحها مسبقًا حتى لا تقف نافذة الإذن أمام الاختبار
+adb shell pm grant $PKG android.permission.CAMERA || true
 echo "--- cold start:"
 adb shell am start -W -n $PKG/.MainActivity | tee start.txt
 echo "COLD_START_MS=$(grep -o 'TotalTime: [0-9]*' start.txt | grep -o '[0-9]*')"
@@ -102,7 +104,6 @@ adb shell input keyevent 4
 expect 'مبيعات اليوم'
 
 # 4) إضافة سريعة بالمسح (بالكتابة اليدوية: المحاكي بلا باركود حقيقي أمام الكاميرا)
-adb shell pm grant $PKG android.permission.CAMERA || true
 tap 'الأصناف'
 expect 'لا أصناف بعد'
 tap 'إضافة سريعة بالمسح'
