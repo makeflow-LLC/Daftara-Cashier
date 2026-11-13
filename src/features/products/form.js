@@ -231,6 +231,21 @@ export async function renderProductForm(el, params) {
     toast(`حُذف «${editing.name}»`, { undo: () => app.products.restore(editing.id) });
   }
 
+  // ---------- خيارات إضافية (مطوية للصنف الجديد: الأساس اسم وسعر فقط) ----------
+  const hasAdvanced = !!(editing && (editing.category_id || editing.units.length || editing.expiry_date || editing.is_quick || editing.note || editing.unit !== 'piece' || editing.low_stock !== null));
+  const adv = h('div', { class: 'adv', hidden: !hasAdvanced },
+    f.multiCurrency ? currencyPicker(() => currency, (c) => { currency = c; paintMargin(); }) : null,
+    f.units ? h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'يُباع بـ'), unitChips) : null,
+    h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'التصنيف'), catChips),
+    field('نبّهني عندما تقل الكمية عن', low),
+    f.units ? section('العبوات', packList, h('p', { class: 'muted small' }, 'المخزون يبقى بالقطعة: بيع كرتونة ينقص 24 قطعة تلقائيًا.'), errorEl('packs')) : null,
+    f.expiry ? field('تاريخ انتهاء الصلاحية', expiry, 'ننبهك قبل الانتهاء بـ 30 يومًا') : null,
+    f.quickItems ? h('div', { class: 'list' }, switchRow({ title: 'زر في شاشة البيع', sub: 'للأصناف بلا باركود: خبز، أكياس، فكّة…', checked: isQuick, onchange: (v) => { isQuick = v; } })) : null,
+    field('ملاحظة', note));
+  const advToggle = h('button', { class: 'adv-toggle', type: 'button', onclick: () => { adv.hidden = !adv.hidden; advToggle.classList.toggle('open', !adv.hidden); } },
+    icon('sliders', 20), h('span', null, 'خيارات إضافية'), h('small', null, [f.units ? 'الوحدة والعبوات' : null, 'التصنيف', f.expiry ? 'الصلاحية' : null, 'التنبيه'].filter(Boolean).join('، ')), icon('chevron', 18));
+  if (hasAdvanced) advToggle.classList.add('open');
+
   // ---------- الرسم ----------
   el.append(
     header(editing ? 'تعديل الصنف' : 'صنف جديد', { back: true, actions: editing ? [iconButton('trash', 'حذف الصنف', remove)] : [] }),
@@ -249,18 +264,9 @@ export async function renderProductForm(el, params) {
         app.can('see_cost') ? h('div', null, field('سعر التكلفة', cost), errorEl('cost_price')) : null,
       ),
       margin,
-      f.multiCurrency ? currencyPicker(() => currency, (c) => { currency = c; paintMargin(); }) : null,
-      f.units ? h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'يُباع بـ'), unitChips) : null,
-      h('div', { class: 'grid-2' },
-        h('div', null, field('الكمية الموجودة الآن', qty), errorEl('qty')),
-        field('نبّهني عندما تقل عن', low),
-      ),
-      h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'التصنيف'), catChips),
-      f.units ? section('العبوات', packList, h('p', { class: 'muted small' }, 'المخزون يبقى بالقطعة: بيع كرتونة ينقص 24 قطعة تلقائيًا.'), errorEl('packs')) : null,
-      f.expiry ? field('تاريخ انتهاء الصلاحية', expiry, 'ننبهك قبل الانتهاء بـ 30 يومًا') : null,
-      f.quickItems ? h('div', { class: 'list' }, switchRow({ title: 'زر في شاشة البيع', sub: 'للأصناف بلا باركود: خبز، أكياس، فكّة…', checked: isQuick, onchange: (v) => { isQuick = v; } })) : null,
-      field('ملاحظة', note),
-      editing ? h('p', { class: 'muted small' }, 'المخزون الحالي: ', num(formatQty(editing.qty)), ` ${unitOf(editing.unit).short}`) : null,
+      h('div', null, field(editing ? 'الكمية الموجودة الآن' : 'الكمية الموجودة (اختياري)', qty), errorEl('qty')),
+      advToggle,
+      adv,
       h('div', { class: 'sticky-save' }, button(editing ? 'حفظ التعديل' : 'حفظ الصنف', { type: 'submit', block: true, size: 'lg', icon: 'check' })),
     ),
   );

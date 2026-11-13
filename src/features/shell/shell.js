@@ -9,7 +9,7 @@ const TABS = [
   { id: 'products', path: '/products', icon: 'box', label: 'الأصناف' },
   null, // مكان الزر العائم
   { id: 'customers', path: '/customers', icon: 'users', label: 'الزبائن' },
-  { id: 'settings', path: '/settings', icon: 'more', label: 'المزيد' },
+  { id: 'settings', path: '/more', icon: 'more', label: 'المزيد' },
 ];
 
 export function mountShell(root) {

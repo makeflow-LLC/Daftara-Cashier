@@ -40,23 +40,25 @@ export function renderSale(el) {
   const custEl = h('div');
   const cartEl = h('div', { class: 'cart' });
   const totalEl = h('div', { class: 'paybar-total' });
-  const heldBtn = iconButton('cart', 'السلال المعلّقة', openHeld);
-  const camBtn = iconButton('scan', 'الكاميرا', toggleCamera);
-  const torchBtn = iconButton('flash', 'الفلاش', () => scanner && scanner.toggleTorch());
+  // أزرار بأيقونة واسم ظاهر: لا تخمين
+  const labeled = (ic, short, aria, fn, cls = '') => h('button', { class: `lbl-btn ${cls}`.trim(), type: 'button', 'aria-label': aria, onclick: fn }, icon(ic, 22), h('span', null, short));
+  const heldBtn = labeled('cart', 'معلّقة', 'السلال المعلّقة', openHeld);
+  const camBtn = labeled('scan', 'الكاميرا', 'الكاميرا', toggleCamera);
+  const torchBtn = labeled('flash', 'فلاش', 'الفلاش', () => scanner && scanner.toggleTorch());
   torchBtn.hidden = true;
   const payBtn = h('button', { class: 'btn btn-primary btn-lg paybtn', type: 'button', onclick: pay }, icon('check', 22), h('span', null, 'ادفع'));
 
   el.append(h('div', { class: 'sale' },
-    header('بيع', { back: true, actions: [torchBtn, camBtn, heldBtn, iconButton('receipt', 'مرتجع', () => navigate('/sale/returns'))] }),
+    header('بيع', { back: true, actions: [torchBtn, camBtn, heldBtn, labeled('undo', 'مرتجع', 'مرتجع', () => navigate('/sale/returns'))] }),
     scanBox, camStatus,
     h('div', { class: 'sale-search' }, h('div', { class: 'search-row' }, icon('search', 20), search), results),
     quick, custEl, cartEl,
-    h('div', { class: 'paybar' }, totalEl,
-      h('div', { class: 'paybar-actions' },
-        iconButton('tag', 'خصم على الفاتورة', openDiscount, 'pb-icon'),
-        iconButton('user', 'الزبون', chooseCustomer, 'pb-icon'),
-        iconButton('clipboard', 'علّق السلة', holdCart, 'pb-icon'),
-        payBtn)),
+    h('div', { class: 'paybar paybar-2' },
+      h('div', { class: 'paybar-tools' },
+        labeled('tag', 'خصم', 'خصم على الفاتورة', openDiscount, 'pill'),
+        labeled('user', 'زبون', 'الزبون', chooseCustomer, 'pill'),
+        labeled('clipboard', 'علّق', 'علّق السلة', holdCart, 'pill')),
+      h('div', { class: 'paybar-main' }, totalEl, payBtn)),
   ));
 
   // ---------- السلة ----------

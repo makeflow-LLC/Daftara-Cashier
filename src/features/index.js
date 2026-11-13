@@ -15,6 +15,8 @@ import { renderInventory } from './inventory/hub.js';
 import { renderPurchase } from './inventory/purchase.js';
 import { renderSuppliers, renderSupplier } from './inventory/suppliers.js';
 import { renderCount } from './inventory/count.js';
+import { renderMore } from './more/more.js';
+import { renderHelp } from './help/help.js';
 import {
   renderSettings, renderShopProfile, renderFeatures, renderCurrencies,
   renderPayments, renderSync, renderAppearance, renderAbout,
@@ -35,7 +37,7 @@ export const MODULES = [
       { path: '/products', tab: 'products', render: renderProducts },
       { path: '/products/edit', tab: 'products', chrome: false, render: renderProductForm },
       { path: '/products/rapid', tab: 'products', chrome: false, render: renderRapidAdd },
-      { path: '/settings/categories', tab: 'settings', render: renderCategories },
+      { path: '/settings/categories', tab: 'settings', chrome: false, render: renderCategories },
     ],
   },
   {
@@ -70,14 +72,16 @@ export const MODULES = [
   {
     id: 'settings',
     routes: [
-      { path: '/settings', tab: 'settings', render: renderSettings },
-      { path: '/settings/shop', tab: 'settings', render: renderShopProfile },
-      { path: '/settings/features', tab: 'settings', render: renderFeatures },
-      { path: '/settings/currencies', tab: 'settings', render: renderCurrencies },
-      { path: '/settings/payments', tab: 'settings', render: renderPayments },
-      { path: '/settings/sync', tab: 'settings', render: renderSync },
-      { path: '/settings/appearance', tab: 'settings', render: renderAppearance },
-      { path: '/settings/about', tab: 'settings', render: renderAbout },
+      { path: '/more', tab: 'settings', render: renderMore },
+      { path: '/help', tab: 'settings', chrome: false, render: renderHelp },
+      { path: '/settings', tab: 'settings', chrome: false, render: renderSettings },
+      { path: '/settings/shop', tab: 'settings', chrome: false, render: renderShopProfile },
+      { path: '/settings/features', tab: 'settings', chrome: false, render: renderFeatures },
+      { path: '/settings/currencies', tab: 'settings', chrome: false, render: renderCurrencies },
+      { path: '/settings/payments', tab: 'settings', chrome: false, render: renderPayments },
+      { path: '/settings/sync', tab: 'settings', chrome: false, render: renderSync },
+      { path: '/settings/appearance', tab: 'settings', chrome: false, render: renderAppearance },
+      { path: '/settings/about', tab: 'settings', chrome: false, render: renderAbout },
     ],
   },
 ];

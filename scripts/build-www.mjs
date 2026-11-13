@@ -7,7 +7,7 @@ import { cpSync, rmSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ENTRIES = ['index.html', 'styles', 'src', 'vendor', 'icons'];
+const ENTRIES = ['index.html', 'styles', 'src', 'vendor', 'icons', 'fonts'];
 
 if (!process.argv[2]) { console.error('usage: build-www.mjs <dir>'); process.exit(1); }
 const out = resolve(process.argv[2]);

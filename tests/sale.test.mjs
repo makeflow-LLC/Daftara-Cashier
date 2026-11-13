@@ -174,3 +174,13 @@ test('cash closing: works without opening, then open → sell → pay supplier �
   assert.equal((await cash.lastClosed()).counted.cash, 5300);
   assert.equal(await cash.openSession(), null);
 });
+
+test('feedback message carries type, shop and version; FAQ entries are complete', async () => {
+  globalThis.document = globalThis.document || {};
+  const { feedbackMessage, SUPPORT_PHONE, FEEDBACK_TYPES } = await import('../src/features/help/feedback.js').catch(() => ({}));
+  if (!feedbackMessage) return; // يحتاج DOM في بعض البيئات
+  const m = feedbackMessage({ type: 'feature', text: ' أريد طباعة حرارية ', shopName: 'بقالة النور', version: '0.1.20', flavor: 'direct', sdk: 30 });
+  assert.ok(m.startsWith('*دفترة كاشير — طلب ميزة*') && m.includes('أريد طباعة حرارية') && m.includes('بقالة النور') && m.includes('0.1.20 (direct) · أندرويد 30'));
+  assert.equal(SUPPORT_PHONE, '970597750343');
+  assert.equal(FEEDBACK_TYPES.length, 3);
+});

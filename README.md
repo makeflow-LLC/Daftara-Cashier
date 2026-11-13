@@ -113,6 +113,17 @@ Nothing else needs to change.
   update with preview and undo (price history batch), A4 label sheets (3×8) as multi-page PDF,
   backup and restore (`src/core/backup.js`; images are not included).
 
+## Usability pass
+
+- Navigation: «المزيد» is a hub of large colored tiles (reports, invoices, drawer, inventory, suppliers,
+  tools, settings, help, feedback); settings holds shop configuration only.
+- Home: colored header with today's sales, tappable pills, a three-step "start here" guide for new
+  shops, and a beta banner that opens the feedback sheet.
+- `src/features/help/` — FAQ with search and deep links, and feedback (bug / feature request / note)
+  sent to MakeFlow on WhatsApp with app version and shop name.
+- Product form shows only the essentials; the rest is under «خيارات إضافية». Sale screen buttons carry
+  visible labels. Tajawal font (two weights, 18 KB) and light page transitions.
+
 ## Data rules (non-negotiable)
 
 - **Money** is an integer in the smallest unit (agorot for ₪). **Quantities** are integers ×1000.
