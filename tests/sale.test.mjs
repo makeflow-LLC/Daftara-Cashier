@@ -184,3 +184,32 @@ test('feedback message carries type, shop and version; FAQ entries are complete'
   assert.equal(SUPPORT_PHONE, '970597750343');
   assert.equal(FEEDBACK_TYPES.length, 3);
 });
+
+test('customer: edit a mistyped payment and delete a debt — the record and the drawer stay right', async () => {
+  const { sessionSummary } = await import('../src/domain/cash.js');
+  const t = await setup();
+  const { db, customers } = t;
+  const c = await customers.create({ name: 'أبو أحمد' });
+  await customers.addDebt(c.id, 200000, 'كماليات سيارات');
+  await customers.recordPayment(c.id, 50000);            // كتب 500 بدل 50
+  let view = await customers.get(c.id);
+  assert.equal(view.balance, 150000);
+  const pay = view.entries.find((e) => e.type === 'payment');
+  await customers.editEntry(pay, 5000);
+  view = await customers.get(c.id);
+  assert.equal(view.balance, 195000);
+  assert.deepEqual(view.entries.map((e) => [e.type, e.amount, e.cancelled]), [['payment', -5000, false], ['payment', -50000, true], ['adjustment', 200000, false]]);
+  assert.equal(view.entries[0].created_at, pay.created_at, 'the corrected payment keeps its place in the statement');
+  const cash = sessionSummary({ payments: await db.payments.toArray() });
+  assert.equal(cash.cashIn - cash.cashOut, 5000, 'drawer: only the real 50 remains');
+  // حذف الدين ثم التراجع
+  const debt = view.entries.find((e) => e.type === 'adjustment');
+  const undo = await customers.voidEntry(debt);
+  assert.equal((await customers.get(c.id)).balance, -5000);
+  await customers.voidEntry(undo);
+  view = await customers.get(c.id);
+  assert.equal(view.balance, 195000);
+  assert.equal(view.entries.find((e) => e.id === debt.id).cancelled, false, 'undo brings the debt back');
+  assert.equal(view.raw.length, 2, 'WhatsApp statement shows only real entries');
+  await assert.rejects(customers.voidEntry({ ...debt, invoice_id: 'x', id: 'y' }), (e) => /مرتجع/.test(e.errors.amount));
+});

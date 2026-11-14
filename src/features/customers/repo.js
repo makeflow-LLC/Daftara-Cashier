@@ -1,11 +1,42 @@
 // الزبائن على الجهاز. الرصيد لا يُحفظ أبدًا: مجموع قيود الزبون (دين +، دفعة −، مرتجع −).
 import { normalizeArabic, normalizeBarcode } from '../../domain/product.js';
 import { sum } from '../../domain/money.js';
-import { statement, oldestUnpaidAt } from '../../domain/ledger.js';
+import { oldestUnpaidAt, ledgerView, effectiveEntries, balanceOf, editableEntry, VOID_PREFIX } from '../../domain/ledger.js';
 import { uuid } from '../../core/ids.js';
 
 export function createCustomerRepo({ db, store }) {
   function invalid(errors) { return Object.assign(new Error('invalid'), { errors }); }
+
+  async function openSession() {
+    return (await db.cash_sessions.orderBy('opened_at').reverse().limit(5).toArray()).find((x) => !x.deleted && !x.closed_at) || null;
+  }
+  async function writePayment(w, { customerId, amount, method_id, kind, session, entryAt = null }) {
+    const paymentId = uuid();
+    await w.append('payments', {
+      id: paymentId, customer_id: customerId, direction: 'in', method_id, method_kind: kind,
+      amount, cash_session_id: kind === 'cash' && session ? session.id : null, note: 'دفعة من دين',
+    });
+    return w.append('customer_entries', { customer_id: customerId, type: 'payment', amount: -amount, payment_id: paymentId, ...(entryAt ? { created_at: entryAt } : {}) });
+  }
+  async function writeVoid(w, entry, session) {
+    if (!editableEntry(entry) && !String(entry.note || '').startsWith(VOID_PREFIX)) throw invalid({ amount: 'هذه الحركة من فاتورة — صحّحها بمرتجع من الفاتورة' });
+    let paymentId = null;
+    if (entry.payment_id) {
+      // الدفعة دخلت الدرج: نُخرجها منه (أو العكس عند التراجع)
+      const orig = await db.payments.get(entry.payment_id);
+      if (orig) {
+        paymentId = uuid();
+        await w.append('payments', {
+          id: paymentId, customer_id: entry.customer_id, direction: orig.direction === 'in' ? 'out' : 'in',
+          method_id: orig.method_id, method_kind: orig.method_kind, amount: orig.amount,
+          cash_session_id: orig.method_kind === 'cash' && session ? session.id : null, note: 'تصحيح دفعة',
+        });
+      }
+    }
+    return w.append('customer_entries', {
+      customer_id: entry.customer_id, type: entry.type, amount: -entry.amount, payment_id: paymentId, note: `${VOID_PREFIX}${entry.id}`,
+    });
+  }
 
   const repo = {
     /** كل الزبائن مع أرصدتهم؛ الأكثر دينًا أولًا. */
@@ -36,8 +67,8 @@ export function createCustomerRepo({ db, store }) {
       const c = await db.customers.get(id);
       if (!c || c.deleted) return null;
       const entries = await db.customer_entries.where('customer_id').equals(id).toArray();
-      const rows = statement(entries);
-      return { ...c, balance: rows.length ? rows[rows.length - 1].balance : 0, entries: rows.reverse(), raw: entries, oldestUnpaidAt: oldestUnpaidAt(entries) };
+      const effective = effectiveEntries(entries);
+      return { ...c, balance: balanceOf(entries), entries: ledgerView(entries), raw: effective, oldestUnpaidAt: oldestUnpaidAt(effective) };
     },
     async create({ name, phone = null, note = null }) {
       const n = String(name || '').trim();
@@ -55,15 +86,37 @@ export function createCustomerRepo({ db, store }) {
     /** دفعة من الزبون: تنقص دينه، وتدخل الدرج إن كانت نقدًا. */
     async recordPayment(customerId, amount, method = null) {
       if (!Number.isSafeInteger(amount) || amount <= 0) throw invalid({ amount: 'اكتب مبلغ الدفعة' });
-      const session = (await db.cash_sessions.orderBy('opened_at').reverse().limit(5).toArray()).find((s) => !s.deleted && !s.closed_at);
-      const kind = method && method.kind === 'transfer' ? 'transfer' : 'cash';
+      const session = await openSession();
+      return store.write((w) => writePayment(w, { customerId, amount, method_id: method ? method.id : null, kind: method && method.kind === 'transfer' ? 'transfer' : 'cash', session }));
+    },
+
+    /**
+     * حذف قيد (دين أو دفعة): لا يُمحى شيء، بل يُضاف قيد عكسي، والدفعة النقدية تُصحَّح في الدرج أيضًا.
+     * يرجع القيد العكسي (لـ «تراجع»: voidEntry عليه يعيد الأصلي).
+     */
+    async voidEntry(entry) {
+      const session = await openSession();
+      return store.write((w) => writeVoid(w, entry, session));
+    },
+
+    /** تعديل مبلغ قيد أو ملاحظته = إلغاؤه + قيد جديد مكانه (في نفس تاريخه بالكشف)، في معاملة واحدة. */
+    async editEntry(entry, amount, note = null) {
+      if (!Number.isSafeInteger(amount) || amount <= 0) throw invalid({ amount: 'اكتب المبلغ' });
+      const session = await openSession();
       return store.write(async (w) => {
-        const paymentId = uuid();
-        await w.append('payments', {
-          id: paymentId, customer_id: customerId, direction: 'in', method_id: method ? method.id : null, method_kind: kind,
-          amount, cash_session_id: kind === 'cash' && session ? session.id : null, note: 'دفعة من دين',
+        await writeVoid(w, entry, session);
+        if (entry.type === 'payment') {
+          const orig = entry.payment_id ? await db.payments.get(entry.payment_id) : null;
+          return writePayment(w, {
+            customerId: entry.customer_id, amount, method_id: orig ? orig.method_id : null,
+            kind: orig && orig.method_kind === 'transfer' ? 'transfer' : 'cash', session, entryAt: entry.created_at,
+          });
+        }
+        const sign = entry.amount < 0 ? -1 : 1;
+        return w.append('customer_entries', {
+          customer_id: entry.customer_id, type: entry.type, amount: sign * amount,
+          note: note === null ? entry.note : (String(note).trim() || null), created_at: entry.created_at,
         });
-        return w.append('customer_entries', { customer_id: customerId, type: 'payment', amount: -amount, payment_id: paymentId });
       });
     },
     /** دين يدوي بلا فاتورة (مثل دفتر الديون): «أخذ بـ 20 شيكل». */

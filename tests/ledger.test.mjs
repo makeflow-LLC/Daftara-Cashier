@@ -47,3 +47,23 @@ test('Daftara backup: customers with balances, decimals to agorot', () => {
   assert.throws(() => parseDaftaraBackup({ app: 'other' }), /ليس ملف نسخة من دفترة/);
   assert.throws(() => parseDaftaraBackup(null), /ليس ملف/);
 });
+
+test('correcting an entry: reverse entry, original shown as cancelled, undo restores it', async () => {
+  const { ledgerView, effectiveEntries, balanceOf, editableEntry, VOID_PREFIX } = await import('../src/domain/ledger.js');
+  const e = (id, amount, at, extra = {}) => ({ id, amount, created_at: `2026-11-${at}T10:00:00Z`, type: amount > 0 ? 'adjustment' : 'payment', note: null, ...extra });
+  const debt = e('d1', 200000, '10');
+  const pay = e('p1', -50000, '11');                      // كتب 500 بدل 50
+  const fix = e('v1', 50000, '12', { note: `${VOID_PREFIX}p1` });
+  const pay2 = e('p2', -5000, '11', { created_at: '2026-11-11T10:00:00Z' });
+  let all = [debt, pay, fix, pay2];
+  assert.equal(balanceOf(all), 195000);
+  assert.deepEqual(effectiveEntries(all).map((x) => x.id), ['d1', 'p2']);
+  const view = ledgerView(all);
+  assert.deepEqual(view.map((x) => [x.id, x.cancelled, x.balance]), [['p2', false, 195000], ['p1', true, 200000], ['d1', false, 200000]]);
+  assert.equal(editableEntry(view.find((x) => x.id === 'p1')), false, 'cancelled rows are not edited again');
+  assert.equal(editableEntry({ ...debt, invoice_id: 'inv' }), false, 'sale entries are corrected from the invoice');
+  // تراجع: إلغاء القيد العكسي يعيد الدفعة الأصلية
+  all = [...all, e('v2', -50000, '13', { note: `${VOID_PREFIX}v1` })];
+  assert.equal(balanceOf(all), 145000);
+  assert.deepEqual(effectiveEntries(all).map((x) => x.id).sort(), ['d1', 'p1', 'p2']);
+});

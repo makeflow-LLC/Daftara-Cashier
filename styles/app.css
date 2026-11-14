@@ -880,3 +880,9 @@ body{font-weight:500}
 .acc-help ol{margin:0;padding:0 22px 0 0}
 .acc-help li{margin:6px 0}
 .acc-form .btn-lg{margin-top:var(--space-2)}
+
+/* كشف الزبون: حركة ملغاة */
+.entry-cancelled{opacity:.55}
+.entry-cancelled .row-end{text-decoration:line-through}
+.tag-cancelled{display:inline-block;padding:1px 8px;border-radius:var(--radius-pill);background:var(--neutral-200);color:var(--color-muted);font-size:12.5px;font-weight:700}
+.btn-danger-text{color:var(--danger)}

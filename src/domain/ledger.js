@@ -22,6 +22,56 @@ export function statement(entries) {
     .map((e) => { run += assertInt(e.amount, 'amount'); return { ...e, balance: run }; });
 }
 
+// ---------- التصحيح: القيود لا تُعدَّل ولا تُحذف (لا يضيع أثر)، بل يُضاف قيد عكسي ----------
+// القيد العكسي ملاحظته «void:<رقم القيد الأصلي>». الرصيد = مجموع كل القيود كما هو دائمًا،
+// والعرض يُخفي القيد العكسي ويُظهر الأصلي «ملغى». إلغاء الإلغاء (تراجع) يعيد الأصلي.
+export const VOID_PREFIX = 'void:';
+export const isVoidEntry = (e) => typeof e.note === 'string' && e.note.startsWith(VOID_PREFIX);
+
+/** أرقام القيود الملغاة فعلًا (قيد عكسي غير ملغى يشير إليها). */
+export function cancelledIds(entries) {
+  const voidsOf = new Map();
+  for (const e of entries) if (isVoidEntry(e)) {
+    const t = e.note.slice(VOID_PREFIX.length);
+    if (!voidsOf.has(t)) voidsOf.set(t, []);
+    voidsOf.get(t).push(e);
+  }
+  const memo = new Map();
+  const cancelled = (id, depth = 0) => {
+    if (memo.has(id)) return memo.get(id);
+    if (depth > 50) return false;
+    const r = (voidsOf.get(id) || []).some((v) => !cancelled(v.id, depth + 1));
+    memo.set(id, r);
+    return r;
+  };
+  return new Set(entries.filter((e) => cancelled(e.id)).map((e) => e.id));
+}
+
+/** القيود الفعلية: بلا القيود العكسية ولا ما ألغته. مجموعها = الرصيد نفسه. */
+export function effectiveEntries(entries) {
+  const gone = cancelledIds(entries);
+  return entries.filter((e) => !isVoidEntry(e) && !gone.has(e.id));
+}
+
+/** كشف للعرض: الأحدث أولًا، الملغى يظهر بعلامة cancelled ولا يدخل في الرصيد الجاري. */
+export function ledgerView(entries) {
+  const gone = cancelledIds(entries);
+  let run = 0;
+  return [...entries]
+    .filter((e) => !isVoidEntry(e))
+    // نفس الوقت (قيد مُعدَّل حلّ مكان الأصلي): الملغى قبله، فيظهر المعدَّل فوقه
+    .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : (gone.has(b.id) ? 1 : 0) - (gone.has(a.id) ? 1 : 0)))
+    .map((e) => {
+      if (gone.has(e.id)) return { ...e, cancelled: true, balance: run };
+      run += assertInt(e.amount, 'amount');
+      return { ...e, cancelled: false, balance: run };
+    })
+    .reverse();
+}
+
+/** قيد يُعدَّل من كشف الزبون؟ (قيود الفواتير تُصحَّح بالمرتجع من الفاتورة نفسها) */
+export const editableEntry = (e) => !e.invoice_id && !isVoidEntry(e) && !e.cancelled;
+
 /** عمر أقدم دين لم يُسدَّد (الدفعات تسدّد الأقدم أولًا). null إن لم يكن عليه شيء. */
 export function oldestUnpaidAt(entries) {
   const rows = statement(entries);

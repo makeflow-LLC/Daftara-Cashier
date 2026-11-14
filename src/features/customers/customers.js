@@ -7,7 +7,7 @@ import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
 import { parseMoney, formatMoney, CURRENCIES } from '../../domain/currency.js';
 import { formatDecimal } from '../../domain/money.js';
-import { ENTRY_LABELS, normalizePhone, whatsappLink, reminderText, statementText, parseDaftaraBackup } from '../../domain/ledger.js';
+import { ENTRY_LABELS, editableEntry, normalizePhone, whatsappLink, reminderText, statementText, parseDaftaraBackup } from '../../domain/ledger.js';
 import { app } from '../../core/app.js';
 import { bus } from '../../core/bus.js';
 import { navigate } from '../../core/router.js';
@@ -111,7 +111,15 @@ export async function renderCustomer(el, params) {
     );
     fill(list, c.entries.length ? h('div', { class: 'section' }, h('h2', { class: 'section-title' }, 'كشف الحساب'),
       h('div', { class: 'list' }, ...c.entries.map((e) => {
-        const tap = e.invoice_id ? () => showReceipt(e.invoice_id, { doneLabel: 'إغلاق', doneIcon: 'x' }) : null;
+        const tap = e.invoice_id ? () => showReceipt(e.invoice_id, { doneLabel: 'إغلاق', doneIcon: 'x' }) : editableEntry(e) ? () => entrySheet(e) : null;
+        if (e.cancelled) {
+          return h('div', { class: 'row entry-cancelled' },
+            h('span', { class: 'row-ic' }, icon('x', 20)),
+            h('span', { class: 'row-main' },
+              h('span', { class: 'row-title' }, ENTRY_LABELS[e.type] || '', ' ', h('span', { class: 'tag-cancelled' }, 'ملغاة')),
+              h('span', { class: 'row-sub' }, num(dateText(e.created_at)))),
+            h('span', { class: 'row-end' }, num(formatMoney(Math.abs(e.amount), cur(), { symbol: false }))));
+        }
         return h(tap ? 'button' : 'div', { class: `row ${tap ? 'row-tap' : ''}`, type: tap ? 'button' : null, onclick: tap },
           h('span', { class: `row-ic ${e.amount > 0 ? 'ic-debt' : ''}` }, icon(e.amount > 0 ? 'plus' : 'check', 20)),
           h('span', { class: 'row-main' },
@@ -120,6 +128,49 @@ export async function renderCustomer(el, params) {
           h('span', { class: `row-end ${e.amount > 0 ? 'owed' : 'credit'}` }, num(`${e.amount > 0 ? '+' : '−'}${formatMoney(Math.abs(e.amount), cur(), { symbol: false })}`)));
       })))
       : emptyState('receipt', 'لا حركات بعد', 'سجّل دينًا أو دفعة، أو بِع له بالآجل من شاشة البيع.'));
+  }
+
+  // تعديل أو حذف دين/دفعة: يُضاف قيد تصحيح (والدرج يُصحَّح للدفعات النقدية)، والأصلية تظهر «ملغاة»
+  function entrySheet(e) {
+    const isPay = e.type === 'payment';
+    const minor = CURRENCIES[cur()].minor;
+    const amt = input({ dir: 'ltr', inputmode: 'decimal', class: 'input input-xl', value: formatDecimal(Math.abs(e.amount), minor, { trim: true, group: false }) });
+    const note = input({ maxlength: 80, value: e.note || '', placeholder: 'ملاحظة (اختياري)' });
+    let busy = false;
+    openSheet((close) => h('form', {
+      onsubmit: async (ev) => {
+        ev.preventDefault();
+        if (busy) return;
+        const v = parseMoney(amt.value || '', cur());
+        if (!v || v <= 0) { feedback.error(); toast('اكتب المبلغ', { kind: 'error' }); amt.focus(); return; }
+        if (v === Math.abs(e.amount) && (isPay || (note.value.trim() || null) === (e.note || null))) { close(); return; }
+        busy = true;
+        try {
+          await app.customers.editEntry(e, v, isPay ? null : note.value);
+          feedback.ok(); close(); await load();
+          toast(`عُدّلت ${isPay ? 'الدفعة' : 'الحركة'} — الرصيد الآن ${formatMoney(c.balance, cur())}`, { kind: 'ok', ms: 3500 });
+        } catch (err) { busy = false; feedback.error(); toast(err.errors?.amount || 'تعذّر الحفظ', { kind: 'error' }); }
+      },
+    },
+      h('p', { class: 'muted' }, `${ENTRY_LABELS[e.type] || ''} بتاريخ `, num(dateText(e.created_at))),
+      field(isPay ? 'مبلغ الدفعة' : 'المبلغ', amt),
+      isPay ? null : field('ملاحظة', note),
+      button('حفظ التعديل', { type: 'submit', block: true, size: 'lg', icon: 'check' }),
+      h('button', {
+        class: 'btn btn-text btn-block btn-danger-text', type: 'button',
+        onclick: async () => {
+          if (busy) return;
+          busy = true;
+          try {
+            const undo = await app.customers.voidEntry(e);
+            feedback.ok(); close(); await load();
+            toast(`حُذفت ${isPay ? 'الدفعة' : 'الحركة'}`, { undo: async () => { await app.customers.voidEntry(undo); await load(); } });
+          } catch (err) { busy = false; feedback.error(); toast(err.errors?.amount || 'تعذّر الحذف', { kind: 'error' }); }
+        },
+      }, icon('trash', 20), h('span', null, isPay ? 'حذف هذه الدفعة' : 'حذف هذه الحركة')),
+      isPay ? h('p', { class: 'muted small' }, 'إن كانت نقدًا يُصحَّح الصندوق تلقائيًا.') : null,
+    ), { title: isPay ? 'تعديل الدفعة' : 'تعديل الحركة' });
+    setTimeout(() => { amt.focus(); amt.select(); }, 150);
   }
 
   function miniBtn(ic, label, onclick, disabled) {
