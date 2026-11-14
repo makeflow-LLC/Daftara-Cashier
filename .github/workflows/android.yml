@@ -302,7 +302,14 @@ jobs:
             set net:max-retries 3;
             set net:timeout 30;
             open -u '$FTP_USERNAME','$FTP_PASSWORD' ftp://$FTP_SERVER;
+            cd domains/makeflow.tech/public_html/apps || cd public_html/apps || cd apps || exit 1;
             mkdir -pf cashier/admin;
             mirror --reverse --verbose --parallel=4 _site/ cashier/
-          "
+          " || { echo "::error::Could not find the apps folder (public_html/apps) on the FTP account"; exit 1; }
+          # تحقّق من الموقع الحي
+          sleep 5
+          code=$(curl -s -o /dev/null -w '%{http_code}' "https://makeflow.tech/apps/cashier/?v=${{ github.run_number }}")
+          admin=$(curl -s -o /dev/null -w '%{http_code}' "https://makeflow.tech/apps/cashier/admin/?v=${{ github.run_number }}")
+          echo "download page: $code, code page: $admin"
+          [ "$code" = 200 ] && [ "$admin" = 200 ] || { echo "::error::makeflow.tech/apps/cashier/ is not live ($code / $admin)"; exit 1; }
           echo "::notice::https://makeflow.tech/apps/cashier/ updated"
