@@ -6,7 +6,9 @@ import { uuid } from './ids.js';
 import { bus } from './bus.js';
 import { config } from './config.js';
 import { makeClock } from '../domain/merge.js';
-import { resolveFeatures, defaultPaymentMethods, TRIAL_DAYS } from '../domain/features.js';
+import { resolveFeatures, defaultPaymentMethods } from '../domain/features.js';
+import { TRIAL_DAYS } from '../domain/license.js';
+import { createLicense } from './license.js';
 import { createSupabase } from '../sync/supabase.js';
 import { createSyncEngine } from '../sync/engine.js';
 import { startScheduler } from '../sync/scheduler.js';
@@ -26,6 +28,7 @@ export const app = {
   sync: null,
   scheduler: null,
   products: null,
+  license: null,
   media: null,
   mediaSync: null,
   shop: null,
@@ -58,7 +61,7 @@ export const app = {
     if (native) {
       try {
         const i = await native.get();
-        app.info = { flavor: i.flavor, version: i.versionName, build: i.versionCode, sdk: i.sdk };
+        app.info = { flavor: i.flavor, version: i.versionName, build: i.versionCode, sdk: i.sdk, deviceKey: i.deviceKey, installedAt: i.installedAt };
       } catch { /* المتصفح */ }
     }
     app.db = createDb(globalThis.Dexie);
@@ -74,6 +77,7 @@ export const app = {
     app.store = createStore({
       db: app.db, clock, getContext: () => app.ctx,
       emit: (e) => bus.emit('data', e),
+      guard: (table) => app.license && app.license.guard(table),
     });
     const deps = { db: app.db, store: app.store, getContext: () => app.ctx };
     app.products = createProductRepo(deps);
@@ -83,6 +87,12 @@ export const app = {
     app.inventory = createInventoryRepo({ ...deps, clock });
     app.cash = createCashRepo({ ...deps, clock });
     if (app.ctx.shopId) await app.loadShop();
+    app.license = createLicense({
+      meta: app.meta, info: app.info, deviceId, shopCreatedAt: app.shop?.created_at || null,
+      emit: (s) => bus.emit('license', s),
+      billing: globalThis.Capacitor?.Plugins?.CashierBilling || null,
+    });
+    await app.license.init();
     app.startSync();
     bus.on('data', async (e) => {
       if (e.tables.includes('shops')) await app.loadShop();
@@ -109,7 +119,7 @@ export const app = {
       saveSession: (s) => app.meta.set('auth', s),
     });
     app.api = api;
-    app.sync = createSyncEngine({ db: app.db, api, getContext: () => app.ctx, emit: (e) => bus.emit('data', e) });
+    app.sync = createSyncEngine({ db: app.db, api, getContext: () => app.ctx, emit: (e) => bus.emit('data', e), gate: (a) => app.license.gate(a) });
     app.mediaSync = createMediaSync({ db: app.db, api });
     app.sync.onStatus((s) => {
       bus.emit('sync', s);

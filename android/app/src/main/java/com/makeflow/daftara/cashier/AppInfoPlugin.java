@@ -16,6 +16,9 @@ public class AppInfoPlugin extends Plugin {
         r.put("versionCode", BuildConfig.VERSION_CODE);
         r.put("versionName", BuildConfig.VERSION_NAME);
         r.put("sdk", android.os.Build.VERSION.SDK_INT);
+        // للترخيص: بصمة الجهاز (يُربط بها كود التفعيل) وتاريخ أول تثبيت (بداية التجربة)
+        r.put("deviceKey", Integrity.deviceKey(getContext()));
+        r.put("installedAt", Integrity.installedAt(getContext()));
         call.resolve(r);
     }
 }

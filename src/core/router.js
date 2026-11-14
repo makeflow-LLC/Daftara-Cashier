@@ -6,6 +6,12 @@ let view = null;
 let cleanup = null;
 let current = null;
 const listeners = new Set();
+let guard = null;
+
+/** fn(route, path) → مسار بديل أو null. يُستعمل لوضع القراءة فقط (الترخيص). */
+export function setGuard(fn) {
+  guard = fn;
+}
 
 /** route: { path: '/sale', render(el, params) → cleanup?, tab: 'home'|…, chrome: true|false } */
 export function addRoute(route) {
@@ -42,6 +48,8 @@ function parse() {
 export async function render() {
   const { path, params } = parse();
   const route = routes.get(path) || routes.get('/');
+  const redirect = guard ? guard(route, path) : null;
+  if (redirect && redirect !== path) { navigate(redirect, { replace: true }); return; }
   if (cleanup) { try { cleanup(); } catch (e) { console.error(e); } cleanup = null; }
   current = route;
   clear(view);

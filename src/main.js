@@ -1,6 +1,6 @@
 // نقطة البدء: يفتح قاعدة الجهاز، ثم الإعداد الأول أو الرئيسية. لا شيء ينتظر الإنترنت.
 import { app } from './core/app.js';
-import { addRoute, mount, render, navigate, onRoute } from './core/router.js';
+import { addRoute, mount, render, navigate, onRoute, setGuard } from './core/router.js';
 import { MODULES } from './features/index.js';
 import { mountShell } from './features/shell/shell.js';
 import { renderSetup } from './features/setup/setup.js';
@@ -19,6 +19,15 @@ async function start() {
   const view = document.getElementById('view');
   mount(view);
   onRoute(closeAllSheets);
+  // الترخيص: بعد انتهاء المدة تُفتح «الاشتراك» بدل شاشات الكتابة، وأي حفظ مرفوض يدلّ عليها
+  setGuard((route) => (route && route.write && app.license.compute().readOnly ? '/subscribe' : null));
+  window.addEventListener('unhandledrejection', (e) => {
+    if (!e.reason || !e.reason.license) return;
+    e.preventDefault();
+    toast(e.reason.message, { kind: 'error', ms: 5000 });
+    navigate('/subscribe');
+  });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) app.license.compute(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTopSheet(); });
 
   if (!app.ctx.shopId) {

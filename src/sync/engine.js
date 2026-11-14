@@ -14,7 +14,7 @@ const PUSH_BATCH = 200;
 const PULL_LIMIT = 500;
 const MAX_TRIES = 5;
 
-export function createSyncEngine({ db, api, getContext, emit = () => {}, now = () => new Date().toISOString() }) {
+export function createSyncEngine({ db, api, getContext, emit = () => {}, now = () => new Date().toISOString(), gate = null }) {
   let running = null;
   let status = { state: 'idle', pending: 0, lastSyncAt: null, error: null };
   const listeners = new Set();
@@ -182,14 +182,16 @@ export function createSyncEngine({ db, api, getContext, emit = () => {}, now = (
     try {
       await ensureSession();
       await ensureRemoteShop(ctx);
-      const pushed = await push();
+      // الترخيص: الخادم يرفض كتابة محل بلا اشتراك سارٍ، فلا نرفع (يبقى الطابور كما هو حتى التجديد) ونسحب فقط
+      const canPush = gate ? await gate({ api, ctx }) : true;
+      const pushed = canPush ? await push() : 0;
       const pulled = await pull(ctx);
       const pending = await db.outbox.count();
       const dead = await db.outbox.filter((e) => !!e.dead).count();
       const at = now();
       await meta.set('lastSyncAt', at);
       setStatus({ state: dead ? 'error' : 'synced', pending, lastSyncAt: at, error: dead ? `${dead} سجل لم يُقبل` : null });
-      return { pushed, pulled, pending };
+      return { pushed, pulled, pending, blocked: !canPush };
     } catch (err) {
       const offline = err instanceof HttpError && err.status === 0;
       setStatus({ state: offline ? 'offline' : 'error', pending: await db.outbox.count(), error: String(err?.message || err).slice(0, 300) });

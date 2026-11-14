@@ -3,6 +3,7 @@
 import { SYNCED } from '../sync/tables.js';
 import { makeBackup, validateBackup } from '../domain/tools.js';
 import { foldProduct } from '../domain/stock.js';
+import { LICENSE_META } from './license.js';
 
 const META_KEYS = ['shopId', 'devicePrefix', 'internalSeq', 'seq:sale', 'seq:sale_return', 'seq:purchase'];
 
@@ -22,10 +23,12 @@ export async function restoreBackup(db, data) {
   checkBackup(data);
   const all = [...SYNCED, 'outbox', 'stock', 'held', 'meta'].map((n) => db.table(n));
   await db.transaction('rw', all, async () => {
-    const deviceId = (await db.meta.get('deviceId'))?.value;
+    // يبقى على الجهاز: هويته وحالة الترخيص (الاستعادة لا تبدأ تجربة جديدة ولا تُضيع اشتراكًا)
+    const keep = [];
+    for (const k of ['deviceId', ...LICENSE_META]) { const r = await db.meta.get(k); if (r) keep.push(r); }
     for (const t of [...SYNCED, 'outbox', 'stock', 'held']) await db.table(t).clear();
     await db.meta.clear();
-    if (deviceId) await db.meta.put({ key: 'deviceId', value: deviceId });
+    for (const r of keep) await db.meta.put(r);
     for (const [k, v] of Object.entries(data.meta)) await db.meta.put({ key: k, value: v });
     for (const t of SYNCED) {
       const rows = data.tables[t] || [];

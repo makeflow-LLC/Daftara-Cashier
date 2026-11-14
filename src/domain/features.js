@@ -56,4 +56,4 @@ export function defaultPaymentMethods() {
 export const DEFAULT_LOW_STOCK_THRESHOLD = 5;
 export const EXPIRY_WARNING_DAYS = 30;
 export const DEAD_STOCK_DAYS = 60;
-export const TRIAL_DAYS = 14;
+export const TRIAL_DAYS = 30; // المرجع: domain/license.js

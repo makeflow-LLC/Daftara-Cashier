@@ -200,4 +200,22 @@ adb shell am start -W -n $PKG/.MainActivity | tee start2.txt
 echo "WARM_START_MS=$(grep -o 'TotalTime: [0-9]*' start2.txt | grep -o '[0-9]*')"
 sleep 4
 expect 'Shop1'
+
+# 11) الترخيص: لافتة التجربة على الرئيسية تفتح صفحة الاشتراك (رقم الجهاز وكود التفعيل)
+tap 'تجربة مجانية'
+expect 'رقم هذا الجهاز'
+expect 'اشترك عبر واتساب'
+adb shell input keyevent 4
+sleep 2
+
+# 12) الحماية: نفس الـ APK بعد إعادة توقيعه بمفتاح آخر (ما يفعله من يعدّل الكود) يجب أن يرفض العمل
+APKSIGNER="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
+rm -f other.jks
+keytool -genkeypair -keystore other.jks -storepass 123456 -keypass 123456 -alias x -keyalg RSA -keysize 2048 -validity 10 -dname "CN=x" >/dev/null 2>&1
+"$APKSIGNER" sign --ks other.jks --ks-pass pass:123456 --key-pass pass:123456 --out tampered.apk daftara-cashier.apk
+adb uninstall $PKG >/dev/null
+adb install tampered.apk >/dev/null
+adb shell am start -W -n $PKG/.MainActivity >/dev/null
+expect 'نسخة غير أصلية'
+echo "OK: re-signed APK refuses to run"
 echo "smoke test passed"

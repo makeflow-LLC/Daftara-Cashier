@@ -5,7 +5,7 @@ import { TABLE, SYNCED, blank } from '../sync/tables.js';
 import { applyMovement } from '../domain/stock.js';
 import { uuid } from './ids.js';
 
-export function createStore({ db, clock, getContext, emit = () => {} }) {
+export function createStore({ db, clock, getContext, emit = () => {}, guard = () => {} }) {
   const TX_TABLES = [...SYNCED, 'outbox', 'stock', 'meta', 'files'];
 
   async function enqueue(table, id) {
@@ -23,6 +23,7 @@ export function createStore({ db, clock, getContext, emit = () => {} }) {
       async put(table, row) {
         const t = TABLE[table];
         if (!t || t.mode !== 'lww') throw new Error(`put: ${table} is not an lww table`);
+        guard(table); // وضع القراءة فقط بعد انتهاء الاشتراك
         const now = clock();
         const id = row.id || uuid();
         const existing = row.id ? await db.table(table).get(row.id) : null;
@@ -53,6 +54,7 @@ export function createStore({ db, clock, getContext, emit = () => {} }) {
       async append(table, row) {
         const t = TABLE[table];
         if (!t || t.mode !== 'append') throw new Error(`append: ${table} is not an append-only table`);
+        guard(table);
         const full = blank(table, {
           device_id: ctx.deviceId ?? null,
           created_by: ctx.userId ?? null,

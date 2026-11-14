@@ -14,7 +14,7 @@ Same stack and conventions as Daftara (the debt ledger app):
 ## Layout
 
 ```
-index.html, styles/app.css     app shell and the whole design system (tokens, components, dark mode)
+index.html, styles/app.css     app shell and the whole design system (tokens, components; always light)
 src/main.js                    boot: opens the device DB, first-run setup or home
 src/core/                      app context, DB schema (db.js), the single write path (store.js), router, queries
 src/domain/                    PURE business logic — no DOM, no DB, fully unit-tested
@@ -124,6 +124,30 @@ Nothing else needs to change.
 - Product form shows only the essentials; the rest is under «خيارات إضافية». Sale screen buttons carry
   visible labels. Tajawal font (two weights, 18 KB) and light page transitions.
 
+## Licensing (milestone 9)
+
+30-day free trial from install, then 30 ₪/month or 300 ₪/year. After expiry (plus 3 grace days for paid
+plans) the app is **read-only**: selling, purchasing and product edits are locked; reading, reports, debt
+payments and backup stay open.
+
+- `src/domain/license.js` — pure: state machine (trial / active / grace / expired / blocked), device code,
+  activation code format (`DCS-<payload>.<Ed25519 signature>`, payload = device | expiry | plan).
+- `src/core/license.js` — service: trusted clock (never goes back), stored code re-verified on every start,
+  `guard()` used by `store.js` (locked tables throw), `gate()` used by the sync engine (asks the server).
+- `src/features/subscribe/` — status, plans, WhatsApp request with the device code, paste-the-code activation.
+- Why editing the code no longer unlocks it (the Daftara crack):
+  1. Activation codes are **signed by MakeFlow's private key** for one device; the app only holds the public key.
+  2. `Integrity.java` compares the installed APK's signing certificate with the one recorded at build time
+     (`BuildConfig.CERT_SHA256`): a modified, re-signed APK refuses to start (the emulator test checks this).
+  3. The **server** enforces it too (`0003_licensing.sql`): RLS rejects writes from a shop without a valid
+     trial/subscription, verifies codes with Ed25519 in SQL, and ties the trial to the device so reinstalling
+     or creating a new shop does not restart it.
+- Owner tool: `tools/license-generator.html` (one offline file, built by `node scripts/build-generator.mjs`).
+  Paste the private key (the same Ed25519 key as Daftara), the customer's WhatsApp request, pick the plan → code.
+- Manual activation without a code (Supabase SQL editor): see the header of `0003_licensing.sql`.
+- `play` flavor: `BillingPlugin.java` (Google Play subscriptions `cashier_monthly`, `cashier_yearly`).
+  Server-side verification of Play purchases (Play Developer API) is not done yet.
+
 ## Data rules (non-negotiable)
 
 - **Money** is an integer in the smallest unit (agorot for ₪). **Quantities** are integers ×1000.
@@ -150,7 +174,7 @@ phone number + password to move to another phone comes in a later milestone.
 
 ### Server setup (once)
 
-1. Supabase Studio → SQL Editor → paste `supabase/migrations/0001_init.sql` → Run (safe to re-run).
+1. Supabase Studio → SQL Editor → run `supabase/migrations/0001_init.sql`, then `0002…`, then `0003_licensing.sql` (each safe to re-run).
 2. Auth settings: enable **anonymous sign-ins** (`GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED=true`).
 3. GitHub → Settings → Secrets and variables → Actions: add `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
    Without them the app builds and works fully on the device, with sync off.

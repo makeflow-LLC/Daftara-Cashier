@@ -17,26 +17,28 @@ import { renderSuppliers, renderSupplier } from './inventory/suppliers.js';
 import { renderCount } from './inventory/count.js';
 import { renderMore } from './more/more.js';
 import { renderHelp } from './help/help.js';
+import { renderSubscribe } from './subscribe/subscribe.js';
 import {
   renderSettings, renderShopProfile, renderFeatures, renderCurrencies,
   renderPayments, renderSync, renderAppearance, renderAbout,
 } from './settings/settings.js';
 
+// write: true = شاشة كتابة (بيع، شراء، تعديل أصناف): في وضع القراءة فقط تُحوَّل إلى «الاشتراك».
 export const MODULES = [
   { id: 'home', routes: [{ path: '/', tab: 'home', render: renderHome }] },
   {
     id: 'sale',
     routes: [
-      { path: '/sale', chrome: false, render: renderSale },
-      { path: '/sale/returns', chrome: false, render: renderReturns },
+      { path: '/sale', write: true, chrome: false, render: renderSale },
+      { path: '/sale/returns', write: true, chrome: false, render: renderReturns },
     ],
   },
   {
     id: 'products',
     routes: [
       { path: '/products', tab: 'products', render: renderProducts },
-      { path: '/products/edit', tab: 'products', chrome: false, render: renderProductForm },
-      { path: '/products/rapid', tab: 'products', chrome: false, render: renderRapidAdd },
+      { path: '/products/edit', write: true, tab: 'products', chrome: false, render: renderProductForm },
+      { path: '/products/rapid', write: true, tab: 'products', chrome: false, render: renderRapidAdd },
       { path: '/settings/categories', tab: 'settings', chrome: false, render: renderCategories },
     ],
   },
@@ -51,8 +53,8 @@ export const MODULES = [
     id: 'tools',
     routes: [
       { path: '/tools', tab: 'settings', chrome: false, render: renderTools },
-      { path: '/tools/import', chrome: false, render: renderImport },
-      { path: '/tools/prices', chrome: false, render: renderPrices },
+      { path: '/tools/import', write: true, chrome: false, render: renderImport },
+      { path: '/tools/prices', write: true, chrome: false, render: renderPrices },
       { path: '/tools/labels', chrome: false, render: renderLabels },
     ],
   },
@@ -63,8 +65,8 @@ export const MODULES = [
     id: 'inventory',
     routes: [
       { path: '/inventory', tab: 'settings', chrome: false, render: renderInventory },
-      { path: '/inventory/purchase', chrome: false, render: renderPurchase },
-      { path: '/inventory/count', chrome: false, render: renderCount },
+      { path: '/inventory/purchase', write: true, chrome: false, render: renderPurchase },
+      { path: '/inventory/count', write: true, chrome: false, render: renderCount },
       { path: '/suppliers', chrome: false, render: renderSuppliers },
       { path: '/suppliers/view', chrome: false, render: renderSupplier },
     ],
@@ -74,6 +76,7 @@ export const MODULES = [
     routes: [
       { path: '/more', tab: 'settings', render: renderMore },
       { path: '/help', tab: 'settings', chrome: false, render: renderHelp },
+      { path: '/subscribe', tab: 'settings', chrome: false, render: renderSubscribe },
       { path: '/settings', tab: 'settings', chrome: false, render: renderSettings },
       { path: '/settings/shop', tab: 'settings', chrome: false, render: renderShopProfile },
       { path: '/settings/features', tab: 'settings', chrome: false, render: renderFeatures },

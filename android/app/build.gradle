@@ -43,9 +43,27 @@ android {
     //  direct — APK من makeflow.tech، التفعيل يدويًا من MakeFlow (cashier_licenses على Supabase)
     //  play   — Google Play، الاشتراك عبر Google Play Billing
     flavorDimensions = ["dist"]
+    // بصمة شهادة التوقيع (SHA-256) تُحفظ داخل التطبيق وقت البناء؛ Integrity.java يقارنها بتوقيع الـ APK
+    // المثبَّت فعلًا، فنسخة عُدّل كودها وأُعيد توقيعها بمفتاح آخر ترفض العمل.
+    def certDigest = { cfg ->
+        try {
+            def ks = java.security.KeyStore.getInstance(cfg.storeFile, cfg.storePassword.toCharArray())
+            def cert = ks.getCertificate(cfg.keyAlias)
+            return java.security.MessageDigest.getInstance("SHA-256").digest(cert.getEncoded()).encodeHex().toString()
+        } catch (Exception e) {
+            throw new GradleException("Cannot read the signing certificate: " + e)
+        }
+    }
     productFlavors {
-        direct { dimension "dist" }
-        play { dimension "dist" }
+        direct {
+            dimension "dist"
+            buildConfigField "String", "CERT_SHA256", "\"${certDigest(signingConfigs.release)}\""
+        }
+        // Google Play يعيد توقيع التطبيق بمفتاحه (Play App Signing) فلا تُفحص البصمة هناك
+        play {
+            dimension "dist"
+            buildConfigField "String", "CERT_SHA256", "\"\""
+        }
     }
     buildTypes {
         release {
@@ -73,6 +91,8 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
+    // الاشتراك عبر Google Play في نسخة play فقط (نسخة direct تبقى بلا المكتبة: أصغر)
+    playImplementation "com.android.billingclient:billing:8.0.0"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

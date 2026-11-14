@@ -80,6 +80,7 @@ jobs:
           cp android/app/build/outputs/apk/direct/release/app-direct-release.apk daftara-cashier.apk
           cp android/app/build/outputs/apk/play/release/app-play-release.apk daftara-cashier-play.apk
           cp android/app/build/outputs/bundle/playRelease/app-play-release.aab daftara-cashier.aab
+          cp tools/license-generator.html cashier-license-generator.html
       - name: App size report
         run: |
           kb() { echo $(( ($(stat -c %s "$1") + 1023) / 1024 )); }
@@ -110,6 +111,7 @@ jobs:
           path: |
             daftara-cashier.apk
             daftara-cashier-play.apk
+            cashier-license-generator.html
       - uses: actions/upload-artifact@v4
         with:
           retention-days: 7
@@ -158,7 +160,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           gh release delete preview --cleanup-tag --yes || true
-          gh release create preview daftara-cashier.apk \
+          gh release create preview daftara-cashier.apk cashier-license-generator.html \
             --target "${{ github.sha }}" --prerelease \
             --title "دفترة كاشير — نسخة تجريبية ${{ github.run_number }}" \
             --notes "نسخة تجريبية للاختبار (بناء ${{ github.run_number }}، فرع ${{ github.ref_name }}). حمّل daftara-cashier.apk على الجوال وثبّته؛ كل نسخة تجريبية جديدة تُثبَّت فوق السابقة دون حذف البيانات."

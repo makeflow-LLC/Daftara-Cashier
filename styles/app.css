@@ -830,3 +830,31 @@ body{font-weight:500}
 .zoom-btn{min-width:46px;height:40px;border-radius:999px;color:#fff;font-family:var(--font-num);font-size:15px;font-weight:700}
 .zoom-btn.on{background:#fff;color:#111}
 .scanner .zoom-bar{align-self:center;margin-bottom:var(--space-2)}
+
+/* الاشتراك والترخيص */
+.lic-banner{display:flex;align-items:center;gap:var(--space-3);width:100%;margin-bottom:var(--space-3);padding:var(--space-3);text-align:right;border-radius:var(--radius-lg);border:2px solid}
+.lic-banner .row-main span{font-size:13.5px}
+.lic-cta{flex:none;padding:8px 14px;border-radius:var(--radius-pill);background:#fff;font-weight:700;font-size:14px}
+.lic-info{background:var(--blue-100);border-color:#b9d4f7;color:var(--blue-700)}
+.lic-warn{background:var(--amber-100);border-color:#f3cf8f;color:var(--amber-700)}
+.lic-bad{background:var(--pink-100);border-color:#f5a9c8;color:var(--pink-700)}
+.lic-ok{background:var(--brand-100);border-color:var(--brand-200);color:var(--brand-700)}
+.lic-status{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-4);border-radius:var(--radius-lg);border:2px solid;margin-bottom:var(--space-4)}
+.lic-status strong{display:block;font-size:19px}
+.lic-status span{font-size:14.5px}
+.lic-status-ic{flex:none;width:56px;height:56px;border-radius:18px;background:#fff;display:flex;align-items:center;justify-content:center}
+.plans{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);margin-bottom:var(--space-3)}
+.plan{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:var(--space-4) var(--space-2) var(--space-3);border-radius:var(--radius-lg);background:#fff;border:3px solid var(--frame)}
+.plan.on{border-color:var(--brand);background:var(--brand-100);box-shadow:var(--shadow-brand)}
+.plan-title{font-size:17px;font-weight:700}
+.plan-price{font-size:30px;font-weight:700;color:var(--brand-700)}
+.plan-per{font-size:13.5px;color:var(--color-muted)}
+.plan-note{position:absolute;top:-12px;padding:3px 12px;border-radius:var(--radius-pill);background:var(--amber);color:#fff;font-size:12.5px;font-weight:700}
+.lic-steps{margin:var(--space-3) 0;padding:var(--space-3);border-radius:var(--radius-lg);background:#fff;border:2px solid var(--frame)}
+.lic-steps div{display:flex;align-items:center;gap:var(--space-2);padding:6px 0;font-size:15px}
+.lic-steps b{flex:none;width:28px;height:28px;border-radius:50%;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px}
+.lic-code{display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-3)}
+.lic-device{display:flex;align-items:center;gap:var(--space-2);width:100%;margin:var(--space-3) 0;padding:var(--space-3);border-radius:var(--radius-lg);background:var(--violet-100);border:2px dashed #cbb6f2;color:var(--violet-700)}
+.lic-device strong{flex:1;font-size:20px;letter-spacing:1px;text-align:left}
+.lic-check{background:#fff;border:2px solid var(--frame);color:var(--color-text)}
+.lic-foot{margin-top:var(--space-3);font-size:13.5px;line-height:1.7}

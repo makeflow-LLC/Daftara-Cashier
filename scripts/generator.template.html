@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>مولّد أكواد اشتراك دفترة كاشير</title>
+<!--
+  أداة MakeFlow الخاصة: تصنع كود اشتراك (شهري أو سنوي) لجهاز عميل دفترة كاشير.
+  تعمل بلا إنترنت: افتح هذا الملف في متصفح جوالك أو حاسوبك.
+  المفتاح الخاص (نفس مفتاح دفترة) لا يُكتب في هذا الملف أبدًا؛ تلصقه أنت (ويمكن حفظه في هذا المتصفح فقط).
+  لا تنشر المفتاح الخاص ولا ترسله لأحد: من يملكه يستطيع تفعيل أي جهاز.
+  هذا الملف يُبنى من scripts/generator.template.html — لا تعدّله هنا.
+-->
+<style>
+  :root{--brand:#0e7a51;--bg:#f3f2f2;--card:#fff;--text:#201e1d;--muted:#605d5d;--line:rgba(0,0,0,.14)}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 system-ui,"Noto Sans Arabic",Tahoma,sans-serif}
+  main{max-width:560px;margin:0 auto;padding:20px 16px 40px}
+  header{background:linear-gradient(135deg,#0e7a51,#0a5577);color:#fff;border-radius:20px;padding:20px;margin-bottom:18px}
+  h1{margin:0 0 4px;font-size:22px}
+  header p{margin:0;opacity:.85;font-size:14px}
+  label{display:block;font-size:14px;color:var(--muted);margin:14px 0 6px}
+  textarea,input{width:100%;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--text);font:inherit}
+  textarea{min-height:84px;resize:vertical}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;direction:ltr;text-align:left;font-size:13px;word-break:break-all}
+  button{min-height:48px;padding:0 18px;border:0;border-radius:12px;font:inherit;font-weight:700;cursor:pointer}
+  .primary{background:linear-gradient(135deg,#0e7a51,#0a5577);color:#fff;width:100%;margin-top:14px}
+  .ghost{background:transparent;border:1.5px solid var(--brand);color:var(--brand)}
+  .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+  .row button{flex:1}
+  .note{font-size:13px;color:var(--muted)}
+  .ok{color:#0b6644}.bad{color:#aa0b56}
+  #out{display:none;margin-top:18px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
+  .dev{font:700 22px ui-monospace,Menlo,monospace;letter-spacing:.08em;direction:ltr;text-align:center;margin:6px 0}
+  .kinds{display:grid;gap:8px}
+  .kinds label{display:flex;gap:10px;align-items:center;margin:0;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--text);cursor:pointer}
+  .kinds input{width:auto}
+  .kinds small{color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>مولّد أكواد اشتراك دفترة كاشير</h1>
+    <p>أحد منتجات MakeFlow — للاستخدام الخاص فقط</p>
+  </header>
+  <label for="key">المفتاح الخاص (نفس مفتاح دفترة: daftara-license-private-key.txt)</label>
+  <textarea id="key" class="mono" placeholder="الصق المفتاح الخاص هنا"></textarea>
+  <div class="row" style="align-items:center">
+    <label style="margin:0;display:flex;gap:8px;align-items:center;color:var(--text)"><input id="remember" type="checkbox" style="width:auto"> احفظه في هذا المتصفح</label>
+  </div>
+  <p id="keystate" class="note"></p>
+  <label for="req">رسالة طلب العميل (أو رقم جهازه فقط)</label>
+  <textarea id="req" placeholder="الصق رسالة واتساب التي وصلتك من العميل، وفيها: رقم الجهاز: ABCDE-FGHJK"></textarea>
+  <label>الاشتراك (يُختار تلقائيًا من رسالة العميل)</label>
+  <div class="kinds">
+    <label><input type="radio" name="plan" value="m" checked> <span><b>شهري</b> <small>— 30 شيكل</small></span></label>
+    <label><input type="radio" name="plan" value="y"> <span><b>سنوي</b> <small>— 300 شيكل</small></span></label>
+  </div>
+  <label for="until">ينتهي الاشتراك في (من اليوم، أو من نهاية اشتراكه الحالي)</label>
+  <input id="until" type="date">
+  <button id="make" class="primary" type="button">اصنع الكود</button>
+  <p id="err" class="note bad"></p>
+  <section id="out">
+    <div class="note">رقم الجهاز</div>
+    <div id="dev" class="dev"></div>
+    <div class="note">الرد الذي ترسله للعميل (انسخه كاملًا):</div>
+    <textarea id="reply" readonly style="min-height:170px"></textarea>
+    <div class="row">
+      <button id="copy" class="ghost" type="button">انسخ الرد</button>
+      <button id="share" class="ghost" type="button">شارك الرد</button>
+    </div>
+    <p id="copied" class="note ok"></p>
+  </section>
+</main>
+<script>
+/*NACL*/
+</script>
+<script id="logic">
+// منطق صنع الكود (بلا واجهة): نفس صيغة src/domain/license.js — يختبره tests/license.test.mjs
+var CASHIER_PUBLIC_KEY = 'HMMGz4JpCMXiMFuTm3ikWsTX6TYKucGN43AaGDMMF0c=';
+function cashierB64url(u) { var s = ''; for (var i = 0; i < u.length; i++) s += String.fromCharCode(u[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+function cashierUtf8(s) { return new TextEncoder().encode(s); }
+/** sk: المفتاح الخاص 64 بايت. device: ABCDE-FGHJK. ymd: YYYYMMDD. plan: m أو y. */
+function makeCashierCode(naclLib, sk, device, ymd, plan) {
+  var payload = device + '|' + ymd + '|' + plan;
+  var sig = naclLib.sign.detached(cashierUtf8('cashier-license-v1|' + payload), sk);
+  return 'DCS-' + cashierB64url(cashierUtf8(payload)) + '.' + cashierB64url(sig);
+}
+function findCashierDevice(text) {
+  var m = /([2-9A-HJ-NP-Z]{5})-([2-9A-HJ-NP-Z]{5})/.exec(String(text).toUpperCase());
+  return m ? m[0] : null;
+}
+</script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  function b64(u) { var s = ''; for (var i = 0; i < u.length; i++) s += String.fromCharCode(u[i]); return btoa(s); }
+  function unb64(s) { var b = atob(s.trim()), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
+  try { var saved = localStorage.getItem('cashier-license-key'); if (saved) { $('key').value = saved; $('remember').checked = true; } } catch (e) {}
+  function secret() {
+    var sk;
+    try { sk = unb64($('key').value.replace(/\s+/g, '')); } catch (e) { return null; }
+    if (sk.length !== 64) return null;
+    // آخر 32 بايت من المفتاح الخاص في Ed25519 هي المفتاح العام
+    if (b64(sk.subarray(32)) !== CASHIER_PUBLIC_KEY) return null;
+    return sk;
+  }
+  function paintKey() {
+    var ok = !!secret();
+    $('keystate').textContent = !$('key').value.trim() ? '' : ok ? '✓ المفتاح صحيح ويطابق التطبيق' : '✗ هذا ليس المفتاح الخاص الصحيح';
+    $('keystate').className = 'note ' + (ok ? 'ok' : 'bad');
+    try {
+      if ($('remember').checked && ok) localStorage.setItem('cashier-license-key', $('key').value.trim());
+      else localStorage.removeItem('cashier-license-key');
+    } catch (e) {}
+  }
+  $('key').addEventListener('input', paintKey);
+  $('remember').addEventListener('change', paintKey);
+  paintKey();
+  function plan() { return document.querySelector('input[name=plan]:checked').value; }
+  function two(n) { return (n < 10 ? '0' : '') + n; }
+  function ymd(d) { return d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate()); }
+  // شهر أو سنة من اليوم، أو من نهاية الاشتراك الحالي إن كان ما زال ساريًا (التجديد المبكر لا يضيع أيامًا)
+  function defaultUntil() {
+    var m = /الاشتراك الحالي حتى:\s*(\d{4})-(\d{2})-(\d{2})/.exec($('req').value);
+    var base = new Date();
+    if (m) { var cur = new Date(+m[1], +m[2] - 1, +m[3]); if (cur > base) base = cur; }
+    return ymd(plan() === 'y' ? new Date(base.getFullYear() + 1, base.getMonth(), base.getDate()) : new Date(base.getFullYear(), base.getMonth() + 1, base.getDate()));
+  }
+  function paintPlan() { if (!$('until').dataset.touched) $('until').value = defaultUntil(); }
+  document.querySelectorAll('input[name=plan]').forEach(function (r) { r.addEventListener('change', paintPlan); });
+  $('until').addEventListener('input', function () { $('until').dataset.touched = '1'; });
+  $('req').addEventListener('input', function () {
+    var t = $('req').value;
+    delete $('until').dataset.touched;
+    if (/سنوي/.test(t)) document.querySelector('input[name=plan][value=y]').checked = true;
+    else if (/شهري/.test(t)) document.querySelector('input[name=plan][value=m]').checked = true;
+    paintPlan();
+  });
+  paintPlan();
+  $('make').addEventListener('click', function () {
+    $('err').textContent = '';
+    $('out').style.display = 'none';
+    var sk = secret();
+    if (!sk) { $('err').textContent = 'الصق المفتاح الخاص الصحيح أولًا.'; return; }
+    var device = findCashierDevice($('req').value);
+    if (!device) { $('err').textContent = 'لم أجد رقم جهاز بالشكل ABCDE-FGHJK في الرسالة.'; return; }
+    var until = $('until').value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(until) || new Date(until) < new Date(ymd(new Date()))) { $('err').textContent = 'اختر تاريخ انتهاء في المستقبل.'; return; }
+    var code = makeCashierCode(nacl, sk, device, until.replace(/-/g, ''), plan());
+    $('dev').textContent = device;
+    $('reply').value = 'تم تفعيل اشتراكك في دفترة كاشير (' + (plan() === 'y' ? 'سنوي' : 'شهري') + ') حتى ' + until + ' ✅\n\nانسخ هذه الرسالة كاملة، ثم افتح التطبيق: المزيد ← الاشتراك ← «عندي كود تفعيل» والصقها:\n\n' + code + '\n\nشكرًا لثقتك — MakeFlow';
+    $('out').style.display = 'block';
+    $('copied').textContent = '';
+  });
+  $('copy').addEventListener('click', function () {
+    $('reply').select();
+    try { navigator.clipboard.writeText($('reply').value); } catch (e) { document.execCommand('copy'); }
+    $('copied').textContent = 'نُسخ ✓';
+  });
+  $('share').addEventListener('click', function () {
+    if (navigator.share) navigator.share({ text: $('reply').value }).catch(function () {});
+    else $('copy').click();
+  });
+})();
+</script>
+</body>
+</html>

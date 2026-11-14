@@ -105,6 +105,50 @@ select pg_temp.expect_error($q$insert into cashier_shops (id, shop_id, name) val
 select pg_temp.expect_error($q$update cashier_licenses set plan = 'lifetime'$q$, 'member edits license');
 do $$ begin assert (select name from public.cashier_catalog_lookup(array['7290000000017'])) = 'سكر السلطان', 'catalog shared across shops'; end $$;
 
+-- ===== الترخيص: الخادم هو الحَكَم
+reset role;
+-- مفتاح اختبار بدل مفتاح MakeFlow (المفتاح الخاص الحقيقي ليس هنا)
+create or replace function public.cashier_license_pubkey() returns bytea
+language sql immutable as $$ select decode('6kpsY+KcUgq+9VB7Ey7F+ZVHdq6+vnuSQh7qaRRG0iw=', 'base64') $$;
+set role authenticated;
+select set_config('request.jwt.claim.sub', :A, false);
+select pg_temp.check((public.cashier_license_checkin(:S1, 'DEV-AAAA-0001')->>'plan') = 'trial', 'checkin returns trial');
+select pg_temp.check(public.cashier_license_ok(:S1), 'trial is valid');
+-- انتهت التجربة: القراءة تبقى، والكتابة تُرفض
+reset role;
+update cashier_licenses set trial_ends_at = now() - interval '1 day' where shop_id = :S1;
+set role authenticated;
+select set_config('request.jwt.claim.sub', :A, false);
+select pg_temp.check((select count(*) from cashier_products) = 1, 'expired shop still reads its data');
+select pg_temp.expect_error($q$insert into cashier_products (id, shop_id, name) values (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'بعد الانتهاء')$q$, 'expired shop cannot insert');
+select pg_temp.expect_error($q$insert into cashier_inventory_movements (id, shop_id, product_id, type, qty) values (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', gen_random_uuid(), 'sale', -1000)$q$, 'expired shop cannot append');
+select pg_temp.expect_error($q$update cashier_products set name = 'x', updated_at = now() where true$q$, 'expired shop cannot update');
+select pg_temp.expect_error($q$insert into storage.objects (bucket_id, name) values ('cashier-media', '11111111-1111-1111-1111-111111111111/products/z.webp')$q$, 'expired shop cannot upload');
+-- كود مزوَّر يُرفض، والكود الموقَّع يفتح المحل
+select pg_temp.expect_error($q$select public.cashier_license_redeem('11111111-1111-1111-1111-111111111111', 'DCS-QUJDREUtRkdISkt8MjE5OTEyMzF8eQ.y1YxGU1U2XP3c-CDNQ2_wpAh5gioa20ZyDwWV4UZXCgffhjJw3_PqTRzso43jfbTuTColQ8gDRfej2RoxwzgBQ')$q$, 'forged code (date changed)');
+select pg_temp.expect_error($q$select public.cashier_license_redeem('11111111-1111-1111-1111-111111111111', 'hello')$q$, 'garbage code');
+select pg_temp.check((public.cashier_license_redeem(:S1, 'DCS-QUJDREUtRkdISkt8MjA5OTEyMzF8eQ.y1YxGU1U2XP3c-CDNQ2_wpAh5gioa20ZyDwWV4UZXCgffhjJw3_PqTRzso43jfbTuTColQ8gDRfej2RoxwzgBQ')->>'plan') = 'yearly', 'signed code activates');
+insert into cashier_products (id, shop_id, name, updated_at) values ('00000000-0000-0000-0000-0000000000a9', :S1, 'بعد التفعيل', now());
+select pg_temp.check((select count(*) from cashier_products) = 2, 'activated shop writes again');
+-- إيقاف من الإدارة يغلب أي اشتراك
+reset role;
+update cashier_licenses set is_active = false where shop_id = :S1;
+set role authenticated;
+select set_config('request.jwt.claim.sub', :A, false);
+select pg_temp.expect_error($q$insert into cashier_products (id, shop_id, name) values (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'موقوف')$q$, 'blocked shop cannot write');
+reset role;
+update cashier_licenses set is_active = true where shop_id = :S1;
+-- جهاز جرّب قبل 40 يومًا: محل جديد عليه لا يأخذ تجربة جديدة
+update cashier_device_trials set first_seen = now() - interval '40 days' where device_key = 'DEV-AAAA-0001';
+set role authenticated;
+select set_config('request.jwt.claim.sub', :A, false);
+select public.cashier_create_shop('44444444-4444-4444-4444-444444444444', 'محل ثانٍ', 'other');
+select pg_temp.check(public.cashier_license_ok('44444444-4444-4444-4444-444444444444'), 'new shop starts with a trial');
+select public.cashier_license_checkin('44444444-4444-4444-4444-444444444444', 'DEV-AAAA-0001');
+select pg_temp.check(not public.cashier_license_ok('44444444-4444-4444-4444-444444444444'), 'reinstall on the same device does not renew the trial');
+select pg_temp.expect_error($q$select public.cashier_license_checkin('22222222-2222-2222-2222-222222222222', 'DEV-AAAA-0001')$q$, 'checkin for another shop');
+select pg_temp.expect_error($q$select * from cashier_device_trials$q$, 'device trials not readable');
+
 -- ===== بلا تسجيل دخول (anon)
 reset role;
 set role anon;

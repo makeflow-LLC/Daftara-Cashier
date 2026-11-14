@@ -38,7 +38,12 @@ for (const t of TABLES) {
 }
 
 test('every synced server table is registered on the device', () => {
-  const synced = [...sql.matchAll(/\('(cashier_[a-z_]+)', '(lww|append)'\)/g)].map((m) => [m[1], m[2]]);
+  // القائمة تتكرر في 0003 (سياسات الترخيص): نأخذ كل جدول مرة، ونتأكد أن التكرار متطابق
+  const all = [...sql.matchAll(/\('(cashier_[a-z_]+)', '(lww|append)'\)/g)].map((m) => [m[1], m[2]]);
+  const modes = new Map();
+  for (const [remote, mode] of all) { assert.ok(!modes.has(remote) || modes.get(remote) === mode, `${remote} mode differs between migrations`); modes.set(remote, mode); }
+  assert.equal(all.length, modes.size * 2, 'licensing policies cover every synced table');
+  const synced = [...modes];
   assert.equal(synced.length, TABLES.length);
   for (const [remote, mode] of synced) {
     const t = TABLES.find((x) => x.remote === remote);

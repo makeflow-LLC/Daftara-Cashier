@@ -7,6 +7,7 @@ import { bus } from '../../core/bus.js';
 import { todaySummary } from '../../core/queries.js';
 import { navigate } from '../../core/router.js';
 import { openFeedback } from '../help/feedback.js';
+import { licenseBanner } from '../subscribe/subscribe.js';
 
 export function renderHome(el) {
   const kpis = h('div', { class: 'kpis' });
@@ -26,6 +27,7 @@ export function renderHome(el) {
         syncBadge()),
       kpis),
     h('div', { class: 'page home-page' },
+      licenseBanner(),
       stats,
       h('div', { class: 'quick' },
         quick('scan', 'بيع جديد', () => navigate('/sale'), 'brand'),
