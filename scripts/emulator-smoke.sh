@@ -114,7 +114,7 @@ adb shell input text '6291003000017'
 hide_kb
 tap 'تم'
 expect 'حفظ وامسح التالي'
-sleep 1
+sleep 3   # الخانة تأخذ التركيز بعد فتح النافذة؛ الكتابة قبلها تذهب لغيرها
 adb shell input text 'Milk'
 adb shell input keyevent 61
 adb shell input text '25'
