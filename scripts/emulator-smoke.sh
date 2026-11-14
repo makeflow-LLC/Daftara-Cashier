@@ -77,6 +77,11 @@ hide_kb() {
 }
 
 adb install -r daftara-cashier.apk
+# بلا إنترنت: الـ APK فيه عنوان الخادم الحقيقي، والاختبار يجب ألّا يكتب بيانات تجريبية فيه
+# (ولا في الكتالوج المشترك). وهكذا نختبر أيضًا أن كل شيء يعمل بلا إنترنت.
+adb shell svc wifi disable || true
+adb shell svc data disable || true
+adb shell cmd connectivity airplane-mode enable || adb shell settings put global airplane_mode_on 1 || true
 # الكاميرا تُطلب عند فتح شاشة البيع؛ نمنحها مسبقًا حتى لا تقف نافذة الإذن أمام الاختبار
 adb shell pm grant $PKG android.permission.CAMERA || true
 echo "--- cold start:"
