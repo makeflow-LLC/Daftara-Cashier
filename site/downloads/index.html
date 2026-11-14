@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>تنزيلات دفترة كاشير</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0e7a51">
+<link rel="icon" href="../icon.svg" type="image/svg+xml">
+<style>
+/* عدد تنزيلات دفترة كاشير، يُقرأ مباشرة من GitHub في كل فتح (المستودع العام makeflow-LLC/Daftara-Cashier،
+   الإصدارات فقط بلا النسخة التجريبية). صفحة للموقع فقط (makeflow.tech/apps/cashier/downloads/). على نسق صفحة دفترة. */
+:root{
+  --bg:#f3f2f2;--card:#fff;--text:#201e1d;--muted:#605d5d;--line:rgba(32,30,29,.08);
+  --brand:#0e7a51;--brand-soft:#e8f5ee;--brand-ink:#085134;--warn-soft:#fff6e5;--warn-ink:#7a4b00;
+  --grad:linear-gradient(135deg,#0e7a51 0%,#0b6b63 55%,#0a5577 100%);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:16px/1.7 "Noto Naskh Arabic","Geeza Pro",system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif}
+.num{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums}
+header{background:var(--grad);color:#fff;padding:28px 16px 30px;text-align:center}
+header h1{margin:0;font-size:18px;font-weight:600;opacity:.92}
+#total{display:block;font-size:64px;font-weight:700;line-height:1.1;margin:6px 0 2px}
+header p{margin:0;opacity:.85;font-size:14px}
+.wrap{max-width:560px;margin:0 auto;padding:0 16px 40px}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:-18px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 16px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+.tile span{display:block;font-size:13.5px;color:var(--muted)}
+.tile b{display:block;font-size:30px;line-height:1.2;color:var(--brand-ink)}
+h2{margin:24px 4px 8px;font-size:14px;color:var(--muted);font-weight:700}
+.list{background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.row .v{flex:1;min-width:0}
+.row .v b{display:block;font-size:15px}
+.row .v small{color:var(--muted);font-size:12.5px}
+.row .c{text-align:left;font-size:13px;color:var(--muted);line-height:1.5}
+.row .c b{color:var(--text);font-size:16px}
+.row.latest .v b::after{content:"الأحدث";margin-inline-start:8px;padding:1px 8px;border-radius:999px;
+  background:var(--brand-soft);color:var(--brand-ink);font-size:11.5px;font-weight:700}
+.msg{margin-top:16px;padding:12px 14px;border-radius:14px;font-size:14.5px;background:var(--warn-soft);color:var(--warn-ink)}
+.msg[hidden]{display:none}
+.foot{margin-top:18px;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;color:var(--muted)}
+button{min-height:44px;padding:0 18px;border:0;border-radius:12px;background:var(--brand);color:#fff;font:inherit;font-weight:700;cursor:pointer}
+button:disabled{opacity:.6;cursor:default}
+.note{margin-top:14px;font-size:13px;color:var(--muted);line-height:1.8}
+</style>
+</head>
+<body>
+<header>
+  <h1>تنزيلات دفترة كاشير</h1>
+  <b id="total" class="num">…</b>
+  <p>مجموع التنزيلات من كل النسخ</p>
+</header>
+
+<main class="wrap">
+  <div class="tiles">
+    <div class="tile"><span>تطبيق أندرويد</span><b id="apk" class="num">…</b></div>
+    <div class="tile"><span>نسخة الحاسوب</span><b id="exe" class="num">…</b></div>
+  </div>
+
+  <p id="msg" class="msg" hidden></p>
+
+  <h2>حسب النسخة</h2>
+  <div id="list" class="list"></div>
+
+  <div class="foot">
+    <span id="when"></span>
+    <button id="refresh" type="button">تحديث</button>
+  </div>
+
+  <p class="note">
+    العدد هو عدد مرات التنزيل لا عدد الأشخاص: من ينزّل مرتين، أو ينقطع تنزيله ثم يعيده، يُحسب أكثر من مرة.
+    ويشمل من نزّل من صفحة makeflow.tech/apps/cashier لأن روابطها تحوّل إلى نفس الملفات. النسخ التجريبية للاختبار لا تُحسب.
+  </p>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var API = 'https://api.github.com/repos/makeflow-LLC/Daftara-Cashier/releases?per_page=100';
+  function $(id) { return document.getElementById(id); }
+  function fmt(n) { return Number(n).toLocaleString('en-US'); }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
+  function day(iso) { var d = new Date(iso); return d.getDate() + '/' + (d.getMonth() + 1) + '/' + d.getFullYear(); }
+
+  function show(releases) {
+    var apk = 0, exe = 0;
+    var rows = releases.filter(function (r) { return !r.draft && !r.prerelease; }).map(function (r) {
+      var a = 0, e = 0;
+      (r.assets || []).forEach(function (x) {
+        if (/\.apk$/i.test(x.name)) a += x.download_count;
+        else if (/\.exe$/i.test(x.name)) e += x.download_count;
+      });
+      apk += a; exe += e;
+      return { name: r.name || r.tag_name, at: r.published_at || r.created_at, apk: a, exe: e };
+    });
+    $('total').textContent = fmt(apk + exe);
+    $('apk').textContent = fmt(apk);
+    $('exe').textContent = fmt(exe);
+    $('list').innerHTML = rows.length ? rows.map(function (r, i) {
+      return '<div class="row' + (i === 0 ? ' latest' : '') + '"><div class="v"><b>' + esc(r.name) + '</b>' +
+        '<small class="num">' + esc(day(r.at)) + '</small></div>' +
+        '<div class="c">أندرويد <b class="num">' + fmt(r.apk) + '</b><br>حاسوب <b class="num">' + fmt(r.exe) + '</b></div></div>';
+    }).join('') : '<div class="row"><div class="v">لا توجد نسخ منشورة بعد.</div></div>';
+    var n = new Date();
+    $('when').textContent = 'آخر تحديث ' + n.getHours() + ':' + String(n.getMinutes()).padStart(2, '0');
+  }
+
+  function load() {
+    $('refresh').disabled = true;
+    $('msg').hidden = true;
+    fetch(API, { headers: { Accept: 'application/vnd.github+json' }, cache: 'no-store' })
+      .then(function (res) {
+        if (res.status === 403 || res.status === 429) throw new Error('limit');
+        if (!res.ok) throw new Error('http');
+        return res.json();
+      })
+      .then(show)
+      .catch(function (e) {
+        $('msg').hidden = false;
+        $('msg').textContent = e.message === 'limit'
+          ? 'GitHub يسمح بعدد محدود من القراءات في الساعة لكل اتصال. جرّب بعد قليل.'
+          : (navigator.onLine === false ? 'لا يوجد إنترنت. اتصل ثم اضغط «تحديث».' : 'تعذّرت قراءة العدد من GitHub. اضغط «تحديث» بعد قليل.');
+      })
+      .then(function () { $('refresh').disabled = false; });
+  }
+
+  $('refresh').addEventListener('click', load);
+  load();
+})();
+</script>
+</body>
+</html>
