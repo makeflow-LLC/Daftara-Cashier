@@ -186,8 +186,12 @@ and pulls only the tables whose `cashier_shop_heads` counter moved — one small
 changed. The server stamps every write with `server_seq` under a per-shop lock, so a pull can never
 miss a row, and rejects edits older than what it has.
 
-Auth: the device signs in **anonymously** the first time it is online (no form to fill). Linking a
-phone number + password to move to another phone comes in a later milestone.
+Auth: the device signs in **anonymously** the first time it is online (no form to fill). The owner can then
+protect the shop with a **phone number + password** («حسابي», `0004_accounts.sql`, no SMS): bcrypt hash on the
+server, lockout after 5 wrong tries (30 s doubling), and on a new device «عندي حساب» makes that device a member
+of the shop and pulls everything (`src/core/account.js`). Forgotten password: the app shows a request code
+derived from the current hash; MakeFlow signs `cashier-reset-v1|phone|request` with the license key on the
+codes page; the code works once.
 
 ### Server setup (once)
 

@@ -8,6 +8,7 @@ import { todaySummary } from '../../core/queries.js';
 import { navigate } from '../../core/router.js';
 import { openFeedback } from '../help/feedback.js';
 import { licenseBanner } from '../subscribe/subscribe.js';
+import { accountBanner } from '../account/account.js';
 
 export function renderHome(el) {
   const kpis = h('div', { class: 'kpis' });
@@ -28,6 +29,7 @@ export function renderHome(el) {
       kpis),
     h('div', { class: 'page home-page' },
       licenseBanner(),
+      accountBanner(),
       stats,
       h('div', { class: 'quick' },
         quick('scan', 'بيع جديد', () => navigate('/sale'), 'brand'),

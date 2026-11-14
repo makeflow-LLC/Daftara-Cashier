@@ -1,4 +1,7 @@
 -- أدنى ما يلزم من Supabase لاختبار المخطط على Postgres عادي (محليًا وفي GitHub Actions).
+-- مثل Supabase: pgcrypto في المخطط extensions لا public (الدوال يجب أن تجدها هناك)
+create schema if not exists extensions;
+create extension if not exists pgcrypto with schema extensions;
 do $$ begin
   if not exists (select 1 from pg_roles where rolname = 'anon') then create role anon nologin; end if;
   if not exists (select 1 from pg_roles where rolname = 'authenticated') then create role authenticated nologin; end if;

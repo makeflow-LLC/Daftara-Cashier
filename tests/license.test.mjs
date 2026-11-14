@@ -86,7 +86,7 @@ test('owner generator page: up to date, and its codes are accepted by the app', 
   const html = readFileSync('tools/license-generator.html', 'utf8');
   assert.equal(html, buildGenerator(), 'run: node scripts/build-generator.mjs');
   const logic = /<script id="logic">([\s\S]*?)<\/script>/.exec(html)[1];
-  const api = new Function(`${logic}; return { makeCashierCode, findCashierDevice, CASHIER_PUBLIC_KEY };`)();
+  const api = new Function(`${logic}; return { makeCashierCode, findCashierDevice, CASHIER_PUBLIC_KEY, makeCashierReset, parseCashierReset };`)();
   const { LICENSE_PUBLIC_KEY } = await import('../src/core/license.js');
   assert.equal(api.CASHIER_PUBLIC_KEY, LICENSE_PUBLIC_KEY);
   assert.ok(readFileSync('supabase/migrations/0003_licensing.sql', 'utf8').includes(LICENSE_PUBLIC_KEY), 'server uses the same public key');
@@ -99,5 +99,13 @@ test('owner generator page: up to date, and its codes are accepted by the app', 
   const r = verifyCode(code, { device, publicKey: keys.publicKey, verify: nacl.sign.detached.verify, now: Date.UTC(2026, 0, 1) });
   assert.ok(r.ok);
   assert.equal(r.plan, 'yearly');
+  // كود إعادة تعيين كلمة السر: نفس الصيغة التي يتحقق منها الخادم
+  const { resetRequestMessage, resetMessage, extractResetCode } = await import('../src/domain/account.js');
+  const q = api.parseCashierReset(resetRequestMessage({ phone: '970599123456', request: '07E4-6405', shopName: 'بقالة' }));
+  assert.deepEqual({ ...q }, { phone: '970599123456', request: '07E4-6405' });
+  const rc = api.makeCashierReset(nacl, keys.secretKey, q.phone, q.request);
+  assert.equal(extractResetCode(`الكود:\n${rc}`), rc);
+  const sig = Buffer.from(rc.slice(4), 'base64url');
+  assert.ok(nacl.sign.detached.verify(new TextEncoder().encode(resetMessage(q.phone, q.request)), sig, keys.publicKey));
   void unb64;
 });

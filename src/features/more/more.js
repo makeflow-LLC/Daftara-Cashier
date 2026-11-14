@@ -28,6 +28,7 @@ export function renderMore(el) {
       tile('tag', 'أدوات', 'pink', go('/tools'))),
     h('h2', { class: 'section-title' }, 'التطبيق'),
     h('div', { class: 'hub' },
+      tile('lock', 'حسابي', 'violet', go('/account')),
       tile('star', 'الاشتراك', 'amber', go('/subscribe')),
       tile('sliders', 'الإعدادات', 'gray', go('/settings')),
       tile('help', 'المساعدة', 'blue', go('/help')),

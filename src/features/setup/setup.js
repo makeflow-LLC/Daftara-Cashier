@@ -36,6 +36,7 @@ export function renderSetup(el) {
         field('رقم جوال المحل (اختياري)', phoneIn, 'يظهر على الفواتير'),
         err,
         h('div', { class: 'setup-bottom' }, button('التالي', { type: 'submit', block: true, size: 'lg' }),
+          app.config.syncEnabled ? h('button', { class: 'btn btn-outline btn-block', type: 'button', onclick: async () => (await import('../account/account.js')).openLogin() }, 'عندي حساب — ادخل برقم الهاتف') : null,
           h('button', { class: 'btn btn-text', type: 'button', onclick: async () => (await import('../tools/tools.js')).restoreFromFile() }, 'لدي نسخة احتياطية — استعادة')),
       ),
     ));

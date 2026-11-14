@@ -77,6 +77,17 @@
     </div>
     <p id="copied" class="note ok"></p>
   </section>
+  <h2 style="margin:28px 0 4px;font-size:19px">نسيت كلمة السر؟</h2>
+  <p class="note">الصق رسالة صاحب المحل (فيها «رقم الحساب» و«رقم الطلب»). تأكد أولًا أنه صاحب المحل فعلًا، مثلًا من رقم واتساب الذي راسلك منه.</p>
+  <textarea id="rreq" placeholder="مرحبًا، نسيت كلمة سر دفترة كاشير…"></textarea>
+  <button id="rmake" class="primary" type="button">اصنع كود إعادة التعيين</button>
+  <p id="rerr" class="note bad"></p>
+  <section id="rout" style="display:none;margin-top:18px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px">
+    <div class="note">الرد الذي ترسله لصاحب المحل:</div>
+    <textarea id="rreply" readonly style="min-height:150px"></textarea>
+    <div class="row"><button id="rcopy" class="ghost" type="button">انسخ الرد</button></div>
+    <p id="rcopied" class="note ok"></p>
+  </section>
   <button id="relock" class="ghost" type="button" style="width:100%;margin-top:18px">قفل الصفحة</button>
   </section>
 </main>
@@ -94,6 +105,16 @@ function makeCashierCode(naclLib, sk, device, ymd, plan) {
   var payload = device + '|' + ymd + '|' + plan;
   var sig = naclLib.sign.detached(cashierUtf8('cashier-license-v1|' + payload), sk);
   return 'DCS-' + cashierB64url(cashierUtf8(payload)) + '.' + cashierB64url(sig);
+}
+/** كود إعادة تعيين كلمة السر: توقيع على «رقم الحساب|رقم الطلب» (نفس صيغة src/domain/account.js). */
+function makeCashierReset(naclLib, sk, phone, request) {
+  var sig = naclLib.sign.detached(cashierUtf8('cashier-reset-v1|' + phone + '|' + request), sk);
+  return 'DCR-' + cashierB64url(sig);
+}
+function parseCashierReset(text) {
+  var t = String(text || '');
+  var p = /رقم الحساب:\s*([0-9]{9,15})/.exec(t), r = /([0-9A-F]{4}-[0-9A-F]{4})/.exec(t.toUpperCase());
+  return p && r ? { phone: p[1], request: r[1] } : null;
 }
 function findCashierDevice(text) {
   var m = /([2-9A-HJ-NP-Z]{5})-([2-9A-HJ-NP-Z]{5})/.exec(String(text).toUpperCase());
@@ -174,6 +195,20 @@ function findCashierDevice(text) {
     $('reply').value = 'تم تفعيل اشتراكك في دفترة كاشير (' + (plan() === 'y' ? 'سنوي' : 'شهري') + ') حتى ' + until + ' ✅\n\nانسخ هذه الرسالة كاملة، ثم افتح التطبيق: المزيد ← الاشتراك ← «عندي كود تفعيل» والصقها:\n\n' + code + '\n\nشكرًا لثقتك — MakeFlow';
     $('out').style.display = 'block';
     $('copied').textContent = '';
+  });
+  $('rmake').addEventListener('click', function () {
+    $('rerr').textContent = ''; $('rout').style.display = 'none';
+    if (!sk) { lock(); return; }
+    var q = parseCashierReset($('rreq').value);
+    if (!q) { $('rerr').textContent = 'لم أجد «رقم الحساب» و«رقم الطلب» في الرسالة.'; return; }
+    var code = makeCashierReset(nacl, sk, q.phone, q.request);
+    $('rreply').value = 'هذا كود إعادة تعيين كلمة سر دفترة كاشير 🔑\n\nانسخ هذه الرسالة كاملة، ثم في التطبيق: «نسيت كلمة السر» ← الصقها في «الكود الذي وصلك» واختر كلمة سر جديدة:\n\n' + code + '\n\nالكود يصلح مرة واحدة فقط. — MakeFlow';
+    $('rout').style.display = 'block'; $('rcopied').textContent = '';
+  });
+  $('rcopy').addEventListener('click', function () {
+    $('rreply').select();
+    try { navigator.clipboard.writeText($('rreply').value); } catch (e) { document.execCommand('copy'); }
+    $('rcopied').textContent = 'نُسخ ✓';
   });
   $('copy').addEventListener('click', function () {
     $('reply').select();

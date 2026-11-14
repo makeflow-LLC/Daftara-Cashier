@@ -149,6 +149,46 @@ select pg_temp.check(not public.cashier_license_ok('44444444-4444-4444-4444-4444
 select pg_temp.expect_error($q$select public.cashier_license_checkin('22222222-2222-2222-2222-222222222222', 'DEV-AAAA-0001')$q$, 'checkin for another shop');
 select pg_temp.expect_error($q$select * from cashier_device_trials$q$, 'device trials not readable');
 
+-- ===== الدخول برقم الهاتف وكلمة سر
+reset role;
+update cashier_licenses set is_active = true where shop_id = :S1;
+set role authenticated;
+select set_config('request.jwt.claim.sub', :B, false);
+select pg_temp.expect_error($q$select public.cashier_account_set('11111111-1111-1111-1111-111111111111', '970599000111', 'secret123')$q$, 'only the owner protects the shop');
+select set_config('request.jwt.claim.sub', :A, false);
+select pg_temp.expect_error($q$select public.cashier_account_set('11111111-1111-1111-1111-111111111111', '970599000111', '123')$q$, 'short password');
+select public.cashier_account_set(:S1, '970599000111', 'secret123');
+select pg_temp.check((public.cashier_account_get(:S1)->>'phone') = '970599000111', 'phone saved');
+select pg_temp.expect_error($q$select public.cashier_account_set('44444444-4444-4444-4444-444444444444', '970599000111', 'other123')$q$, 'phone used by another shop');
+reset role;
+select pg_temp.check((select pass_hash from cashier_accounts where phone = '970599000111') like '$2a$%', 'password stored as bcrypt');
+set role authenticated;
+-- جهاز جديد (مستخدم مجهول جديد C)
+select set_config('request.jwt.claim.sub', 'cccccccc-0000-0000-0000-000000000003', false);
+select pg_temp.check((select count(*) from cashier_products) = 0, 'new device sees nothing before login');
+select pg_temp.check((public.cashier_account_login('970599000111', 'wrong')->>'ok')::boolean = false, 'wrong password refused');
+select pg_temp.check((public.cashier_account_login('970500000000', 'secret123')->>'reason') = 'bad', 'unknown phone refused');
+select pg_temp.check((public.cashier_account_login('970599000111', 'secret123')->>'shop_id') = '11111111-1111-1111-1111-111111111111', 'right password logs in');
+select pg_temp.check((select count(*) from cashier_products) >= 1, 'new device now reads the shop');
+select pg_temp.check(public.cashier_is_member(:S1), 'new device is a member');
+-- التخمين: 5 أخطاء ← قفل مؤقت حتى بكلمة السر الصحيحة
+select set_config('request.jwt.claim.sub', 'dddddddd-0000-0000-0000-000000000004', false);
+select public.cashier_account_login('970599000111', 'guess' || g) from generate_series(1, 5) g;
+select pg_temp.check((public.cashier_account_login('970599000111', 'secret123')->>'reason') = 'locked', 'locked after 5 wrong tries');
+select pg_temp.check(not public.cashier_is_member(:S1), 'locked device is not a member');
+-- نسيت كلمة السر: كود موقَّع (مفتاح الاختبار) على الرقم ورقم الطلب
+reset role;
+update cashier_accounts set pass_hash = 'fixed-test-hash' where phone = '970599000111';
+set role authenticated;
+select pg_temp.check(public.cashier_account_reset_request('970599000111') = '07E4-6405', 'request code');
+select pg_temp.check((public.cashier_account_reset('970599000111', 'DCR-' || repeat('A', 86), 'newpass1')->>'ok')::boolean = false, 'forged reset code refused');
+select pg_temp.check((public.cashier_account_reset('970599000111', 'DCR-XvXWHTknwsbvQEP60E2G3YcpXEsxwAIFcdzl6GUj5oBgcHhaQxWjiqLseyCZNwx4whHzV_pOVdcx3NpwZTyNAw', 'newpass1')->>'ok')::boolean, 'signed reset code accepted');
+select pg_temp.check((public.cashier_account_reset('970599000111', 'DCR-XvXWHTknwsbvQEP60E2G3YcpXEsxwAIFcdzl6GUj5oBgcHhaQxWjiqLseyCZNwx4whHzV_pOVdcx3NpwZTyNAw', 'again99')->>'ok')::boolean = false, 'reset code works once');
+select pg_temp.check((public.cashier_account_login('970599000111', 'newpass1')->>'ok')::boolean, 'new password works and unlocks');
+reset role;
+select pg_temp.expect_error($q$set role authenticated; select * from cashier_accounts$q$, 'accounts table not readable');
+reset role;
+
 -- ===== بلا تسجيل دخول (anon)
 reset role;
 set role anon;

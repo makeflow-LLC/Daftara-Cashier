@@ -867,3 +867,16 @@ body{font-weight:500}
 .pack-box .field:only-child,.pack-box .pack-other[hidden]+.field{grid-column:1 / -1}
 .piece-hint{margin:-4px 0 var(--space-3);padding:10px 12px;border-radius:var(--radius-md);background:var(--brand-100);color:var(--brand-700);font-weight:700;font-size:14.5px}
 .piece-hint:empty{display:none}
+
+/* حسابي */
+.acc-card{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-4);border-radius:var(--radius-lg);border:2px solid;margin-bottom:var(--space-4)}
+.acc-card strong{display:block;font-size:18px}
+.acc-card span{font-size:14.5px}
+.acc-ic{flex:none;width:56px;height:56px;border-radius:18px;background:#fff;display:flex;align-items:center;justify-content:center}
+.acc-ok{background:var(--brand-100);border-color:var(--brand-200);color:var(--brand-700)}
+.acc-info{background:var(--blue-100);border-color:#b9d4f7;color:var(--blue-700)}
+.acc-warn{background:var(--amber-100);border-color:#f3cf8f;color:var(--amber-700)}
+.acc-help{padding:var(--space-3);margin-bottom:var(--space-4);border-radius:var(--radius-lg);background:#fff;border:2px solid var(--frame)}
+.acc-help ol{margin:0;padding:0 22px 0 0}
+.acc-help li{margin:6px 0}
+.acc-form .btn-lg{margin-top:var(--space-2)}

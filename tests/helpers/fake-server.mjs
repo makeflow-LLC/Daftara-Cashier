@@ -15,6 +15,7 @@ export function createFakeServer() {
   const members = new Map(); // shopId → Set(userId)
   const devices = new Map(); // shopId → Map(deviceId → prefix)
   const heads = new Map();   // shopId → {table: seq}
+  const accounts = new Map(); // phone → {shop, pass, fails}
   let seq = 0;
   let users = 0;
   const server = { offline: false, reject: null, requests: 0, tables, members };
@@ -108,6 +109,30 @@ export function createFakeServer() {
           for (let i = 0; !p; i++) { const c = String.fromCharCode(65 + i); if (!used.has(c)) p = c; }
           d.set(a.p_device, p);
           return p;
+        }
+        // الحساب (مثل 0004_accounts.sql، بلا تشفير هنا): رقم + كلمة سر ← عضوية في المحل
+        if (fn === 'cashier_account_set') {
+          if (!isMember(a.p_shop, uid())) throw new HttpError(403, { code: '42501', message: 'not the owner' }, fn);
+          const other = accounts.get(a.p_phone);
+          if (other && other.shop !== a.p_shop) throw new HttpError(409, { code: '23505', message: 'phone taken' }, fn);
+          for (const [ph, acc] of accounts) if (acc.shop === a.p_shop) accounts.delete(ph);
+          accounts.set(a.p_phone, { shop: a.p_shop, pass: a.p_password, fails: 0 });
+          return { phone: a.p_phone };
+        }
+        if (fn === 'cashier_account_get') {
+          if (!isMember(a.p_shop, uid())) return null;
+          for (const [ph, acc] of accounts) if (acc.shop === a.p_shop) return { phone: ph };
+          return null;
+        }
+        if (fn === 'cashier_account_login') {
+          const acc = accounts.get(a.p_phone);
+          if (!acc) return { ok: false, reason: 'bad' };
+          if (acc.fails >= 5) return { ok: false, reason: 'locked', wait: 30 };
+          if (acc.pass !== a.p_password) { acc.fails++; return { ok: false, reason: 'bad' }; }
+          acc.fails = 0;
+          members.get(acc.shop).add(uid());
+          const shop = tbl('cashier_shops').get(acc.shop);
+          return { ok: true, shop_id: acc.shop, name: shop && shop.name };
         }
         throw new HttpError(404, { message: `no rpc ${fn}` }, fn);
       },
