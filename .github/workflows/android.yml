@@ -273,8 +273,9 @@ jobs:
   # أسرار: FTP_SERVER و FTP_USERNAME و FTP_PASSWORD. نرفع إلى المجلد cashier/ فقط ولا نحذف شيئًا،
   # فلا تُلمس ملفات دفترة في نفس الحساب.
   website:
-    if: ${{ always() && (needs.release.result == 'success' || (github.event_name == 'workflow_dispatch' && needs.meta.result == 'success')) }}
-    needs: [meta, release]
+    # لا ينتظر البناء: الصفحة ثابتة وروابطها تشير دائمًا إلى «آخر إصدار»
+    if: ${{ needs.meta.outputs.version != '' || github.event_name == 'workflow_dispatch' }}
+    needs: [meta]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
