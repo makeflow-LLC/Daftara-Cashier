@@ -6,6 +6,7 @@ import { header, iconButton, money, emptyState, input, button, field } from '../
 import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
 import { startInlineScanner } from '../../ui/scanner.js';
+import { listenKeyScanner, isDesktop } from '../../ui/keyscan.js';
 import { makeLine, addLine, lineTotal, cartTotals } from '../../domain/cart.js';
 import { searchProducts, normalizeBarcode } from '../../domain/product.js';
 import { formatQty, parseQty, unit as unitOf, QTY_SCALE } from '../../domain/units.js';
@@ -354,10 +355,13 @@ export function renderSale(el) {
   paintHeld();
   app.sales.loadCurrent().then((c) => { if (c && c.lines.length && !cart.lines.length) { cart = { lines: c.lines, discount: c.discount, customer: c.customer }; paint(); } });
   setTimeout(loadProducts, 0);
+  // الحاسوب: قارئ باركود USB بدل الكاميرا، والمؤشر في البحث جاهز للكتابة
+  if (isDesktop()) { cameraOn = false; camBtn.hidden = true; setTimeout(() => search.focus(), 50); }
   if (cameraOn) startCam(); else scanBox.hidden = true;
+  const offKeys = listenKeyScanner(onCode);
   const off = bus.on('data', (e) => { if (e.tables.includes('products') || e.tables.includes('movements')) loadProducts(); });
   el.dataset.openMs = String(Math.round(performance.now() - t0));
-  return () => { off(); stopCam(); clearTimeout(saveTimer); app.sales.saveCurrent(serialize()); };
+  return () => { off(); offKeys(); stopCam(); clearTimeout(saveTimer); app.sales.saveCurrent(serialize()); };
 }
 
 function readPref() {

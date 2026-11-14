@@ -1,0 +1,49 @@
+{
+  "name": "daftara-cashier-desktop",
+  "productName": "Daftara Cashier",
+  "version": "1.0.0",
+  "private": true,
+  "description": "دفترة كاشير — نسخة الحاسوب (ويندوز)",
+  "author": "MakeFlow LLC",
+  "main": "main.js",
+  "scripts": {
+    "www": "node ../scripts/build-www.mjs www desktop",
+    "start": "npm run www && electron .",
+    "dist": "npm run www && electron-builder --win nsis --publish never"
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "26.17.0",
+    "playwright": "1.64.0"
+  },
+  "build": {
+    "appId": "com.makeflow.daftara.cashier.desktop",
+    "productName": "Daftara Cashier",
+    "copyright": "MakeFlow LLC",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["main.js", "preload.js", "www/**/*", "build/icon.png"],
+    "asar": true,
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true
+    },
+    "win": {
+      "target": ["nsis"],
+      "icon": "build/icon.png",
+      "artifactName": "daftara-cashier-setup.exe"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "دفترة كاشير",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}

@@ -1,5 +1,6 @@
 // شراء بضاعة: امسح أو ابحث ← الكمية والتكلفة ← «دفعت نقدًا» أو «على الحساب». المخزون ومتوسط التكلفة يتحدّثان وحدهما.
 // باركود جديد أثناء الشراء يُضاف كصنف بسطرين ويدخل الفاتورة مباشرة. المسودة تُحفظ لو أُغلق التطبيق.
+import { listenKeyScanner, isDesktop } from '../../ui/keyscan.js';
 import { h, fill, num } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { header, iconButton, money, emptyState, input, button, field } from '../../ui/components.js';
@@ -190,6 +191,7 @@ export async function renderPurchase(el, params) {
   if (params.supplier) { const s = await app.inventory.supplier(params.supplier); if (s) draft.supplier = { id: s.id, name: s.name }; }
   products = await app.products.list();
   paint();
-  startCam();
-  return () => { if (scanner) scanner.stop(); };
+  if (isDesktop()) setTimeout(() => search.focus(), 50); else startCam();
+  const offKeys = listenKeyScanner(onCode);
+  return () => { offKeys(); if (scanner) scanner.stop(); };
 }

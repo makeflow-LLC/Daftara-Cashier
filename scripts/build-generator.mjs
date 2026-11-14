@@ -8,7 +8,9 @@ const root = new URL('..', import.meta.url);
 export function buildGenerator() {
   const tpl = readFileSync(new URL('scripts/generator.template.html', root), 'utf8');
   const nacl = readFileSync(new URL('vendor/nacl-fast.min.js', root), 'utf8').trim();
-  return tpl.replace('/*NACL*/', () => nacl);
+  const vault = readFileSync(new URL('scripts/license-vault.txt', root), 'utf8').trim();
+  if (!/^DCV1\.[A-Za-z0-9+/=]+$/.test(vault)) throw new Error('scripts/license-vault.txt is not a sealed key');
+  return tpl.replace('/*NACL*/', () => nacl).replace('/*VAULT*/', () => vault);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

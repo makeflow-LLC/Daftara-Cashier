@@ -38,7 +38,7 @@ export function renderHome(el) {
       guide,
       section('تنبيهات', alerts),
       h('button', { class: 'beta-banner', type: 'button', onclick: () => openFeedback('note') },
-        icon('chat', 26), h('span', { class: 'row-main' }, h('strong', null, 'نسخة تجريبية — رأيك يهمنا'), h('span', null, 'بلّغ عن مشكلة أو اطلب ميزة بضغطة')), icon('chevron', 20)),
+        icon('chat', 26), h('span', { class: 'row-main' }, h('strong', null, app.config.release ? 'رأيك يهمنا' : 'نسخة تجريبية — رأيك يهمنا'), h('span', null, 'بلّغ عن مشكلة أو اطلب ميزة بضغطة')), icon('chevron', 20)),
     ),
   );
 

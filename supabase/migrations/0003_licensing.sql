@@ -115,7 +115,7 @@ end $$;
 -- ---------------------------------------------------------------------------
 -- المفتاح العام لـ MakeFlow (نفسه في التطبيق: src/core/license.js). الخاص عند MakeFlow وحدها.
 create or replace function public.cashier_license_pubkey() returns bytea
-language sql immutable as $$ select decode('HMMGz4JpCMXiMFuTm3ikWsTX6TYKucGN43AaGDMMF0c=', 'base64') $$;
+language sql immutable as $$ select decode('LQAGz2YjhZJjLP4/6d91+KqTvqbopt+6rH4Lhumxsqc=', 'base64') $$;
 
 create or replace function public.cashier_ed_le(b bytea) returns numeric
 language plpgsql immutable as $$

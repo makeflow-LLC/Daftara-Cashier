@@ -57,6 +57,14 @@ export const app = {
   },
 
   async boot() {
+    // نسخة الحاسوب (Electron): رقم الجهاز وتاريخ التثبيت من ويندوز عبر preload.js
+    const desk = globalThis.cashierDesktop;
+    if (desk) {
+      try {
+        const i = await desk.info();
+        app.info = { ...app.info, flavor: 'desktop', version: i.version || app.info.version, deviceKey: i.deviceKey, installedAt: i.installedAt, os: i.os };
+      } catch { /* يبقى ما في الإعدادات */ }
+    }
     const native = globalThis.Capacitor?.Plugins?.AppInfo;
     if (native) {
       try {

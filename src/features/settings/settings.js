@@ -256,7 +256,7 @@ export function renderAbout(el) {
     h('div', { class: 'page' },
       card(h('div', { class: 'list' },
         row({ title: 'دفترة كاشير', end: num(app.info.version) }),
-        row({ title: 'النسخة', end: app.info.flavor === 'play' ? 'Google Play' : app.info.flavor === 'direct' ? 'تثبيت مباشر' : 'تجريبية' }),
+        row({ title: 'النسخة', end: app.info.flavor === 'play' ? 'Google Play' : app.info.flavor === 'direct' ? 'تثبيت مباشر' : app.info.flavor === 'desktop' ? 'نسخة الحاسوب' : 'تجريبية' }),
         row({ title: 'رقم البناء', end: num(String(app.info.build)) }),
       )),
       h('p', { class: 'made-by' }, 'أحد منتجات ', h('b', null, 'MakeFlow')),

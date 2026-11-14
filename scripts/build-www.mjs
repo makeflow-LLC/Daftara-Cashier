@@ -2,7 +2,9 @@
 // ويكتب www/config.js من متغيرات البيئة — لا عنوان خادم ولا مفاتيح في الكود:
 //   SUPABASE_URL, SUPABASE_ANON_KEY   (بدونهما: التطبيق كامل على الجهاز، والمزامنة متوقفة)
 //   VERSION_CODE                      رقم البناء (GitHub Actions)
-//   node scripts/build-www.mjs <المجلد>
+//   APP_FLAVOR                        direct | play | desktop (أو الوسيط الثاني)
+//   VERSION_NAME                      رقم الإصدار للزبائن (من وسم الإصدار v1.0.0)
+//   node scripts/build-www.mjs <المجلد> [flavor]
 import { cpSync, rmSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,8 +24,9 @@ const build = parseInt(process.env.VERSION_CODE || '0', 10) || 0;
 const cfg = {
   supabaseUrl: (process.env.SUPABASE_URL || '').trim(),
   supabaseAnonKey: (process.env.SUPABASE_ANON_KEY || '').trim(),
-  flavor: process.env.APP_FLAVOR || 'direct',
-  version: `${pkg.version || '0.1.0'}${build ? `.${build}` : ''}`,
+  flavor: process.argv[3] || process.env.APP_FLAVOR || 'direct',
+  version: (process.env.VERSION_NAME || '').replace(/^v/, '') || `${pkg.version || '0.1.0'}${build ? `.${build}` : ''}`,
+  release: !!process.env.VERSION_NAME,
   build,
 };
 writeFileSync(`${out}/config.js`, `window.CASHIER_CONFIG = ${JSON.stringify(cfg)};\n`);

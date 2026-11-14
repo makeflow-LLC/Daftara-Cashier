@@ -32,6 +32,6 @@ export function renderMore(el) {
       tile('sliders', 'الإعدادات', 'gray', go('/settings')),
       tile('help', 'المساعدة', 'blue', go('/help')),
       tile('chat', 'أرسل ملاحظة', 'green', () => openFeedback('note'))),
-    h('p', { class: 'made-by' }, 'دفترة كاشير ', h('span', { class: 'num' }, app.info.version), ' — نسخة تجريبية · أحد منتجات ', h('b', null, 'MakeFlow')),
+    h('p', { class: 'made-by' }, 'دفترة كاشير ', h('span', { class: 'num' }, app.info.version), app.config.release ? ' · أحد منتجات ' : ' — نسخة تجريبية · أحد منتجات ', h('b', null, 'MakeFlow')),
   ));
 }

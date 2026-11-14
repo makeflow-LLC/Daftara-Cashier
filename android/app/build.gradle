@@ -9,7 +9,8 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // في GitHub Actions يأخذ رقم البناء، فكل APK جديد يُثبَّت كتحديث فوق السابق
         versionCode((System.getenv("VERSION_CODE") ?: "1") as Integer)
-        versionName "0.1." + (System.getenv("VERSION_CODE") ?: "0")
+        // إصدار للزبائن: من الوسم (v1.0.0 ← 1.0.0)، وإلا نسخة تجريبية 0.1.<رقم البناء>
+        versionName((System.getenv("VERSION_NAME") ?: "").replaceFirst("^v", "") ?: ("0.1." + (System.getenv("VERSION_CODE") ?: "0")))
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         // العربية والإنجليزية فقط من موارد مكتبات AndroidX (يحذف ترجمات عشرات اللغات: حجم أصغر)
         resourceConfigurations += ["ar", "en"]

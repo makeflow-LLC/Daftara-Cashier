@@ -143,10 +143,26 @@ payments and backup stay open.
      trial/subscription, verifies codes with Ed25519 in SQL, and ties the trial to the device so reinstalling
      or creating a new shop does not restart it.
 - Owner tool: `tools/license-generator.html` (one offline file, built by `node scripts/build-generator.mjs`).
-  Paste the private key (the same Ed25519 key as Daftara), the customer's WhatsApp request, pick the plan → code.
+  The Cashier's own Ed25519 private key is embedded **sealed** (`scripts/license-vault.txt`: PBKDF2-SHA256
+  600k → AES-256-GCM) and opens only with MakeFlow's password, in memory; it relocks after 15 idle minutes.
+  Published at `https://makeflow.tech/apps/cashier/admin/` (noindex).
 - Manual activation without a code (Supabase SQL editor): see the header of `0003_licensing.sql`.
 - `play` flavor: `BillingPlugin.java` (Google Play subscriptions `cashier_monthly`, `cashier_yearly`).
   Server-side verification of Play purchases (Play Developer API) is not done yet.
+
+## Windows (desktop) and releases
+
+- `desktop/` — Electron wrapper (same `www`, flavor `desktop`): pages served from `app://cashier` (ES modules,
+  stable IndexedDB origin), device key from Windows MachineGuid, no camera — a USB barcode reader types the code
+  (`src/ui/keyscan.js` catches it anywhere on the sale and purchase screens). Electron fuses: ASAR integrity
+  validation, load only from ASAR, no Node mode, no devtools in the installed app.
+  Local: `cd desktop && npm ci && npm start`; CI builds `daftara-cashier-setup.exe` on Windows and runs
+  `desktop/test/smoke.mjs` against the real app.
+- Customer release = push a tag `v1.2.3`: CI builds everything, publishes a normal GitHub Release (so
+  `releases/latest/download/…` points to it) and uploads `site/` to `https://makeflow.tech/apps/cashier/`
+  (download page; the `.apk`/`.exe` links redirect to the latest release) with the code page at
+  `/apps/cashier/admin/`. Needs the `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD` secrets (same Hostinger
+  account as Daftara; only the `cashier/` folder is written).
 
 ## Data rules (non-negotiable)
 

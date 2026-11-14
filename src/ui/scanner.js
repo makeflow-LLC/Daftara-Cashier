@@ -165,7 +165,7 @@ export function openScanner({ title = 'امسح الباركود', onCode, conti
   async function startWeb() {
     const BD = globalThis.BarcodeDetector;
     if (!BD || !navigator.mediaDevices?.getUserMedia) {
-      say('اكتب الباركود (الكاميرا تعمل في تطبيق الجوال)');
+      say((globalThis.CASHIER_CONFIG || {}).flavor === 'desktop' ? 'امسح بقارئ الباركود أو اكتبه هنا' : 'اكتب الباركود (الكاميرا تعمل في تطبيق الجوال)');
       setTimeout(() => manual.focus(), 100);
       return;
     }
@@ -319,7 +319,7 @@ export async function startInlineScanner({ box, onCode, onStatus = () => {} }) {
     }
   }
   const BD = globalThis.BarcodeDetector;
-  if (!BD || !navigator.mediaDevices?.getUserMedia) { onStatus('الكاميرا تعمل في تطبيق الجوال — ابحث بالاسم أو اكتب الباركود'); return null; }
+  if (!BD || !navigator.mediaDevices?.getUserMedia) { onStatus((globalThis.CASHIER_CONFIG || {}).flavor === 'desktop' ? '' : 'الكاميرا تعمل في تطبيق الجوال — ابحث بالاسم أو اكتب الباركود'); return null; }
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
     const video = h('video', { class: 'scan-video', playsinline: true, muted: true, autoplay: true });

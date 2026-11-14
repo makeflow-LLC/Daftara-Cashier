@@ -4,3 +4,7 @@ www/
 *.jks
 !android/app/preview.keystore
 .DS_Store
+desktop/node_modules/
+desktop/www/
+desktop/dist/
+desktop/desktop-screenshot.png

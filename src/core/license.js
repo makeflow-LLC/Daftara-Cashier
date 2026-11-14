@@ -3,7 +3,7 @@
 import { licenseState, trustedNow, deviceCode, verifyCode, unb64, LOCKED_TABLES, GRACE_DAYS } from '../domain/license.js';
 
 /** المفتاح العام لـ MakeFlow (نفسه في supabase/migrations/0003_licensing.sql). الخاص عند MakeFlow وحدها. */
-export const LICENSE_PUBLIC_KEY = 'HMMGz4JpCMXiMFuTm3ikWsTX6TYKucGN43AaGDMMF0c=';
+export const LICENSE_PUBLIC_KEY = 'LQAGz2YjhZJjLP4/6d91+KqTvqbopt+6rH4Lhumxsqc=';
 const DAY = 86400000;
 /** مفاتيح meta التي تبقى عند استعادة نسخة احتياطية. */
 export const LICENSE_META = ['installedAt', 'lastSeen', 'license:server', 'license:code', 'license:codeSent', 'license:play'];
@@ -120,8 +120,9 @@ export function createLicense({ meta, info = {}, deviceId, shopCreatedAt = null,
       try { return await fn(); } catch (e) { if (!e || e.status === undefined || e.transient) throw e; return null; }
     };
     if (code && (await meta.get('license:codeSent')) !== code.code) {
-      await soft(() => api.rest.rpc('cashier_license_redeem', { p_shop: ctx.shopId, p_code: code.code }));
-      await meta.set('license:codeSent', code.code);
+      // يُعلَّم «أُرسل» فقط إن قبله الخادم؛ وإلا نعيد المحاولة في المزامنة التالية
+      const ok = await soft(() => api.rest.rpc('cashier_license_redeem', { p_shop: ctx.shopId, p_code: code.code }));
+      if (ok) await meta.set('license:codeSent', code.code);
     }
     if (play && play.active && play.token) {
       await soft(() => api.rest.rpc('cashier_license_play', { p_shop: ctx.shopId, p_token: play.token, p_plan: play.plan }));

@@ -4,11 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>مولّد أكواد اشتراك دفترة كاشير</title>
+<meta name="robots" content="noindex, nofollow">
 <!--
   أداة MakeFlow الخاصة: تصنع كود اشتراك (شهري أو سنوي) لجهاز عميل دفترة كاشير.
-  تعمل بلا إنترنت: افتح هذا الملف في متصفح جوالك أو حاسوبك.
-  المفتاح الخاص (نفس مفتاح دفترة) لا يُكتب في هذا الملف أبدًا؛ تلصقه أنت (ويمكن حفظه في هذا المتصفح فقط).
-  لا تنشر المفتاح الخاص ولا ترسله لأحد: من يملكه يستطيع تفعيل أي جهاز.
+  المفتاح الخاص مدمج في هذه الصفحة **مشفّرًا** (PBKDF2-SHA256 600 ألف دورة ← AES-256-GCM)،
+  ولا يُفك إلا بكلمة سر MakeFlow، وفي ذاكرة المتصفح فقط. بدون كلمة السر الصفحة لا تصنع شيئًا.
+  تُقفل وحدها بعد 15 دقيقة بلا استعمال.
   هذا الملف يُبنى من scripts/generator.template.html — لا تعدّله هنا.
 -->
 <style>
@@ -44,12 +45,16 @@
     <h1>مولّد أكواد اشتراك دفترة كاشير</h1>
     <p>أحد منتجات MakeFlow — للاستخدام الخاص فقط</p>
   </header>
-  <label for="key">المفتاح الخاص (نفس مفتاح دفترة: daftara-license-private-key.txt)</label>
-  <textarea id="key" class="mono" placeholder="الصق المفتاح الخاص هنا"></textarea>
-  <div class="row" style="align-items:center">
-    <label style="margin:0;display:flex;gap:8px;align-items:center;color:var(--text)"><input id="remember" type="checkbox" style="width:auto"> احفظه في هذا المتصفح</label>
-  </div>
-  <p id="keystate" class="note"></p>
+  <section id="lock">
+    <form id="unlock" autocomplete="on">
+      <input type="text" name="username" value="MakeFlow" autocomplete="username" hidden>
+      <label for="pass">كلمة السر</label>
+      <input id="pass" name="password" type="password" autocomplete="current-password" required>
+      <button class="primary" type="submit">افتح</button>
+      <p id="lockerr" class="note bad"></p>
+    </form>
+  </section>
+  <section id="app" hidden>
   <label for="req">رسالة طلب العميل (أو رقم جهازه فقط)</label>
   <textarea id="req" placeholder="الصق رسالة واتساب التي وصلتك من العميل، وفيها: رقم الجهاز: ABCDE-FGHJK"></textarea>
   <label>الاشتراك (يُختار تلقائيًا من رسالة العميل)</label>
@@ -72,13 +77,16 @@
     </div>
     <p id="copied" class="note ok"></p>
   </section>
+  <button id="relock" class="ghost" type="button" style="width:100%;margin-top:18px">قفل الصفحة</button>
+  </section>
 </main>
 <script>
 /*NACL*/
 </script>
 <script id="logic">
 // منطق صنع الكود (بلا واجهة): نفس صيغة src/domain/license.js — يختبره tests/license.test.mjs
-var CASHIER_PUBLIC_KEY = 'HMMGz4JpCMXiMFuTm3ikWsTX6TYKucGN43AaGDMMF0c=';
+var CASHIER_VAULT = '/*VAULT*/';
+var CASHIER_PUBLIC_KEY = 'LQAGz2YjhZJjLP4/6d91+KqTvqbopt+6rH4Lhumxsqc=';
 function cashierB64url(u) { var s = ''; for (var i = 0; i < u.length; i++) s += String.fromCharCode(u[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
 function cashierUtf8(s) { return new TextEncoder().encode(s); }
 /** sk: المفتاح الخاص 64 بايت. device: ABCDE-FGHJK. ymd: YYYYMMDD. plan: m أو y. */
@@ -98,27 +106,39 @@ function findCashierDevice(text) {
   var $ = function (id) { return document.getElementById(id); };
   function b64(u) { var s = ''; for (var i = 0; i < u.length; i++) s += String.fromCharCode(u[i]); return btoa(s); }
   function unb64(s) { var b = atob(s.trim()), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
-  try { var saved = localStorage.getItem('cashier-license-key'); if (saved) { $('key').value = saved; $('remember').checked = true; } } catch (e) {}
-  function secret() {
-    var sk;
-    try { sk = unb64($('key').value.replace(/\s+/g, '')); } catch (e) { return null; }
-    if (sk.length !== 64) return null;
-    // آخر 32 بايت من المفتاح الخاص في Ed25519 هي المفتاح العام
-    if (b64(sk.subarray(32)) !== CASHIER_PUBLIC_KEY) return null;
-    return sk;
+  var sk = null; // المفتاح المفكوك: في الذاكرة فقط
+  var enc = new TextEncoder();
+  function openVault(pass) {
+    var o = JSON.parse(atob(CASHIER_VAULT.slice(5)));
+    return crypto.subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']).then(function (base) {
+      return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: unb64(o.s), iterations: o.i, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+    }).then(function (key) {
+      return crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(o.n) }, key, unb64(o.c));
+    }).then(function (p) {
+      var u = new Uint8Array(p);
+      if (u.length !== 64 || b64(u.subarray(32)) !== CASHIER_PUBLIC_KEY) throw new Error('bad');
+      return u;
+    });
   }
-  function paintKey() {
-    var ok = !!secret();
-    $('keystate').textContent = !$('key').value.trim() ? '' : ok ? '✓ المفتاح صحيح ويطابق التطبيق' : '✗ هذا ليس المفتاح الخاص الصحيح';
-    $('keystate').className = 'note ' + (ok ? 'ok' : 'bad');
-    try {
-      if ($('remember').checked && ok) localStorage.setItem('cashier-license-key', $('key').value.trim());
-      else localStorage.removeItem('cashier-license-key');
-    } catch (e) {}
+  function lock() {
+    if (sk) sk.fill(0);
+    sk = null;
+    $('app').hidden = true; $('lock').hidden = false; $('out').style.display = 'none'; $('reply').value = '';
+    $('pass').value = ''; setTimeout(function () { $('pass').focus(); }, 50);
   }
-  $('key').addEventListener('input', paintKey);
-  $('remember').addEventListener('change', paintKey);
-  paintKey();
+  var idle = null;
+  function touch() { clearTimeout(idle); idle = setTimeout(lock, 15 * 60 * 1000); }
+  ['click', 'keydown', 'input'].forEach(function (e) { document.addEventListener(e, function () { if (sk) touch(); }); });
+  $('unlock').addEventListener('submit', function (e) {
+    e.preventDefault();
+    $('lockerr').textContent = 'جارٍ الفتح…';
+    openVault($('pass').value).then(function (u) {
+      sk = u; $('lockerr').textContent = ''; $('lock').hidden = true; $('app').hidden = false; touch(); $('req').focus();
+    }, function () { $('lockerr').textContent = 'كلمة السر غير صحيحة'; });
+  });
+  $('relock').addEventListener('click', lock);
+  function secret() { return sk; }
+  setTimeout(function () { $('pass').focus(); }, 50);
   function plan() { return document.querySelector('input[name=plan]:checked').value; }
   function two(n) { return (n < 10 ? '0' : '') + n; }
   function ymd(d) { return d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate()); }
@@ -144,7 +164,7 @@ function findCashierDevice(text) {
     $('err').textContent = '';
     $('out').style.display = 'none';
     var sk = secret();
-    if (!sk) { $('err').textContent = 'الصق المفتاح الخاص الصحيح أولًا.'; return; }
+    if (!sk) { lock(); return; }
     var device = findCashierDevice($('req').value);
     if (!device) { $('err').textContent = 'لم أجد رقم جهاز بالشكل ABCDE-FGHJK في الرسالة.'; return; }
     var until = $('until').value;

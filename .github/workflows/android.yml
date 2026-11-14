@@ -17,6 +17,10 @@ on:
 permissions:
   contents: write
 
+# إصدار للزبائن = وسم (tag) مثل v1.0.0: رقم الإصدار منه، ويُنشر في Releases وعلى makeflow.tech.
+env:
+  VERSION_NAME: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+
 concurrency:
   group: android-${{ github.ref }}
   cancel-in-progress: true
@@ -146,20 +150,137 @@ jobs:
 
   # نسخة تجريبية للجوال: رابط ثابت لآخر بناء ناجح
   #   https://github.com/<repo>/releases/download/preview/daftara-cashier.apk
+  # نسخة الحاسوب (ويندوز): مثبّت daftara-cashier-setup.exe، يُختبر بتشغيل البرنامج الحقيقي
+  desktop:
+    needs: test
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Version
+        working-directory: desktop
+        run: |
+          V="${VERSION_NAME#v}"; [ -n "$V" ] || V="0.1.${{ github.run_number }}"
+          npm version "$V" --no-git-tag-version --allow-same-version >/dev/null
+          echo "Desktop version $V"
+      - name: Build the Windows installer
+        working-directory: desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+          VERSION_CODE: ${{ github.run_number }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          npm ci
+          npm run dist
+      - name: Run the desktop app (smoke test)
+        working-directory: desktop
+        run: node test/smoke.mjs "dist/win-unpacked/Daftara Cashier.exe"
+      - name: Installer size
+        run: echo "| daftara-cashier-setup.exe (Windows) | $(( ($(stat -c %s desktop/dist/daftara-cashier-setup.exe) + 1023) / 1024 )) KB |" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          retention-days: 7
+          name: daftara-cashier-desktop
+          path: desktop/dist/daftara-cashier-setup.exe
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          retention-days: 7
+          name: desktop-screenshot
+          path: desktop/desktop-screenshot.png
+
+  # نسخة تجريبية للجوال والحاسوب: رابط ثابت لآخر بناء ناجح
+  #   https://github.com/<repo>/releases/download/preview/daftara-cashier.apk
   preview:
-    needs: [build, smoke-test]
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    needs: [build, smoke-test, desktop]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: daftara-cashier-apk
+      - uses: actions/download-artifact@v4
+        with:
+          name: daftara-cashier-desktop
+      - name: Publish the preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          cp tools/license-generator.html cashier-license-generator.html
+          gh release delete preview --cleanup-tag --yes || true
+          gh release create preview daftara-cashier.apk daftara-cashier-setup.exe cashier-license-generator.html \
+            --target "${{ github.sha }}" --prerelease \
+            --title "دفترة كاشير — نسخة تجريبية ${{ github.run_number }}" \
+            --notes "نسخة تجريبية للاختبار (بناء ${{ github.run_number }}، فرع ${{ github.ref_name }}). الجوال: daftara-cashier.apk — الحاسوب: daftara-cashier-setup.exe."
+
+  # إصدار للزبائن (وسم v1.0.0…): Release عادي («الأحدث»)، فتعمل الروابط الثابتة
+  #   https://makeflow.tech/apps/cashier/daftara-cashier.apk  و  …/daftara-cashier-setup.exe
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, smoke-test, desktop]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: daftara-cashier-apk
-      - name: Publish the preview APK
+      - uses: actions/download-artifact@v4
+        with:
+          name: daftara-cashier-desktop
+      - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh release delete preview --cleanup-tag --yes || true
-          gh release create preview daftara-cashier.apk cashier-license-generator.html \
-            --target "${{ github.sha }}" --prerelease \
-            --title "دفترة كاشير — نسخة تجريبية ${{ github.run_number }}" \
-            --notes "نسخة تجريبية للاختبار (بناء ${{ github.run_number }}، فرع ${{ github.ref_name }}). حمّل daftara-cashier.apk على الجوال وثبّته؛ كل نسخة تجريبية جديدة تُثبَّت فوق السابقة دون حذف البيانات."
+          gh release create "${{ github.ref_name }}" daftara-cashier.apk daftara-cashier-setup.exe \
+            --verify-tag --latest \
+            --title "دفترة كاشير ${{ github.ref_name }}" \
+            --notes "الجوال (أندرويد 8+): daftara-cashier.apk — الحاسوب (ويندوز 10/11): daftara-cashier-setup.exe. التحديث يُثبَّت فوق النسخة السابقة ولا يمسح البيانات. صفحة التنزيل: https://makeflow.tech/apps/cashier/"
+
+  # صفحة التنزيل وصفحة أكواد الاشتراك على makeflow.tech/apps/cashier/ (Hostinger، نفس حساب دفترة)
+  # أسرار: FTP_SERVER و FTP_USERNAME و FTP_PASSWORD. نرفع إلى المجلد cashier/ فقط ولا نحذف شيئًا،
+  # فلا تُلمس ملفات دفترة في نفس الحساب.
+  website:
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Site files
+        run: |
+          cp -r site _site
+          cp tools/license-generator.html _site/admin/index.html
+          ls -la _site _site/admin
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+      - name: Upload over FTPS
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          # بصمة شهادة FTP عند Hostinger (نفسها في سير عمل دفترة)؛ إن جدّدوها ضع البصمة الجديدة
+          FTP_CERT: D5:F8:12:83:AA:BE:1E:92:51:FF:84:B3:A5:65:D6:51:91:C9:A5:28
+        run: |
+          if [ -z "$FTP_SERVER" ]; then echo "::warning::FTP secrets are not set: makeflow.tech was not updated."; exit 0; fi
+          echo | openssl s_client -connect "$FTP_SERVER:21" -starttls ftp 2>/dev/null | openssl x509 -noout -subject -enddate -fingerprint -sha1 || true
+          lftp -c "
+            set ssl:verify-certificate/$FTP_CERT no;
+            set ftp:ssl-force true;
+            set ftp:ssl-protect-data true;
+            set ftp:passive-mode true;
+            set net:max-retries 3;
+            set net:timeout 30;
+            open -u '$FTP_USERNAME','$FTP_PASSWORD' ftp://$FTP_SERVER;
+            mkdir -pf cashier/admin;
+            mirror --reverse --verbose --parallel=4 _site/ cashier/
+          "
+          echo "::notice::https://makeflow.tech/apps/cashier/ updated"

@@ -9,5 +9,6 @@ export const config = Object.freeze({
   flavor: c.flavor || 'web',        // direct | play | web
   version: c.version || 'dev',
   build: c.build || 0,
+  release: !!c.release,              // إصدار للزبائن (من وسم v1.0.0)، لا نسخة تجريبية
   get syncEnabled() { return !!(this.supabaseUrl && this.supabaseAnonKey); },
 });

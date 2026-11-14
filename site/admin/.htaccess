@@ -1,0 +1,5 @@
+# صفحة MakeFlow الخاصة لأكواد الاشتراك: لا فهرسة ولا تخزين.
+<IfModule mod_headers.c>
+  Header set X-Robots-Tag "noindex, nofollow"
+  Header set Cache-Control "no-store"
+</IfModule>

@@ -1,0 +1,17 @@
+# makeflow.tech/apps/cashier/ — صفحة التنزيل (يرفعها .github/workflows/android.yml عند كل إصدار).
+# الملفات نفسها على GitHub (التنزيل من Hostinger يتوقف في منتصفه، كما حصل مع دفترة):
+# الرابطان الثابتان يحوَّلان دائمًا إلى آخر إصدار.
+DirectoryIndex index.html
+Options -Indexes
+
+<IfModule mod_headers.c>
+  Header set Cache-Control "no-cache"
+  Header set X-Content-Type-Options "nosniff"
+  Header set Referrer-Policy "no-referrer"
+</IfModule>
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^daftara-cashier\.apk$ https://github.com/makeflow-LLC/Daftara-Cashier/releases/latest/download/daftara-cashier.apk [R=302,L]
+  RewriteRule ^daftara-cashier-setup\.exe$ https://github.com/makeflow-LLC/Daftara-Cashier/releases/latest/download/daftara-cashier-setup.exe [R=302,L]
+</IfModule>
