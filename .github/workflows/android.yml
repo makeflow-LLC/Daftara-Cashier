@@ -302,13 +302,18 @@ jobs:
           echo "root has public_html: $(has public_html)"
           echo "root has domains: $(has domains)"
           echo "root has cashier/index.html: $(has cashier/index.html)"
+          # حسابان ممكنان: حساب دفترة (يفتح على apps ← نرفع إلى cashier/)، أو حساب خاص يفتح على apps/cashier نفسه
           T=""
           for d in domains/makeflow.tech/public_html/apps public_html/apps apps .; do
             if [ "$(has "$d/manifest.json")" = yes ]; then T="$d"; break; fi
           done
-          [ -n "$T" ] || { echo "::error::Could not find the Daftara web folder (apps) on this FTP account"; exit 1; }
-          echo "upload folder: ${T/#./(account root)}" | sed 's#domains/makeflow.tech/##'
-          lftp -c "$L; cd '$T'; mkdir -pf cashier/admin; mirror --reverse --verbose --parallel=4 _site/ cashier/"
+          if [ -n "$T" ]; then
+            echo "upload: Daftara account -> apps/cashier/"
+            lftp -c "$L; cd '$T'; mkdir -pf cashier/admin; mirror --reverse --verbose --parallel=4 _site/ cashier/"
+          else
+            echo "upload: dedicated account (opens on apps/cashier) -> account root"
+            lftp -c "$L; rm -rf cashier; mkdir -pf admin; mirror --reverse --verbose --parallel=4 _site/ ./"
+          fi
           # تحقّق من الموقع الحي
           sleep 5
           code=$(curl -s -o /dev/null -w '%{http_code}' "https://makeflow.tech/apps/cashier/?v=${{ github.run_number }}")
