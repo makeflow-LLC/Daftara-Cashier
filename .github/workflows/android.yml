@@ -6,8 +6,8 @@
 #
 # أسرار المستودع (Settings → Secrets and variables → Actions):
 #   SUPABASE_URL, SUPABASE_ANON_KEY        للمزامنة (بدونهما يعمل التطبيق على الجهاز فقط)
-#   ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
-#                                          مفتاح التوقيع الرسمي (بدونه: مفتاح التجربة preview.keystore)
+#   ANDROID_KEYSTORE_PASSWORD              كلمة سر مفتاح التوقيع الرسمي android/app/release.keystore
+#                                          (بدونها: مفتاح التجربة preview.keystore)
 name: Android
 
 on:
@@ -56,21 +56,20 @@ jobs:
           VERSION_CODE: ${{ github.run_number }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-      - name: Signing key from secrets
+      # المفتاح الرسمي android/app/release.keystore في المستودع، مشفّر بكلمة سر قوية (32 حرفًا عشوائيًا)
+      # لا توجد إلا في سر المستودع ANDROID_KEYSTORE_PASSWORD. بدون السر: مفتاح التجربة preview.keystore.
+      - name: Official signing key
         env:
-          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        if: env.KEYSTORE_B64 != ''
+          KP: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        if: env.KP != ''
         run: |
-          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
           {
-            echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks"
-            echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
-            echo "KEY_ALIAS=$KEY_ALIAS"
-            echo "KEY_PASSWORD=$KEY_PASSWORD"
+            echo "KEYSTORE_FILE=$GITHUB_WORKSPACE/android/app/release.keystore"
+            echo "KEYSTORE_PASSWORD=$KP"
+            echo "KEY_ALIAS=makeflow-cashier"
+            echo "KEY_PASSWORD=$KP"
           } >> "$GITHUB_ENV"
+          echo "::notice::Signed with the official MakeFlow key"
       - name: Build APK (direct, play) and AAB (play)
         working-directory: android
         env:

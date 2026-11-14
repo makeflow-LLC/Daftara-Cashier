@@ -188,8 +188,9 @@ and AAB, a size report (in the run summary), a smoke test on an Android emulator
 APK as the rolling **preview** pre-release:
 `https://github.com/makeflow-LLC/Daftara-Cashier/releases/download/preview/daftara-cashier.apk`
 
-Preview builds are signed with `android/app/preview.keystore` (testing only, so each preview installs
-over the previous one). Real releases use the key from the `ANDROID_KEYSTORE_*` secrets — always the
-same key for every release.
+Builds are signed with the official key `android/app/release.keystore` (PKCS12, AES-256, alias
+`makeflow-cashier`) when the `ANDROID_KEYSTORE_PASSWORD` secret is set; its password exists only in that
+secret and with MakeFlow. Without the secret, `android/app/preview.keystore` (testing only) is used.
+Always the same key for every release — losing it means no more updates for installed apps.
 
 Local: `npm ci && npm test && bash supabase/tests/run.sh`; try it in a browser with `npm run serve`.
