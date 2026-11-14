@@ -174,7 +174,8 @@ phone number + password to move to another phone comes in a later milestone.
 
 ### Server setup (once)
 
-1. Supabase Studio → SQL Editor → run `supabase/migrations/0001_init.sql`, then `0002…`, then `0003_licensing.sql` (each safe to re-run).
+1. Supabase Studio → SQL Editor → paste `supabase/setup.sql` (all migrations in one file, built by
+   `node scripts/build-setup-sql.mjs`) → Run. Safe to re-run after every update.
 2. Auth settings: enable **anonymous sign-ins** (`GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED=true`).
 3. GitHub → Settings → Secrets and variables → Actions: add `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
    Without them the app builds and works fully on the device, with sync off.

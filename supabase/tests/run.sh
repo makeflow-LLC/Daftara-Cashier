@@ -12,5 +12,5 @@ export PGOPTIONS="-c client_min_messages=warning"
 PSQL=("${RUN[@]}" env PGOPTIONS="$PGOPTIONS" "$PGBIN/psql" -h "$DIR" -U postgres -d postgres -v ON_ERROR_STOP=1 -q)
 "${PSQL[@]}" -f supabase/tests/stubs.sql
 for f in supabase/migrations/*.sql; do "${PSQL[@]}" -f "$f"; done
-for f in supabase/migrations/*.sql; do "${PSQL[@]}" -f "$f"; done   # إعادة التشغيل آمنة
+"${PSQL[@]}" -f supabase/setup.sql   # الملف المجمّع (ما يلصقه صاحب الخادم)، وإعادة التشغيل آمنة
 "${PSQL[@]}" -t -f supabase/tests/rls.sql

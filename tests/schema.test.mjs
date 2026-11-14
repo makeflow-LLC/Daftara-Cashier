@@ -51,3 +51,8 @@ test('every synced server table is registered on the device', () => {
     assert.equal(t.mode, mode, `${remote} mode`);
   }
 });
+
+test('supabase/setup.sql is the up-to-date concatenation of all migrations', async () => {
+  const { buildSetupSql } = await import('../scripts/build-setup-sql.mjs');
+  assert.equal(readFileSync('supabase/setup.sql', 'utf8'), buildSetupSql(), 'run: node scripts/build-setup-sql.mjs');
+});
