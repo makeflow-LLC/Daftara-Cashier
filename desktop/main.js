@@ -22,6 +22,11 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
 ]);
 
+// النسخة المثبّتة لا تقبل أدوات التصحيح عن بُعد (منها يُعبث بالصفحة وبالتفعيل)
+if (app.isPackaged && ['remote-debugging-port', 'remote-debugging-pipe', 'inspect', 'inspect-brk', 'js-flags'].some((s) => app.commandLine.hasSwitch(s))) {
+  app.exit(1);
+}
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {

@@ -1,11 +1,16 @@
-// اختبار دخان لنسخة الحاسوب: يشغّل البرنامج الحقيقي (Electron) ويتأكد أن:
-//   الإعداد الأول يعمل، رقم الجهاز من ويندوز، شاشة البيع تقبل قارئ باركود USB، والتجربة 30 يومًا.
-//   node test/smoke.mjs [مسار "Daftara Cashier.exe"]   (بدونه: electron . من هذا المجلد)
+// اختبار دخان لنسخة الحاسوب، على جزأين:
+//  1) البرنامج نفسه (electron . بنفس ملفات www): الإعداد الأول، رقم الجهاز من ويندوز، قارئ باركود USB، تجربة 30 يومًا.
+//  2) المثبَّت المحصَّن (exe): يبدأ ويفتح قاعدة بياناته (فحص سلامة app.asar نجح)، ويرفض أدوات التصحيح عن بُعد.
+//     أداة الاختبار نفسها لا تستطيع التحكم بالنسخة المحصَّنة — وهذا المقصود.
+//   node test/smoke.mjs [مسار "Daftara Cashier.exe"]
 import { _electron as electron } from 'playwright';
 import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { spawn } from 'node:child_process';
 
 const exe = process.argv[2];
-const opts = exe ? { executablePath: exe } : { args: ['.'] };
+const opts = { args: ['.'] };
 
 let app = await electron.launch(opts);
 const userData = await app.evaluate(({ app }) => app.getPath('userData'));
@@ -52,4 +57,31 @@ try {
 } finally {
   await app.close();
 }
+
+async function packaged() {
+  const appData = process.env.APPDATA || path.join(os.homedir(), '.config');
+  const userData = path.join(appData, 'Daftara Cashier');
+  fs.rmSync(userData, { recursive: true, force: true });
+  const run = (args) => spawn(exe, args, { stdio: 'ignore' });
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  // أدوات التصحيح: يجب أن يخرج فورًا
+  const dbg = run(['--remote-debugging-port=9333']);
+  const code = await new Promise((r) => { dbg.on('exit', (c) => r(c)); setTimeout(() => r('still running'), 15000); });
+  if (code === 'still running') { dbg.kill(); fail('installed app accepted --remote-debugging-port'); } else console.log('debug switch refused, exit code', code);
+  // تشغيل عادي: يفتح قاعدة بياناته خلال 40 ثانية ويبقى يعمل
+  const p = run([]);
+  let exited = null;
+  p.on('exit', (c) => { exited = c; });
+  let db = false;
+  for (let i = 0; i < 40 && !db && exited === null; i++) {
+    await sleep(1000);
+    const dir = path.join(userData, 'IndexedDB');
+    db = fs.existsSync(dir) && fs.readdirSync(dir).some((f) => f.startsWith('app_cashier'));
+  }
+  if (exited !== null) fail('installed app exited with code ' + exited + ' (ASAR integrity?)');
+  else if (!db) fail('installed app did not open its database');
+  else console.log('installed app started and opened its database');
+  p.kill();
+}
+if (exe) await packaged();
 if (!process.exitCode) console.log('desktop smoke test passed');
