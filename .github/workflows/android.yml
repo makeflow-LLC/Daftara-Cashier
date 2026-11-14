@@ -17,16 +17,32 @@ on:
 permissions:
   contents: write
 
-# إصدار للزبائن = وسم (tag) مثل v1.0.0: رقم الإصدار منه، ويُنشر في Releases وعلى makeflow.tech.
-env:
-  VERSION_NAME: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+# إصدار للزبائن = دفعة رسالتها تبدأ بـ «Release v1.2.3» (أو وسم v1.2.3): رقم الإصدار منها،
+# وتُنشر في Releases (ويُنشأ الوسم تلقائيًا) وعلى makeflow.tech.
 
 concurrency:
   group: android-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - id: v
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+          REF: ${{ github.ref }}
+        run: |
+          V=""
+          case "$REF" in refs/tags/v*) V="${REF#refs/tags/}";; esac
+          [ -n "$V" ] || V=$(printf '%s' "$MSG" | head -1 | sed -nE 's/^Release (v[0-9]+\.[0-9]+\.[0-9]+)\b.*/\1/p')
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Release version: ${V:-none (preview build)}"
+
   test:
+    needs: meta
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,7 +57,9 @@ jobs:
         run: bash supabase/tests/run.sh
 
   build:
-    needs: test
+    needs: [meta, test]
+    env:
+      VERSION_NAME: ${{ needs.meta.outputs.version }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -122,7 +140,7 @@ jobs:
           path: daftara-cashier.aab
 
   smoke-test:
-    needs: build
+    needs: [meta, build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -152,7 +170,9 @@ jobs:
   #   https://github.com/<repo>/releases/download/preview/daftara-cashier.apk
   # نسخة الحاسوب (ويندوز): مثبّت daftara-cashier-setup.exe، يُختبر بتشغيل البرنامج الحقيقي
   desktop:
-    needs: test
+    needs: [meta, test]
+    env:
+      VERSION_NAME: ${{ needs.meta.outputs.version }}
     runs-on: windows-latest
     defaults:
       run:
@@ -201,8 +221,8 @@ jobs:
   # نسخة تجريبية للجوال والحاسوب: رابط ثابت لآخر بناء ناجح
   #   https://github.com/<repo>/releases/download/preview/daftara-cashier.apk
   preview:
-    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
-    needs: [build, smoke-test, desktop]
+    if: ${{ needs.meta.outputs.version == '' }}
+    needs: [meta, build, smoke-test, desktop]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -227,8 +247,10 @@ jobs:
   # إصدار للزبائن (وسم v1.0.0…): Release عادي («الأحدث»)، فتعمل الروابط الثابتة
   #   https://makeflow.tech/apps/cashier/daftara-cashier.apk  و  …/daftara-cashier-setup.exe
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build, smoke-test, desktop]
+    if: ${{ needs.meta.outputs.version != '' }}
+    needs: [meta, build, smoke-test, desktop]
+    env:
+      VERSION_NAME: ${{ needs.meta.outputs.version }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -242,17 +264,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh release create "${{ github.ref_name }}" daftara-cashier.apk daftara-cashier-setup.exe \
-            --verify-tag --latest \
-            --title "دفترة كاشير ${{ github.ref_name }}" \
+          gh release create "$VERSION_NAME" daftara-cashier.apk daftara-cashier-setup.exe \
+            --target "${{ github.sha }}" --latest \
+            --title "دفترة كاشير $VERSION_NAME" \
             --notes "الجوال (أندرويد 8+): daftara-cashier.apk — الحاسوب (ويندوز 10/11): daftara-cashier-setup.exe. التحديث يُثبَّت فوق النسخة السابقة ولا يمسح البيانات. صفحة التنزيل: https://makeflow.tech/apps/cashier/"
 
   # صفحة التنزيل وصفحة أكواد الاشتراك على makeflow.tech/apps/cashier/ (Hostinger، نفس حساب دفترة)
   # أسرار: FTP_SERVER و FTP_USERNAME و FTP_PASSWORD. نرفع إلى المجلد cashier/ فقط ولا نحذف شيئًا،
   # فلا تُلمس ملفات دفترة في نفس الحساب.
   website:
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
-    needs: test
+    if: ${{ always() && (needs.release.result == 'success' || (github.event_name == 'workflow_dispatch' && needs.meta.result == 'success')) }}
+    needs: [meta, release]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

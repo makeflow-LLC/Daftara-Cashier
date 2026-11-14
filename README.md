@@ -158,7 +158,8 @@ payments and backup stay open.
   validation, load only from ASAR, no Node mode, no devtools in the installed app.
   Local: `cd desktop && npm ci && npm start`; CI builds `daftara-cashier-setup.exe` on Windows and runs
   `desktop/test/smoke.mjs` against the real app.
-- Customer release = push a tag `v1.2.3`: CI builds everything, publishes a normal GitHub Release (so
+- Customer release = a commit whose message starts with `Release v1.2.3` (or a `v1.2.3` tag): CI builds
+  everything, creates the tag and publishes a normal GitHub Release (so
   `releases/latest/download/…` points to it) and uploads `site/` to `https://makeflow.tech/apps/cashier/`
   (download page; the `.apk`/`.exe` links redirect to the latest release) with the code page at
   `/apps/cashier/admin/`. Needs the `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD` secrets (same Hostinger
