@@ -182,3 +182,18 @@ test('scanner zoom: default 2x, clamped to what the camera allows', async () => 
   assert.deepEqual(zoomLevels(1, 2), [1, 2]);
   assert.deepEqual(zoomLevels(1, 1), [1]);
 });
+
+test('carton pricing: the trader types the carton price, the app divides', async () => {
+  const { packToPiece, upsertPack } = await import('../src/domain/product.js');
+  // كرتونة 24 قطعة: بيع 80 ₪، تكلفة 65 ₪، عندي 4 كراتين
+  assert.deepEqual(packToPiece({ count: 24000, sell: 8000, cost: 6500, qty: 4000 }), { sell: 333, cost: 271, qty: 96000 });
+  // دستة 12: بيع 30 ₪ ← 2.50 للقطعة، ونصف دستة في المخزون
+  assert.deepEqual(packToPiece({ count: 12000, sell: 3000, cost: 0, qty: 500 }), { sell: 250, cost: 0, qty: 6000 });
+  assert.equal(packToPiece({ count: 1000, sell: 100 }), null, 'a pack holds more than one piece');
+  let packs = upsertPack([], { name: 'كرتونة', count: 24000, sell: 8000, makeId: () => 'u1' });
+  assert.deepEqual(packs, [{ id: 'u1', name: 'كرتونة', factor: 24000, barcode: null, sell_price: 8000 }]);
+  packs = upsertPack(packs, { name: 'كرتونة ', count: 20000, sell: 7000, makeId: () => 'u2' });
+  assert.equal(packs.length, 1);
+  assert.equal(packs[0].factor, 20000);
+  assert.equal(packs[0].id, 'u1');
+});

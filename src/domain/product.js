@@ -126,3 +126,26 @@ export function validatePack(u) {
   if (u.barcode && !isAcceptableBarcode(u.barcode)) return 'باركود العبوة غير صحيح';
   return null;
 }
+
+/**
+ * أسعار «بالكرتونة»: التاجر يكتب سعر العبوة (بيع وتكلفة) وكميتها، والتطبيق يقسم.
+ * count و qty بالألف (QTY_SCALE)، والأسعار بأصغر وحدة. يرجع سعر القطعة وتكلفتها والكمية بالقطع.
+ */
+export function packToPiece({ count, sell, cost = 0, qty = 0 }) {
+  if (!(count > 1000)) return null;
+  const per = (v) => Math.round((v * 1000) / count);
+  return {
+    sell: sell === null || sell === undefined ? null : per(sell),
+    cost: per(cost || 0),
+    qty: Math.round(((qty || 0) * count) / 1000),
+  };
+}
+
+/** يضيف العبوة إلى قائمة عبوات الصنف أو يحدّثها إن وُجدت بنفس الاسم (لتُباع بسعرها). */
+export function upsertPack(packs, { name, count, sell, makeId }) {
+  const list = (packs || []).map((p) => ({ ...p }));
+  const i = list.findIndex((p) => p.name.trim() === name.trim());
+  if (i >= 0) list[i] = { ...list[i], factor: count, sell_price: sell };
+  else list.push({ id: makeId(), name: name.trim(), factor: count, barcode: null, sell_price: sell });
+  return list;
+}

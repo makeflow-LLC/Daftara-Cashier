@@ -858,3 +858,12 @@ body{font-weight:500}
 .lic-device strong{flex:1;font-size:20px;letter-spacing:1px;text-align:left}
 .lic-check{background:#fff;border:2px solid var(--frame);color:var(--color-text)}
 .lic-foot{margin-top:var(--space-3);font-size:13.5px;line-height:1.7}
+
+/* بطاقة الصنف: السعر لقطعة أم لكرتونة */
+.price-for .chips{flex-wrap:wrap}
+.price-mode .chip{min-height:44px;padding:0 16px;font-size:15.5px}
+.pack-box{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);padding:var(--space-3);margin-bottom:var(--space-3);border-radius:var(--radius-lg);background:var(--amber-100);border:2px solid #f3cf8f}
+.pack-box .field{margin:0}
+.pack-box .field:only-child,.pack-box .pack-other[hidden]+.field{grid-column:1 / -1}
+.piece-hint{margin:-4px 0 var(--space-3);padding:10px 12px;border-radius:var(--radius-md);background:var(--brand-100);color:var(--brand-700);font-weight:700;font-size:14.5px}
+.piece-hint:empty{display:none}

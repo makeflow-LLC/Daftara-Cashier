@@ -1,6 +1,9 @@
 // الإضافة السريعة بالمسح: الكاميرا تبقى مفتوحة. باركود جديد ← ورقة صغيرة (الاسم والسعر وصورة اختيارية)
 // ← حفظ ← عودة فورية للمسح. باركود مسجّل ← تنبيه قصير ونكمل. الاسم يُقترح من الكتالوج المشترك إن وُجد.
-import { h, num } from '../../ui/dom.js';
+import { packToPiece, upsertPack } from '../../domain/product.js';
+import { uuid } from '../../core/ids.js';
+import { parseQty } from '../../domain/units.js';
+import { h, num, fill } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { field, input, button } from '../../ui/components.js';
 import { toast, openSheet } from '../../ui/overlay.js';
@@ -51,6 +54,21 @@ export function renderRapidAdd(el) {
       const name = input({ maxlength: 120, placeholder: 'اسم الصنف', enterkeyhint: 'next' });
       const price = input({ dir: 'ltr', inputmode: 'decimal', placeholder: '0.00', enterkeyhint: 'done' });
       const hint = h('div', { class: 'field-hint' });
+      // السعر لقطعة أم لكرتونة/دستة (التاجر يكتب غالبًا سعر الكرتونة)
+      let mode = 'piece';
+      const count = input({ dir: 'ltr', inputmode: 'numeric', placeholder: 'كم قطعة؟' });
+      const priceLabel = h('span', { class: 'field-label' }, 'سعر بيع القطعة');
+      const countBox = h('label', { class: 'field', hidden: true }, h('span', { class: 'field-label' }, 'كم قطعة فيها؟'), count);
+      const modes = h('div', { class: 'chips price-mode' });
+      const paintModes = () => {
+        fill(modes, ...[['piece', 'قطعة'], ['كرتونة', 'كرتونة'], ['دستة', 'دستة']].map(([id, label]) => h('button', {
+          class: `chip ${mode === id ? 'on' : ''}`, type: 'button', tabindex: '-1', // الانتقال بالكيبورد: الاسم ← السعر مباشرة
+          onclick: () => { mode = id; if (id === 'دستة' && !count.value) count.value = '12'; paintModes(); (id === 'piece' ? price : (count.value ? price : count)).focus(); },
+        }, label)));
+        countBox.hidden = mode === 'piece';
+        priceLabel.textContent = mode === 'piece' ? 'سعر بيع القطعة' : `سعر بيع ال${mode}`;
+      };
+      paintModes();
       let photo = null;
       const photoBtn = app.feature('images') ? h('button', { class: 'btn btn-outline btn-block', type: 'button', onclick: takePhoto }, icon('camera', 20), h('span', null, 'صورة (اختياري)')) : null;
       let saving = false;
@@ -78,7 +96,14 @@ export function renderRapidAdd(el) {
           if (sell === null || sell < 0) { feedback.error(); price.focus(); hint.textContent = 'اكتب سعر البيع'; return; }
           saving = true;
           try {
-            const { product } = await app.products.save({ name: name.value, barcode: code, sell_price: sell, cost_price: 0 });
+            let sellP = sell, packs = null;
+            if (mode !== 'piece') {
+              const n = parseQty(count.value || '');
+              if (!(n > 1000)) { saving = false; feedback.error(); count.focus(); hint.textContent = `اكتب كم قطعة في ال${mode}`; return; }
+              sellP = packToPiece({ count: n, sell }).sell;
+              packs = upsertPack([], { name: mode, count: n, sell, makeId: uuid });
+            }
+            const { product } = await app.products.save({ name: name.value, barcode: code, sell_price: sellP, cost_price: 0 }, { packs });
             if (photo) await app.media.addProductImage(product.id, photo);
             added++;
             countEl.textContent = String(added);
@@ -94,7 +119,9 @@ export function renderRapidAdd(el) {
       },
         h('div', { class: 'rapid-code' }, icon('scan', 18), num(code)),
         field('الاسم', name),
-        field('سعر البيع', price),
+        h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'السعر الذي ستكتبه لـ'), modes),
+        countBox,
+        h('label', { class: 'field' }, priceLabel, price),
         hint,
         photoBtn,
         button('حفظ وامسح التالي', { type: 'submit', block: true, size: 'lg', icon: 'check' }),
