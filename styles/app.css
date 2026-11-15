@@ -451,7 +451,7 @@ html.scanning-inline .sale{background:transparent}
 .big-btn:active{filter:brightness(.92)}
 .big-btn.pay{background:var(--grad-brand);box-shadow:var(--shadow-brand)}
 .big-btn.debt{background:linear-gradient(135deg,#e2367f 0%,#aa0b56 100%);box-shadow:0 8px 20px rgba(170,11,86,.25)}
-.mini-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-2)}
+.mini-actions{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--space-2)}
 .mini-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:64px;border-radius:var(--radius-md);background:var(--color-card);box-shadow:var(--shadow-sm);font-size:13px;font-weight:600;color:var(--brand-700)}
 .mini-btn:disabled{opacity:.4}
 .mini-btn:active{background:var(--brand-100)}
@@ -886,3 +886,16 @@ body{font-weight:500}
 .entry-cancelled .row-end{text-decoration:line-through}
 .tag-cancelled{display:inline-block;padding:1px 8px;border-radius:var(--radius-pill);background:var(--neutral-200);color:var(--color-muted);font-size:12.5px;font-weight:700}
 .btn-danger-text{color:var(--danger)}
+
+.mini-actions .mini-btn:nth-child(4){background:var(--brand-100);color:var(--brand-700);border-color:var(--brand-200)}
+.mini-actions .mini-btn{flex-direction:row;min-height:56px}
+/* رسائل SMS */
+.sms-event{margin-bottom:var(--space-3)}
+.sms-box{padding:var(--space-3);margin-top:var(--space-2);border-radius:var(--radius-lg);background:#fff;border:2px solid var(--frame)}
+.sms-title{font-weight:700;margin-bottom:6px}
+.sms-ta{min-height:84px;font-size:16px}
+.sms-chips{margin:8px 0}
+.sms-chips .chip{min-height:36px;font-size:14px}
+.sms-preview{display:flex;flex-direction:column;align-items:flex-start;gap:4px;margin-top:6px}
+.sms-bubble{max-width:92%;padding:10px 12px;border-radius:16px 16px 4px 16px;background:var(--brand-100);color:var(--brand-700);font-size:14.5px;line-height:1.6;white-space:pre-wrap}
+.sms-preview small{color:var(--color-muted)}

@@ -336,6 +336,12 @@ export function renderSale(el) {
       customer: cart.customer,
       onConfirm: async ({ payments, customer }) => {
         const r = await app.sales.checkout({ lines: cart.lines, discount: cart.discount, payments, customerId: customer ? customer.id : null, currency: base });
+        if (customer) {
+          // بيع بالآجل: رسالة SMS للزبون إن شغّلها صاحب المحل
+          const credit = (await app.db.customer_entries.where('customer_id').equals(customer.id).toArray())
+            .filter((e) => e.invoice_id === r.invoice.id).reduce((t, e) => t + e.amount, 0);
+          if (credit > 0) app.sms.notify('sale_credit', customer, credit);
+        }
         cart = { lines: [], discount: null, customer: null };
         changed();
         feedback.ok();

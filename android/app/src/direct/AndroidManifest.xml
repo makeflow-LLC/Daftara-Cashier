@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- نسخة التحميل المباشر فقط: إرسال رسائل SMS للزبائن تلقائيًا (ميزة اختيارية يشغّلها صاحب المحل).
+     Google Play لا يسمح بهذا الإذن لغير تطبيقات الرسائل، فنسخة play بلا هذا الإذن (تفتح تطبيق الرسائل جاهزًا). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
+</manifest>

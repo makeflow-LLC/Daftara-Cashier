@@ -25,6 +25,7 @@ export function renderSettings(el) {
         row({ icon: 'tag', title: 'التصنيفات', sub: 'ألبان، معلبات، منظفات…', onclick: go('/settings/categories') }),
         f.multiCurrency ? row({ icon: 'coins', title: 'العملات وأسعار الصرف', onclick: go('/settings/currencies') }) : null,
         row({ icon: 'wallet', title: 'طرق الدفع', sub: 'نقدًا، تحويل، محافظ، آجل', onclick: go('/settings/payments') }),
+        row({ icon: 'chat', title: 'رسائل SMS للزبائن', sub: app.shop?.settings?.sms?.enabled ? 'مفعّلة' : 'مطفأة — رسالة تلقائية بعد الدين والدفعة', onclick: go('/settings/sms') }),
       )),
       section('التطبيق', h('div', { class: 'list' },
         row({ icon: 'scan', title: 'الأصوات وشاشة البيع', sub: 'صوت المسح، الاهتزاز، إظهار الربح', onclick: go('/settings/appearance') }),

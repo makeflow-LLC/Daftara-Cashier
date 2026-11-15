@@ -7,6 +7,7 @@ import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
 import { parseMoney, formatMoney, CURRENCIES } from '../../domain/currency.js';
 import { formatDecimal } from '../../domain/money.js';
+import { smsLink } from '../../domain/sms.js';
 import { ENTRY_LABELS, editableEntry, normalizePhone, whatsappLink, reminderText, statementText, parseDaftaraBackup } from '../../domain/ledger.js';
 import { app } from '../../core/app.js';
 import { bus } from '../../core/bus.js';
@@ -107,7 +108,8 @@ export async function renderCustomer(el, params) {
       h('div', { class: 'mini-actions' },
         miniBtn('alert', 'تذكير واتساب', () => send(reminderText({ shopName: app.shop.name, customerName: c.name, balance: c.balance, currency: cur() })), !owes),
         miniBtn('receipt', 'كشف واتساب', () => send(statementText({ shopName: app.shop.name, customerName: c.name, entries: c.raw, currency: cur(), formatDate: dateText })), !c.entries.length),
-        miniBtn('phone', 'اتصال', () => openLink(`tel:+${phone}`), !phone)),
+        miniBtn('phone', 'اتصال', () => openLink(`tel:+${phone}`), !phone),
+        miniBtn('chat', 'رسالة SMS', async () => openLink(smsLink(phone, await app.sms.text('reminder', c))), !phone)),
     );
     fill(list, c.entries.length ? h('div', { class: 'section' }, h('h2', { class: 'section-title' }, 'كشف الحساب'),
       h('div', { class: 'list' }, ...c.entries.map((e) => {
@@ -204,6 +206,7 @@ export async function renderCustomer(el, params) {
         try {
           if (isPay) await app.customers.recordPayment(c.id, v, method);
           else await app.customers.addDebt(c.id, v, note.value);
+          app.sms.notify(isPay ? 'payment' : 'debt', c, v); // رسالة SMS تلقائية إن شغّلها صاحب المحل
           feedback.ok();
           close();
           await load();

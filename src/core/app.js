@@ -10,6 +10,7 @@ import { resolveFeatures, defaultPaymentMethods } from '../domain/features.js';
 import { TRIAL_DAYS } from '../domain/license.js';
 import { createLicense } from './license.js';
 import { createAccount } from './account.js';
+import { createSms } from './sms.js';
 import { createSupabase } from '../sync/supabase.js';
 import { createSyncEngine } from '../sync/engine.js';
 import { startScheduler } from '../sync/scheduler.js';
@@ -105,6 +106,7 @@ export const app = {
     await app.license.init();
     app.startSync();
     app.account = createAccount(app);
+    app.sms = createSms(app, { toast: (...a) => bus.emit('toast', a) });
     bus.on('data', async (e) => {
       if (e.tables.includes('shops')) await app.loadShop();
       if (e.prefixChanged) app.ctx.prefix = e.prefixChanged;

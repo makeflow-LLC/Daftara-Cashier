@@ -28,6 +28,7 @@ async function start() {
     navigate('/subscribe');
   });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) app.license.compute(); });
+  app.bus.on('toast', (a) => toast(...a)); // رسائل من الخدمات (مثل SMS) تظهر للمستخدم
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTopSheet(); });
 
   if (!app.ctx.shopId) {
