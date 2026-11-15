@@ -177,17 +177,17 @@ export function renderAccountRequired(el) {
       onsubmit: (e) => {
         e.preventDefault();
         busy(save, async () => {
-          try { await app.account.protect(ph.value, pw.value, pw2.value); } catch (err) { if (err.kind === 'offline' || err.kind === 'server') { lastFail = err.kind; showOffline(err.kind === 'server'); } throw err; }
+          try { await app.account.protect(ph.value, pw.value, pw2.value); } catch (err) { if (err.kind === 'offline' || err.kind === 'server') { lastFail = err.kind; showOffline(err.kind === 'server'); el.scrollTop = 0; window.scrollTo(0, 0); } throw err; }
           feedback.ok();
           enter('حسابك جاهز ✓ احفظ كلمة السر في مكان آمن');
         });
       },
     },
+      offlineBox, // في الأعلى: ظاهر دائمًا حتى على الشاشات الصغيرة
       field('رقم جوالك', ph),
       field('كلمة السر', pw, `${MIN_PASSWORD} أحرف أو أرقام على الأقل — تحتاجها فقط عند الدخول من جهاز جديد`),
       field('تأكيد كلمة السر', pw2),
       save,
-      offlineBox,
       h('p', { class: 'muted small acc-legal' }, 'بإنشاء الحساب توافق على ',
         h('a', { href: TERMS_URL, target: '_blank', rel: 'noopener' }, 'شروط الاستخدام'), ' و',
         h('a', { href: PRIVACY_URL, target: '_blank', rel: 'noopener' }, 'سياسة الخصوصية'), '.'))));

@@ -927,4 +927,5 @@ body{font-weight:500}
 .acc-hero .acc-ic{margin-bottom:var(--space-2);color:var(--brand-700)}
 .acc-legal{text-align:center;margin-top:var(--space-3)}
 .acc-legal a{color:var(--brand-700);font-weight:700}
-.setup-body .acc-card{margin-top:var(--space-3);margin-bottom:var(--space-2)}
+.setup-body .acc-card{margin-top:0;margin-bottom:var(--space-2)}
+.setup-body .acc-card+.btn{margin-bottom:var(--space-4)}
