@@ -151,6 +151,8 @@ export function openForgot(prefill = '') {
   setTimeout(() => ph.focus(), 200);
 }
 
+let lastFail = null; // آخر فشل (offline | server): يبقى خيار المتابعة ظاهرًا إن أُعيد رسم الشاشة
+
 // ---------- الحساب إلزامي: شاشة كاملة تظهر لكل محل بلا حساب (بعد الإعداد الأول، أو بعد التحديث) ----------
 export function renderAccountRequired(el) {
   if (!app.account.required) { navigate('/', { replace: true }); return; }
@@ -175,7 +177,7 @@ export function renderAccountRequired(el) {
       onsubmit: (e) => {
         e.preventDefault();
         busy(save, async () => {
-          try { await app.account.protect(ph.value, pw.value, pw2.value); } catch (err) { if (err.kind === 'offline' || err.kind === 'server') showOffline(err.kind === 'server'); throw err; }
+          try { await app.account.protect(ph.value, pw.value, pw2.value); } catch (err) { if (err.kind === 'offline' || err.kind === 'server') { lastFail = err.kind; showOffline(err.kind === 'server'); } throw err; }
           feedback.ok();
           enter('حسابك جاهز ✓ احفظ كلمة السر في مكان آمن');
         });
@@ -190,6 +192,7 @@ export function renderAccountRequired(el) {
         h('a', { href: TERMS_URL, target: '_blank', rel: 'noopener' }, 'شروط الاستخدام'), ' و',
         h('a', { href: PRIVACY_URL, target: '_blank', rel: 'noopener' }, 'سياسة الخصوصية'), '.'))));
   if (navigator.onLine === false) showOffline();
+  else if (lastFail) showOffline(lastFail === 'server');
   // جهاز ثانٍ لمحل له حساب أصلًا: الخادم يعرف الرقم، فلا نطلب شيئًا
   app.account.refresh().then((p) => { if (p) enter('حسابك مفعّل ✓'); });
 }
