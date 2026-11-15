@@ -260,6 +260,10 @@ export function renderAbout(el) {
         row({ title: 'النسخة', end: app.info.flavor === 'play' ? 'Google Play' : app.info.flavor === 'direct' ? 'تثبيت مباشر' : app.info.flavor === 'desktop' ? 'نسخة الحاسوب' : 'تجريبية' }),
         row({ title: 'رقم البناء', end: num(String(app.info.build)) }),
       )),
+      card(h('div', { class: 'list' },
+        row({ icon: 'lock', title: 'سياسة الخصوصية', onclick: () => window.open('https://makeflow.tech/apps/cashier/privacy.html', '_blank') }),
+        row({ icon: 'clipboard', title: 'شروط الاستخدام', onclick: () => window.open('https://makeflow.tech/apps/cashier/terms.html', '_blank') }),
+      )),
       h('p', { class: 'made-by' }, 'أحد منتجات ', h('b', null, 'MakeFlow')),
     ),
   );

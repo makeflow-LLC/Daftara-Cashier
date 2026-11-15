@@ -922,3 +922,8 @@ body{font-weight:500}
 .day-grid .chip:last-child{grid-column:span 3}
 .sched-next{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:var(--radius-md);background:var(--amber-100);color:var(--amber-700)}
 .sched-log{margin-top:var(--space-2)}
+
+/* شاشة «أنشئ حسابك» الإلزامية */
+.acc-hero .acc-ic{margin-bottom:var(--space-2);color:var(--brand-700)}
+.acc-legal{text-align:center;margin-top:var(--space-3)}
+.acc-legal a{color:var(--brand-700);font-weight:700}

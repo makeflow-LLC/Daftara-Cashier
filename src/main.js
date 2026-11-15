@@ -20,7 +20,11 @@ async function start() {
   mount(view);
   onRoute(closeAllSheets);
   // الترخيص: بعد انتهاء المدة تُفتح «الاشتراك» بدل شاشات الكتابة، وأي حفظ مرفوض يدلّ عليها
-  setGuard((route) => (route && route.write && app.license.compute().readOnly ? '/subscribe' : null));
+  setGuard((route, path) => {
+    // الحساب إلزامي: بلا حساب لا تُفتح أي شاشة غير شاشة إنشائه
+    if (app.account.required) return path === '/account/required' ? null : '/account/required';
+    return route && route.write && app.license.compute().readOnly ? '/subscribe' : null;
+  });
   window.addEventListener('unhandledrejection', (e) => {
     if (!e.reason || !e.reason.license) return;
     e.preventDefault();

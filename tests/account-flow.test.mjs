@@ -82,3 +82,34 @@ test('after five wrong passwords the account waits', async () => {
   for (let i = 0; i < 5; i++) await assert.rejects(b.account.login('0599000111', `x${i}`));
   await assert.rejects(b.account.login('0599000111', 'secret1'), /انتظر/);
 });
+
+test('the account is mandatory: required until created, with a one-session pass when offline', async () => {
+  const server = createFakeServer();
+  const shopId = uuid();
+  const a = await device(server, shopId);
+  a.config = { syncEnabled: true };
+  await a.account.init();
+  await a.store.put('shops', { id: shopId, name: 'محل' });
+  assert.equal(a.account.required, true);
+  server.offline = true;
+  await assert.rejects(a.account.protect('0599000222', 'secret1', 'secret1'), (e) => e.kind === 'offline');
+  a.account.skipForNow();
+  assert.equal(a.account.required, false, 'works offline this session');
+  // الفتح القادم: خدمة جديدة ← يُطلب من جديد
+  const { createAccount } = await import('../src/core/account.js');
+  a.account = createAccount(a);
+  await a.account.init();
+  assert.equal(a.account.required, true);
+  server.offline = false;
+  await a.account.protect('0599000222', 'secret1', 'secret1');
+  assert.equal(a.account.required, false);
+  a.account = createAccount(a);
+  await a.account.init();
+  assert.equal(a.account.required, false, 'stays satisfied after restart');
+  // نسخة بلا خادم: لا حساب ولا إلزام
+  const b = await device(server, uuid());
+  b.config = { syncEnabled: false };
+  await b.account.init();
+  assert.equal(b.account.required, false);
+  await assert.rejects(a.account.protect('12', 'secret1', 'secret1'), (e) => e.kind === 'input');
+});

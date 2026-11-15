@@ -19,7 +19,7 @@ import { renderCount } from './inventory/count.js';
 import { renderMore } from './more/more.js';
 import { renderHelp } from './help/help.js';
 import { renderSubscribe } from './subscribe/subscribe.js';
-import { renderAccount } from './account/account.js';
+import { renderAccount, renderAccountRequired } from './account/account.js';
 import { renderSmsSettings } from './settings/sms.js';
 import {
   renderSettings, renderShopProfile, renderFeatures, renderCurrencies,
@@ -82,6 +82,7 @@ export const MODULES = [
       { path: '/help', tab: 'settings', chrome: false, render: renderHelp },
       { path: '/subscribe', tab: 'settings', chrome: false, render: renderSubscribe },
       { path: '/account', tab: 'settings', chrome: false, render: renderAccount },
+      { path: '/account/required', chrome: false, render: renderAccountRequired },
       { path: '/settings/sms', tab: 'settings', chrome: false, render: renderSmsSettings },
       { path: '/settings', tab: 'settings', chrome: false, render: renderSettings },
       { path: '/settings/shop', tab: 'settings', chrome: false, render: renderShopProfile },

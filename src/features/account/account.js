@@ -5,6 +5,8 @@ import { header, field, input, button } from '../../ui/components.js';
 import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
 import { app } from '../../core/app.js';
+import { navigate } from '../../core/router.js';
+import { PRIVACY_URL, TERMS_URL } from '../../core/account.js';
 import { displayPhone, resetRequestMessage, MIN_PASSWORD } from '../../domain/account.js';
 import { openLink } from '../customers/customers.js';
 import { SUPPORT_PHONE } from '../help/feedback.js';
@@ -149,39 +151,47 @@ export function openForgot(prefill = '') {
   setTimeout(() => ph.focus(), 200);
 }
 
-/**
- * بعد أول بيع: يطلب حماية البيانات مرة واحدة فقط (مع «لاحقًا»). يرجع true إن فُتحت النافذة.
- * onClose تُستدعى عند إغلاقها (لإعادة تشغيل الكاميرا في شاشة البيع).
- */
-export async function askProtectOnce({ onClose = null } = {}) {
-  if (!app.config.syncEnabled || !app.account) return false;
-  if ((await app.account.phone()) || (await app.meta.get('account:asked'))) return false;
-  await app.meta.set('account:asked', true);
+// ---------- الحساب إلزامي: شاشة كاملة تظهر لكل محل بلا حساب (بعد الإعداد الأول، أو بعد التحديث) ----------
+export function renderAccountRequired(el) {
+  if (!app.account.required) { navigate('/', { replace: true }); return; }
   const ph = phoneInput(app.shop?.phone || '');
   const pw = passInput('كلمة سر جديدة', 'new-password');
   const pw2 = passInput('أعد كتابتها', 'new-password');
-  const save = button('احمِ بياناتي', { type: 'submit', block: true, size: 'lg', icon: 'lock' });
-  openSheet((close) => h('form', {
-    onsubmit: (e) => {
-      e.preventDefault();
-      busy(save, async () => {
-        await app.account.protect(ph.value, pw.value, pw2.value);
-        feedback.ok();
-        close();
-        toast('بياناتك محمية الآن ✓ احفظ كلمة السر في مكان آمن', { kind: 'ok', ms: 5000 });
-      });
+  const save = button('أنشئ حسابي', { type: 'submit', block: true, size: 'lg', icon: 'lock' });
+  const offlineBox = h('div');
+  const enter = (msg) => { navigate('/', { replace: true }); toast(msg, { kind: 'ok', ms: 4500 }); };
+  // بلا إنترنت لا يتوقف البيع: يتابع هذه المرة، ونطلب الحساب عند الفتح القادم
+  // (وكذلك إن تعذّر الخادم: لا نحبس صاحب المحل خارج تطبيقه)
+  const showOffline = (server = false) => fill(offlineBox, h('div', { class: 'acc-card acc-warn' }, icon('cloudOff', 26),
+    h('div', null, h('strong', null, server ? 'تعذّر إنشاء الحساب الآن' : 'لا يوجد إنترنت الآن'), h('span', null, server ? 'تابع عملك، وسنطلبه منك عند الفتح القادم. إن تكرر، راسلنا من «أرسل ملاحظة».' : 'إنشاء الحساب يحتاج إنترنت. تابع عملك، وسنطلبه منك عند الفتح القادم.'))),
+  h('button', { class: 'btn btn-outline btn-block', type: 'button', onclick: () => { app.account.skipForNow(); enter('تابع عملك — أنشئ حسابك عند الفتح القادم'); } }, server ? 'تابع الآن' : 'تابع بلا إنترنت الآن'));
+
+  el.append(h('div', { class: 'setup' },
+    h('div', { class: 'setup-hero acc-hero' }, h('span', { class: 'acc-ic' }, icon('lock', 30)),
+      h('h1', null, 'أنشئ حسابك'),
+      h('p', null, 'رقم جوالك وكلمة سر: بهما تحفظ بيانات محلك، وترجع كاملة إن ضاع الجوال أو غيّرته، وتعمل من الحاسوب أيضًا.')),
+    h('form', {
+      class: 'setup-body',
+      onsubmit: (e) => {
+        e.preventDefault();
+        busy(save, async () => {
+          try { await app.account.protect(ph.value, pw.value, pw2.value); } catch (err) { if (err.kind === 'offline' || err.kind === 'server') showOffline(err.kind === 'server'); throw err; }
+          feedback.ok();
+          enter('حسابك جاهز ✓ احفظ كلمة السر في مكان آمن');
+        });
+      },
     },
-  },
-    h('div', { class: 'acc-card acc-info' }, h('span', { class: 'acc-ic' }, icon('lock', 30)),
-      h('div', null, h('strong', null, 'مبروك أول بيع! 🎉'), h('span', null, 'احمِ بياناتك الآن برقم هاتفك: إن ضاع الجوال أو تعطّل يرجع محلك كاملًا على جوال جديد.'))),
-    field('رقم جوالك', ph),
-    field('كلمة السر', pw, 'لا تحتاجها يوميًا — فقط عند الدخول من جهاز جديد'),
-    field('تأكيد كلمة السر', pw2),
-    save,
-    h('button', { class: 'btn btn-text btn-block', type: 'button', onclick: () => { close(); toast('تجدها لاحقًا في المزيد ← حسابي'); } }, 'لاحقًا'),
-  ), { title: 'احمِ بياناتك', onClose });
-  // لا نفتح الكيبورد وحده: يرى التاجر النافذة كاملة وزر «لاحقًا» ثم يقرر
-  return true;
+      field('رقم جوالك', ph),
+      field('كلمة السر', pw, `${MIN_PASSWORD} أحرف أو أرقام على الأقل — تحتاجها فقط عند الدخول من جهاز جديد`),
+      field('تأكيد كلمة السر', pw2),
+      save,
+      offlineBox,
+      h('p', { class: 'muted small acc-legal' }, 'بإنشاء الحساب توافق على ',
+        h('a', { href: TERMS_URL, target: '_blank', rel: 'noopener' }, 'شروط الاستخدام'), ' و',
+        h('a', { href: PRIVACY_URL, target: '_blank', rel: 'noopener' }, 'سياسة الخصوصية'), '.'))));
+  if (navigator.onLine === false) showOffline();
+  // جهاز ثانٍ لمحل له حساب أصلًا: الخادم يعرف الرقم، فلا نطلب شيئًا
+  app.account.refresh().then((p) => { if (p) enter('حسابك مفعّل ✓'); });
 }
 
 /** لافتة صغيرة للرئيسية: تظهر حتى يحمي صاحب المحل بياناته. */

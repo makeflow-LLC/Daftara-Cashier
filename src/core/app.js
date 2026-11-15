@@ -107,6 +107,7 @@ export const app = {
     await app.license.init();
     app.startSync();
     app.account = createAccount(app);
+    await app.account.init();
     app.sms = createSms(app, { toast: (...a) => bus.emit('toast', a) });
     app.reminders = createReminders(app, { toast: (...a) => bus.emit('toast', a), emit: () => bus.emit('reminders', app.reminders.due) });
     bus.on('data', async (e) => {

@@ -3,19 +3,25 @@
 import { HttpError } from '../sync/supabase.js';
 import { accountPhone, passwordProblem, loginProblem, extractResetCode } from '../domain/account.js';
 
-export class AccountError extends Error {}
+/** kind: 'input' (خطأ في ما كتبه المستخدم) | 'offline' | 'server' (خلل لا يحلّه المستخدم الآن) */
+export class AccountError extends Error {
+  constructor(message, kind = 'input') { super(message); this.kind = kind; }
+}
 
-const OFFLINE = 'تحتاج إنترنت لهذه الخطوة — اتصل ثم حاول';
+export const PRIVACY_URL = 'https://makeflow.tech/apps/cashier/privacy.html';
+export const TERMS_URL = 'https://makeflow.tech/apps/cashier/terms.html';
+
+export const OFFLINE = 'تحتاج إنترنت لهذه الخطوة — اتصل ثم حاول';
 
 function friendly(e) {
   if (e instanceof AccountError) return e;
   if (e instanceof HttpError) {
-    if (e.status === 0 || e.transient) return new AccountError(OFFLINE);
+    if (e.status === 0 || e.transient) return new AccountError(OFFLINE, 'offline');
     const code = e.body && e.body.code;
     if (code === '23505') return new AccountError('هذا الرقم مسجّل لمحل آخر');
-    if (code === '42501') return new AccountError('هذا الجهاز ليس صاحب المحل');
+    if (code === '42501') return new AccountError('هذا الجهاز ليس صاحب المحل', 'server');
   }
-  return new AccountError('حدث خطأ، حاول مرة أخرى');
+  return new AccountError('حدث خطأ، حاول مرة أخرى', 'server');
 }
 
 export function createAccount(app) {
@@ -29,7 +35,17 @@ export function createAccount(app) {
     return a;
   }
 
+  let cached = null;   // رقم الحساب المحفوظ على الجهاز (يُقرأ فورًا في حارس التنقل)
+  let skipped = false; // «تابع بلا إنترنت» لهذه الجلسة فقط: عند الفتح القادم يُطلب الحساب من جديد
+  const remember = async (phone) => { cached = phone; await app.meta.set('account:phone', phone); };
+
   return {
+    /** يُستدعى عند بدء التطبيق. */
+    async init() { cached = await app.meta.get('account:phone'); },
+    /** الحساب إلزامي: محل بلا حساب (والنسخة متصلة بالخادم) لا يُستعمل حتى يُنشأ حسابه. */
+    get required() { return !!(app.config.syncEnabled && app.ctx.shopId && !cached && !skipped); },
+    /** بلا إنترنت الآن: يُسمح بالعمل هذه الجلسة، ويُطلب الحساب عند الفتح القادم. */
+    skipForNow() { skipped = true; },
     /** الرقم المحفوظ على هذا الجهاز (أو null). */
     phone: () => app.meta.get('account:phone'),
 
@@ -38,7 +54,7 @@ export function createAccount(app) {
       if (!app.api || !app.ctx.shopId) return app.meta.get('account:phone');
       try {
         const r = await app.api.rest.rpc('cashier_account_get', { p_shop: app.ctx.shopId });
-        if (r && r.phone) await app.meta.set('account:phone', r.phone);
+        if (r && r.phone) await remember(r.phone);
       } catch { /* بلا إنترنت: نبقى على المحفوظ */ }
       return app.meta.get('account:phone');
     },
@@ -56,7 +72,7 @@ export function createAccount(app) {
       try {
         await app.api.rest.rpc('cashier_account_set', { p_shop: app.ctx.shopId, p_phone: phone, p_password: password });
       } catch (e) { throw friendly(e); }
-      await app.meta.set('account:phone', phone);
+      await remember(phone);
       return phone;
     },
 
@@ -79,7 +95,7 @@ export function createAccount(app) {
         throw s && s.error ? friendly(s.error) : new AccountError('لم تنزل بيانات المحل، حاول مرة أخرى');
       }
       await app.meta.set('shopId', r.shop_id);
-      await app.meta.set('account:phone', phone);
+      await remember(phone);
       return { shopId: r.shop_id, name: r.name };
     },
 

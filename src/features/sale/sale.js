@@ -18,7 +18,6 @@ import { navigate } from '../../core/router.js';
 import { productThumb } from '../products/thumb.js';
 import { openPay } from './pay.js';
 import { showReceipt } from './receipt.js';
-import { askProtectOnce } from '../account/account.js';
 import { readPrefs } from '../settings/settings.js';
 
 const PREF = 'cashier-sale-camera';
@@ -354,13 +353,7 @@ export function renderSale(el) {
   // بعد الدفع: الفاتورة نفسها (بلا ربح — قد يراها الزبون)، وزر واحد لبيع جديد
   function done(r) {
     if (scanner) scanner.pause();
-    showReceipt(r.invoice.id, {
-      onClose: async () => {
-        const resume = () => { if (scanner) scanner.resume(); search.blur(); };
-        // بعد أول بيع: نطلب حماية البيانات برقم الهاتف مرة واحدة
-        if (!(await askProtectOnce({ onClose: resume }))) resume();
-      },
-    });
+    showReceipt(r.invoice.id, { onClose: () => { if (scanner) scanner.resume(); search.blur(); } });
   }
 
   // ---------- البدء ----------
