@@ -149,6 +149,41 @@ export function openForgot(prefill = '') {
   setTimeout(() => ph.focus(), 200);
 }
 
+/**
+ * بعد أول بيع: يطلب حماية البيانات مرة واحدة فقط (مع «لاحقًا»). يرجع true إن فُتحت النافذة.
+ * onClose تُستدعى عند إغلاقها (لإعادة تشغيل الكاميرا في شاشة البيع).
+ */
+export async function askProtectOnce({ onClose = null } = {}) {
+  if (!app.config.syncEnabled || !app.account) return false;
+  if ((await app.account.phone()) || (await app.meta.get('account:asked'))) return false;
+  await app.meta.set('account:asked', true);
+  const ph = phoneInput(app.shop?.phone || '');
+  const pw = passInput('كلمة سر جديدة', 'new-password');
+  const pw2 = passInput('أعد كتابتها', 'new-password');
+  const save = button('احمِ بياناتي', { type: 'submit', block: true, size: 'lg', icon: 'lock' });
+  openSheet((close) => h('form', {
+    onsubmit: (e) => {
+      e.preventDefault();
+      busy(save, async () => {
+        await app.account.protect(ph.value, pw.value, pw2.value);
+        feedback.ok();
+        close();
+        toast('بياناتك محمية الآن ✓ احفظ كلمة السر في مكان آمن', { kind: 'ok', ms: 5000 });
+      });
+    },
+  },
+    h('div', { class: 'acc-card acc-info' }, h('span', { class: 'acc-ic' }, icon('lock', 30)),
+      h('div', null, h('strong', null, 'مبروك أول بيع! 🎉'), h('span', null, 'احمِ بياناتك الآن برقم هاتفك: إن ضاع الجوال أو تعطّل يرجع محلك كاملًا على جوال جديد.'))),
+    field('رقم جوالك', ph),
+    field('كلمة السر', pw, 'لا تحتاجها يوميًا — فقط عند الدخول من جهاز جديد'),
+    field('تأكيد كلمة السر', pw2),
+    save,
+    h('button', { class: 'btn btn-text btn-block', type: 'button', onclick: () => { close(); toast('تجدها لاحقًا في المزيد ← حسابي'); } }, 'لاحقًا'),
+  ), { title: 'احمِ بياناتك', onClose });
+  setTimeout(() => (ph.value ? pw : ph).focus(), 200);
+  return true;
+}
+
 /** لافتة صغيرة للرئيسية: تظهر حتى يحمي صاحب المحل بياناته. */
 export function accountBanner() {
   const box = h('div');
