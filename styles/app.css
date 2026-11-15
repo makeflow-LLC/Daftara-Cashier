@@ -899,3 +899,26 @@ body{font-weight:500}
 .sms-preview{display:flex;flex-direction:column;align-items:flex-start;gap:4px;margin-top:6px}
 .sms-bubble{max-width:92%;padding:10px 12px;border-radius:16px 16px 4px 16px;background:var(--brand-100);color:var(--brand-700);font-size:14.5px;line-height:1.6;white-space:pre-wrap}
 .sms-preview small{color:var(--color-muted)}
+
+/* تذكير الزبائن */
+.remind-page{padding-bottom:150px}
+.remind-filter{margin:var(--space-3) 0}
+.remind-row{gap:var(--space-2)}
+.remind-row.off{opacity:.5}
+.remind-row .row-main{text-align:right;background:none;border:0;padding:0;font:inherit;color:inherit}
+.remind-pick{display:flex;align-items:center}
+.remind-check{width:24px;height:24px;accent-color:var(--brand)}
+.remind-acts{display:flex;gap:4px}
+.remind-bar{position:fixed;bottom:0;left:0;right:0;padding:var(--space-3) var(--space-3) calc(var(--space-3) + var(--sab));background:#fff;border-top:1px solid var(--color-divider);box-shadow:0 -4px 14px rgba(0,0,0,.06);z-index:5}
+.remind-progress{text-align:center;font-size:18px;font-weight:700;padding:var(--space-3);color:var(--brand-700)}
+.remind-hint{text-align:center;margin:0 0 var(--space-2)}
+
+/* التذكير الدوري */
+.sched{display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-3);margin-bottom:var(--space-4);border-radius:var(--radius-lg);background:#fff;border:2px solid var(--frame)}
+.sched .list{margin:0}
+.sched .chips{flex-wrap:wrap}
+.day-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.day-grid .chip{min-height:40px;padding:0;justify-content:center;font-size:15px}
+.day-grid .chip:last-child{grid-column:span 3}
+.sched-next{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:var(--radius-md);background:var(--amber-100);color:var(--amber-700)}
+.sched-log{margin-top:var(--space-2)}

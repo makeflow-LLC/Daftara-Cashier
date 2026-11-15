@@ -41,6 +41,7 @@ export function renderCustomers(el) {
         button('زبون جديد', { icon: 'plus', onclick: () => editCustomer(null, (c) => navigate(`/customers/view?id=${c.id}`)) }),
         button('استيراد من دفترة', { kind: 'outline', icon: 'clipboard', onclick: () => importFromDaftara(load) }),
       ),
+      button('ذكّر الزبائن بديونهم', { kind: 'outline', icon: 'chat', block: true, onclick: () => navigate('/customers/remind') }),
       body,
     ),
   );

@@ -6,6 +6,8 @@ import { toast } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
 import { app } from '../../core/app.js';
 import { SMS_EVENTS, PLACEHOLDERS, DEFAULT_TEMPLATES, renderSms, smsParts } from '../../domain/sms.js';
+import { WEEKDAYS, LAST_DAY, nextRun, whenText, customersText, isDue } from '../../domain/reminders.js';
+import { navigate } from '../../core/router.js';
 
 const SAMPLE = { name: 'أبو أحمد', amount: 2000, balance: 15000 };
 
@@ -70,10 +72,50 @@ export function renderSmsSettings(el) {
             onchange: async (on) => { await save({ ...s, events: { ...s.events, [ev.key]: on } }); paint(); },
           })),
           s.events[ev.key] ? templateBox(ev.key) : null))) : null,
-      h('h2', { class: 'section-title' }, 'رسالة التذكير (زر «رسالة SMS» في صفحة الزبون)'),
+      scheduleSection(auto),
+      h('h2', { class: 'section-title' }, 'نص رسالة التذكير'),
       templateBox('reminder'),
       h('p', { class: 'muted small' }, 'الرسالة العربية الواحدة 70 حرفًا؛ الأطول تُحسب رسالتين أو أكثر. تُرسل فقط لزبون له رقم جوال.'),
     );
   }
+  // ---------- التذكير الدوري ----------
+  function scheduleSection(auto) {
+    const r = app.reminders.settings();
+    const set = async (patch) => { await app.reminders.save(patch); paint(); app.reminders.check(); };
+    const chip = (on, label, onclick) => h('button', { class: `chip ${on ? 'on' : ''}`, type: 'button', onclick }, label);
+    const box = h('div', { class: 'sched' });
+    if (!r.enabled) {
+      fill(box, h('div', { class: 'list' }, switchRow({ title: 'ذكّر الزبائن بديونهم دوريًا', sub: 'مثلًا أول كل شهر: رسالة لكل من عليه دين', checked: false, onchange: (on) => set({ enabled: on }) })));
+      return h('div', null, h('h2', { class: 'section-title' }, 'تذكير دوري بالديون'), box);
+    }
+    const days = r.freq === 'weekly'
+      ? [6, 0, 1, 2, 3, 4, 5].map((d) => chip(r.day === d, WEEKDAYS[d], () => set({ day: d })))
+      : [...Array.from({ length: 28 }, (_, i) => i + 1).map((d) => chip(r.day === d, String(d), () => set({ day: d }))), chip(r.day === LAST_DAY, 'آخر الشهر', () => set({ day: LAST_DAY }))];
+    const next = nextRun(r, Date.now());
+    fill(box,
+      h('div', { class: 'list' }, switchRow({ title: 'ذكّر الزبائن بديونهم دوريًا', sub: 'مفعّل', checked: true, onchange: (on) => set({ enabled: on }) })),
+      h('div', { class: 'sched-next' }, icon('star', 20), h('span', null, 'التذكير القادم: ', h('b', null, isDue(r, Date.now()) ? 'الآن — افتح الرئيسية' : whenText(next)))),
+      h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'كل'),
+        h('div', { class: 'chips' }, chip(r.freq === 'monthly', 'شهر', () => set({ freq: 'monthly', day: 1 })), chip(r.freq === 'weekly', 'أسبوع', () => set({ freq: 'weekly', day: 4 })))),
+      h('div', { class: 'field' }, h('span', { class: 'field-label' }, r.freq === 'weekly' ? 'في يوم' : 'في يوم (من الشهر)'),
+        h('div', { class: `chips ${r.freq === 'monthly' ? 'day-grid' : ''}` }, ...days)),
+      h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'الساعة'),
+        h('div', { class: 'chips' }, ...[9, 10, 12, 16, 18, 20].map((hr) => chip(r.hour === hr, `${hr}:00`, () => set({ hour: hr }))))),
+      h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'لمن عليه دين أكثر من'),
+        h('div', { class: 'chips' }, ...[[100, 'أي مبلغ'], [1000, '10 ₪'], [5000, '50 ₪'], [10000, '100 ₪'], [50000, '500 ₪']].map(([v, l]) => chip(r.minBalance === v, l, () => set({ minBalance: v }))))),
+      h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'وأقدم دين عليه منذ'),
+        h('div', { class: 'chips' }, ...[[0, 'أي وقت'], [7, 'أسبوع'], [30, 'شهر'], [60, 'شهرين']].map(([v, l]) => chip(r.minDays === v, l, () => set({ minDays: v }))))),
+      h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'عند الموعد'),
+        h('div', { class: 'chips' },
+          chip(r.mode === 'ask', 'اعرض لي القائمة لأراجعها', () => set({ mode: 'ask' })),
+          auto ? chip(r.mode === 'auto', 'أرسل وحده وأبلغني', () => set({ mode: 'auto' })) : null),
+        h('span', { class: 'field-hint' }, r.mode === 'auto' && auto ? 'يرسل SMS للجميع وحده عند الموعد، ثم يخبرك كم رسالة أُرسلت.' : 'تظهر لك لافتة على الرئيسية: تراجع القائمة وترسل بضغطة.')),
+      h('button', { class: 'btn btn-outline btn-block', type: 'button', onclick: () => navigate('/customers/remind') }, icon('users', 20), h('span', null, 'شاهد من سيصله التذكير الآن')),
+      r.log.length ? h('div', { class: 'sched-log' }, h('div', { class: 'field-label' }, 'آخر التذكيرات'),
+        ...r.log.slice(0, 5).map((x) => h('div', { class: 'row-sub' }, `${new Date(x.at).toLocaleDateString('en-GB')} — ${x.count ? `أُرسل إلى ${customersText(x.count)}` : 'لا إرسال'}${x.note ? ` (${x.note})` : ''}`))) : null,
+    );
+    return h('div', null, h('h2', { class: 'section-title' }, 'تذكير دوري بالديون'), box);
+  }
+
   paint();
 }

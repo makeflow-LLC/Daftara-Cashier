@@ -53,6 +53,21 @@ export function createCustomerRepo({ db, store }) {
       const digits = normalizeBarcode(query).replace(/\D/g, '').replace(/^0+/, '');
       return list.filter((c) => normalizeArabic(c.name).includes(q) || (digits && c.phone && c.phone.replace(/\D/g, '').includes(digits)));
     },
+    /** الزبائن الذين عليهم دين، مع تاريخ أقدم دين غير مسدَّد (للتذكير الجماعي). */
+    async debtors() {
+      const [cs, entries] = await Promise.all([db.customers.toArray(), db.customer_entries.toArray()]);
+      const by = new Map();
+      for (const e of entries) { if (!by.has(e.customer_id)) by.set(e.customer_id, []); by.get(e.customer_id).push(e); }
+      const out = [];
+      for (const c of cs) {
+        if (c.deleted) continue;
+        const all = by.get(c.id) || [];
+        const balance = balanceOf(all);
+        if (balance <= 0) continue;
+        out.push({ ...c, balance, oldestUnpaidAt: oldestUnpaidAt(effectiveEntries(all)) });
+      }
+      return out.sort((a, b) => b.balance - a.balance);
+    },
     /** مجموع ما على الزبائن (الأرصدة الموجبة فقط) وعدد المدينين. */
     async totals() {
       const list = await repo.list();

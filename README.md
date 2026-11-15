@@ -150,6 +150,17 @@ payments and backup stay open.
 - `play` flavor: `BillingPlugin.java` (Google Play subscriptions `cashier_monthly`, `cashier_yearly`).
   Server-side verification of Play purchases (Play Developer API) is not done yet.
 
+## Customer messages (SMS)
+
+- `src/domain/sms.js`, `src/core/sms.js`, Settings → «رسائل SMS للزبائن»: off by default. Optional automatic SMS after a
+  debt, a credit sale or a payment, with editable templates ({الاسم} {المبلغ} {الرصيد} {المحل} {التاريخ} {منذ}).
+- Periodic debt reminders (`src/domain/reminders.js`, `src/core/reminders.js`): monthly on a chosen day (1–28 or last
+  day) or weekly, at a chosen hour, for customers above a minimum balance / debt age, with per-customer opt-out.
+  Checked when the app opens and every 10 minutes; once per period (stored in shop settings, so devices agree).
+  Mode «ask» shows a home banner → review list (`/customers/remind`); mode «auto» sends by itself.
+- Sending by itself needs the `direct` APK (`SmsPlugin.java`, `SEND_SMS` in `src/direct/AndroidManifest.xml`);
+  Google Play does not allow that permission, so `play` and desktop open WhatsApp / the messages app per customer.
+
 ## Windows (desktop) and releases
 
 - `desktop/` — Electron wrapper (same `www`, flavor `desktop`): pages served from `app://cashier` (ES modules,

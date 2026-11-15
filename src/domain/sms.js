@@ -15,7 +15,7 @@ export const DEFAULT_TEMPLATES = Object.freeze({
   reminder: '{الاسم}، تذكير لطيف من {المحل}: عليك {الرصيد}. شكرًا لتعاملك معنا.',
 });
 
-export const PLACEHOLDERS = Object.freeze(['{الاسم}', '{المبلغ}', '{الرصيد}', '{المحل}', '{التاريخ}']);
+export const PLACEHOLDERS = Object.freeze(['{الاسم}', '{المبلغ}', '{الرصيد}', '{المحل}', '{التاريخ}', '{منذ}']);
 
 /** إعدادات افتراضية: الميزة مطفأة، والقوالب جاهزة. */
 export function smsSettings(saved) {
@@ -28,7 +28,7 @@ export function smsSettings(saved) {
 }
 
 /** يعبّئ القالب. balance: رصيد الزبون بعد الحركة. */
-export function renderSms(template, { name, amount = 0, balance = 0, shop, currency = 'ILS', date = new Date() }) {
+export function renderSms(template, { name, amount = 0, balance = 0, shop, currency = 'ILS', date = new Date(), days = 0 }) {
   const money = (v) => formatMoney(Math.abs(v), currency);
   const bal = balance > 0 ? money(balance) : balance < 0 ? `${money(balance)} لك عندنا` : 'لا شيء';
   const d = date instanceof Date ? date : new Date(date);
@@ -38,6 +38,7 @@ export function renderSms(template, { name, amount = 0, balance = 0, shop, curre
     .split('{الرصيد}').join(bal)
     .split('{المحل}').join(shop || '')
     .split('{التاريخ}').join(`${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`)
+    .split('{منذ}').join(days === 1 ? 'يوم واحد' : days === 2 ? 'يومين' : days >= 3 && days <= 10 ? `${days} أيام` : `${days} يومًا`)
     .replace(/[ \t]+/g, ' ')
     .trim();
 }

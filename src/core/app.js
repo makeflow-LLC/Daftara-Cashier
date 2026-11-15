@@ -11,6 +11,7 @@ import { TRIAL_DAYS } from '../domain/license.js';
 import { createLicense } from './license.js';
 import { createAccount } from './account.js';
 import { createSms } from './sms.js';
+import { createReminders } from './reminders.js';
 import { createSupabase } from '../sync/supabase.js';
 import { createSyncEngine } from '../sync/engine.js';
 import { startScheduler } from '../sync/scheduler.js';
@@ -107,6 +108,7 @@ export const app = {
     app.startSync();
     app.account = createAccount(app);
     app.sms = createSms(app, { toast: (...a) => bus.emit('toast', a) });
+    app.reminders = createReminders(app, { toast: (...a) => bus.emit('toast', a), emit: () => bus.emit('reminders', app.reminders.due) });
     bus.on('data', async (e) => {
       if (e.tables.includes('shops')) await app.loadShop();
       if (e.prefixChanged) app.ctx.prefix = e.prefixChanged;
