@@ -180,7 +180,7 @@ export async function askProtectOnce({ onClose = null } = {}) {
     save,
     h('button', { class: 'btn btn-text btn-block', type: 'button', onclick: () => { close(); toast('تجدها لاحقًا في المزيد ← حسابي'); } }, 'لاحقًا'),
   ), { title: 'احمِ بياناتك', onClose });
-  setTimeout(() => (ph.value ? pw : ph).focus(), 200);
+  // لا نفتح الكيبورد وحده: يرى التاجر النافذة كاملة وزر «لاحقًا» ثم يقرر
   return true;
 }
 

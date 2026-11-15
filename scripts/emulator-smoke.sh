@@ -149,6 +149,7 @@ expect 'A-0001'
 tap 'بيع جديد'
 # بعد أول بيع: طلب حماية البيانات برقم الهاتف مرة واحدة
 expect 'مبروك أول بيع'
+hide_kb
 tap 'لاحقًا'
 sleep 1
 adb shell input keyevent 4
