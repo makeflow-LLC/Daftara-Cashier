@@ -12,6 +12,9 @@ import { accountBanner, maybeNudgeAccount } from '../account/account.js';
 import { reminderBanner } from '../customers/remind.js';
 import { userChip } from '../staff/staff.js';
 import { daysLeftText } from '../../domain/inventory.js';
+import { supplierDues, dueText } from '../../domain/dues.js';
+import { localDay } from '../../domain/offers.js';
+import { formatMoney } from '../../domain/currency.js';
 import { formatQty } from '../../domain/units.js';
 import { shouldShowInstallHint, dismissInstallHint, isIos } from '../../core/pwa.js';
 
@@ -97,7 +100,10 @@ export function renderHome(el) {
     // المساعد: ما يخلص قريبًا حسب سرعة البيع (أوضح من «منخفض»)
     const soon = app.can('purchases') ? (await app.inventory.assistant()).soon.filter((x) => x.p.qty > 0).slice(0, 3) : [];
     const soonIds = new Set(soon.map((x) => x.p.id));
+    // مواعيد الدفع للموردين: متأخر أو خلال 3 أيام
+    const dues = app.can('purchases') ? supplierDues(await app.inventory.suppliers(), app.shop?.settings?.supplierDues, localDay()) : [];
     const items = [
+      ...dues.slice(0, 3).map((d) => row({ icon: 'truck', title: `ادفع لـ ${d.supplier.name}: ${formatMoney(d.supplier.balance, app.shop?.base_currency || 'ILS')}`, sub: `موعد الدفع ${dueText(d.days)}`, tone: d.state === 'overdue' || d.state === 'today' ? 'danger' : 'warn', onclick: () => navigate(`/suppliers/view?id=${d.supplier.id}`) })),
       ...soon.map((x) => row({ icon: 'bulb', title: x.p.name, sub: `${daysLeftText(x.daysLeft)} — اطلب ${formatQty(x.qty)}`, tone: 'warn', onclick: () => navigate('/inventory/assistant') })),
       ...a.out.slice(0, 3).map((p) => row({ icon: 'alert', title: p.name, sub: 'نفد من المخزون', tone: 'danger' })),
       ...a.low.filter((p) => !soonIds.has(p.id)).slice(0, 3).map((p) => row({ icon: 'box', title: p.name, sub: 'المخزون منخفض', tone: 'warn' })),

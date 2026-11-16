@@ -12,6 +12,46 @@ import { bus } from '../../core/bus.js';
 import { navigate } from '../../core/router.js';
 import { openLink } from '../customers/customers.js';
 import { showReceipt } from '../sale/receipt.js';
+import { addDays, dueStatus, dueText } from '../../domain/dues.js';
+import { localDay } from '../../domain/offers.js';
+
+const duesOf = () => app.shop?.settings?.supplierDues || {};
+/** يحفظ موعد الدفع لمورّد (date = null يمسحه). */
+export async function setSupplierDue(id, date, note = null) {
+  const next = { ...duesOf() };
+  if (date) next[id] = { date, note: note || null }; else delete next[id];
+  await app.updateShopSettings({ supplierDues: next });
+}
+const DUE_CLASS = { overdue: 'due-bad', today: 'due-bad', soon: 'due-warn', later: 'due-ok' };
+/** شارة الموعد: «متأخر 3 أيام» / «غدًا» … */
+export function dueBadge(id) {
+  const d = duesOf()[id];
+  if (!d || !d.date) return null;
+  const st = dueStatus(d.date, localDay());
+  return h('span', { class: `due-badge ${DUE_CLASS[st.state]}` }, icon('alert', 13), dueText(st.days));
+}
+
+/** ورقة «متى تدفع له؟»: تاريخ أو ضغطة (أسبوع، أسبوعين، شهر). */
+export function dueSheet(s, onDone) {
+  const cur = duesOf()[s.id];
+  const date = input({ type: 'date', dir: 'ltr', value: cur?.date || addDays(localDay(), 7) });
+  const note = input({ maxlength: 60, value: cur?.note || '', placeholder: 'شيك، دفعة أولى… (اختياري)' });
+  openSheet((close) => h('form', {
+    onsubmit: async (e) => {
+      e.preventDefault();
+      if (!date.value) { feedback.error(); return; }
+      await setSupplierDue(s.id, date.value, note.value.trim());
+      feedback.ok(); close();
+      toast(`سنذكّرك بالدفع لـ ${s.name} ${dueText(dueStatus(date.value, localDay()).days)}`, { kind: 'ok', ms: 3500 });
+      if (onDone) onDone();
+    },
+  },
+    h('div', { class: 'chips' }, ...[['أسبوع', 7], ['أسبوعين', 14], ['شهر', 30]].map(([l, n]) => h('button', { class: 'chip', type: 'button', onclick: () => { date.value = addDays(localDay(), n); } }, l))),
+    field('موعد الدفع', date), field('ملاحظة', note),
+    button('حفظ الموعد', { type: 'submit', block: true, size: 'lg', icon: 'check' }),
+    cur ? button('بلا موعد', { kind: 'text', block: true, onclick: async () => { await setSupplierDue(s.id, null); close(); if (onDone) onDone(); } }) : null,
+  ), { title: `متى تدفع لـ ${s.name}؟` });
+}
 
 const cur = () => app.shop?.base_currency || 'ILS';
 const dateText = (iso) => new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
@@ -62,11 +102,20 @@ export function renderSuppliers(el) {
   async function load() {
     const all = await app.inventory.suppliers();
     const owing = all.filter((s) => s.balance > 0);
+    const dues = duesOf();
+    const today = localDay();
+    const urgent = owing.filter((s) => dues[s.id] && dueStatus(dues[s.id].date, today).state !== 'later');
     fill(totalEl, all.length ? h('div', { class: 'debt-card' }, h('div', { class: 'hero-label' }, 'عليك للموردين'),
-      h('div', { class: 'hero-value' }, money(owing.reduce((a, s) => a + s.balance, 0))), h('div', { class: 'hero-mini-label' }, `${owing.length} مورّد له عندك`)) : null);
+      h('div', { class: 'hero-value' }, money(owing.reduce((a, s) => a + s.balance, 0))), h('div', { class: 'hero-mini-label' }, `${owing.length} مورّد له عندك`),
+      urgent.length ? h('div', { class: 'hero-mini-label due-line' }, icon('alert', 14), ` مستحق خلال 3 أيام أو متأخر: `, num(formatMoney(urgent.reduce((a, s) => a + s.balance, 0), cur()))) : null) : null);
+    // الأقرب موعدًا أولًا، ثم الأكبر رصيدًا
+    all.sort((a, b) => {
+      const da = a.balance > 0 && dues[a.id] ? dues[a.id].date : '9999'; const db = b.balance > 0 && dues[b.id] ? dues[b.id].date : '9999';
+      return da < db ? -1 : da > db ? 1 : b.balance - a.balance;
+    });
     fill(body, all.length ? h('div', { class: 'list' }, ...all.map((s) => h('button', { class: 'row row-tap', type: 'button', onclick: () => navigate(`/suppliers/view?id=${s.id}`) },
       h('span', { class: 'row-ic' }, icon('truck', 20)),
-      h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, s.name), s.phone ? h('span', { class: 'row-sub num' }, s.phone) : null),
+      h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, s.name), s.balance > 0 && dueBadge(s.id) ? h('span', { class: 'row-sub' }, dueBadge(s.id)) : s.phone ? h('span', { class: 'row-sub num' }, s.phone) : null),
       s.balance ? h('span', { class: `row-end ${s.balance > 0 ? 'owed' : 'credit'}` }, money(s.balance)) : h('span', { class: 'row-end muted small' }, 'لا شيء'))))
       : emptyState('truck', 'لا موردين بعد', 'أضف من تشتري منهم لتعرف ما عليك لكل واحد وترسل له الطلبيات.'));
   }
@@ -93,6 +142,11 @@ export async function renderSupplier(el, params) {
     fill(top,
       h('div', { class: `balance-card ${s.balance > 0 ? 'owed' : 'clear'}` },
         h('div', { class: 'hero-label' }, s.balance > 0 ? 'عليك له' : 'لا شيء عليك له'), h('div', { class: 'hero-value' }, money(Math.abs(s.balance)))),
+      s.balance > 0 ? h('button', { class: 'due-row', type: 'button', onclick: () => dueSheet(s, paint) },
+        icon('alert', 20),
+        duesOf()[s.id] ? h('span', { class: 'row-main due-main' }, 'موعد الدفع ', h('b', { class: 'num' }, duesOf()[s.id].date.split('-').reverse().join('/')), ' ', dueBadge(s.id), duesOf()[s.id].note ? h('span', { class: 'muted' }, ` · ${duesOf()[s.id].note}`) : null)
+          : h('span', { class: 'row-main due-main' }, 'حدد موعد الدفع — نذكّرك قبله'),
+        icon('edit', 18)) : null,
       h('div', { class: 'big-actions' },
         h('button', { class: 'big-btn pay', type: 'button', onclick: payHim }, icon('cash', 26), h('span', null, 'دفعت له')),
         h('button', { class: 'big-btn debt', type: 'button', onclick: () => navigate(`/inventory/purchase?supplier=${s.id}`) }, icon('truck', 26), h('span', null, 'شراء منه'))),
@@ -120,6 +174,7 @@ export async function renderSupplier(el, params) {
         if (!v || v <= 0) { feedback.error(); toast('اكتب المبلغ', { kind: 'error' }); return; }
         await app.inventory.paySupplier(s.id, v);
         feedback.ok(); close(); await load();
+        if (s.balance <= 0 && duesOf()[s.id]) await setSupplierDue(s.id, null);
         toast(`دُفع ${formatMoney(v, cur())} — الباقي له ${formatMoney(Math.max(0, s.balance), cur())}`, { kind: 'ok', ms: 3500 });
       },
     }, field('المبلغ المدفوع', amt),

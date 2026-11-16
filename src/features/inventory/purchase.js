@@ -16,7 +16,9 @@ import { app } from '../../core/app.js';
 import { compressImage, pickImage } from '../../core/media.js';
 import { uuid } from '../../core/ids.js';
 import { productThumb } from '../products/thumb.js';
-import { pickSupplier } from './suppliers.js';
+import { pickSupplier, setSupplierDue } from './suppliers.js';
+import { addDays } from '../../domain/dues.js';
+import { localDay } from '../../domain/offers.js';
 import { showReceipt } from '../sale/receipt.js';
 
 export async function renderPurchase(el, params) {
@@ -153,6 +155,11 @@ export async function renderPurchase(el, params) {
     const total = purchaseTotal(draft.lines);
     if (scanner) scanner.pause();
     let busy = false;
+    let dueDays = null; // «على الحساب»: متى تدفع (اختياري)
+    const dueChips = h('div', { class: 'chips due-chips' });
+    const paintDue = () => fill(dueChips, h('span', { class: 'muted small' }, 'موعد الدفع:'),
+      ...[[null, 'بلا'], [7, 'أسبوع'], [14, 'أسبوعين'], [30, 'شهر']].map(([n, l]) => h('button', { class: `chip ${dueDays === n ? 'on' : ''}`, type: 'button', onclick: () => { dueDays = n; paintDue(); } }, l)));
+    paintDue();
     openSheet((close) => {
       async function save(paid) {
         if (busy) return;
@@ -166,6 +173,7 @@ export async function renderPurchase(el, params) {
             await app.db.files.put({ id, kind: 'purchase', path: attachmentPath, blob: photo.blob, thumb: photo.thumb, state: 'pending' });
           }
           const r = await app.inventory.savePurchase({ lines: draft.lines, supplierId: draft.supplier ? draft.supplier.id : null, paid, attachmentPath });
+          if (paid === 'credit' && draft.supplier && dueDays) await setSupplierDue(draft.supplier.id, addDays(localDay(), dueDays));
           draft = { lines: [], supplier: null }; photo = null;
           feedback.ok(); close(); paint();
           showReceipt(r.invoice.id, { doneLabel: 'تم', doneIcon: 'check', onClose: () => history.back() });
@@ -176,7 +184,8 @@ export async function renderPurchase(el, params) {
         draft.supplier ? h('div', { class: 'pay-cust' }, icon('truck', 18), h('span', null, draft.supplier.name)) : null,
         h('div', { class: 'pay-methods' },
           h('button', { class: 'pay-method pay-cash', type: 'button', onclick: () => save('cash') }, icon('cash', 26), h('span', null, 'دفعت نقدًا')),
-          h('button', { class: 'pay-method pay-credit', type: 'button', onclick: () => save('credit') }, icon('truck', 26), h('span', null, 'على الحساب'))));
+          h('button', { class: 'pay-method pay-credit', type: 'button', onclick: () => save('credit') }, icon('truck', 26), h('span', null, 'على الحساب'))),
+        dueChips);
     }, { title: 'كيف دفعت؟', onClose: () => { if (scanner) scanner.resume(); } });
   }
 
