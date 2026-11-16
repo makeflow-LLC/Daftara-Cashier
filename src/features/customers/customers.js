@@ -6,7 +6,7 @@ import { header, iconButton, emptyState, syncBadge, button, money, input, field 
 import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
 import { parseMoney, formatMoney, CURRENCIES } from '../../domain/currency.js';
-import { formatDecimal } from '../../domain/money.js';
+import { formatDecimal, parseDecimal } from '../../domain/money.js';
 import { smsLink } from '../../domain/sms.js';
 import { ENTRY_LABELS, editableEntry, normalizePhone, whatsappLink, reminderText, statementText, parseDaftaraBackup } from '../../domain/ledger.js';
 import { app } from '../../core/app.js';
@@ -236,12 +236,22 @@ export function editCustomer(c, onSaved, onDelete = null) {
   const name = input({ value: c ? c.name : '', maxlength: 60, placeholder: 'اسم الزبون' });
   const phone = input({ value: c ? c.phone || '' : '', type: 'tel', inputmode: 'tel', dir: 'ltr', placeholder: '059xxxxxxx' });
   const note = input({ value: c ? c.note || '' : '', maxlength: 120, placeholder: 'اختياري' });
+  // خصم دائم لهذا الزبون (زبون جملة أو قريب): يُطبَّق على فاتورته تلقائيًا حين يُختار في البيع
+  const discs = app.shop?.settings?.customerDiscounts || {};
+  const disc = input({ dir: 'ltr', inputmode: 'decimal', placeholder: '0', value: c && discs[c.id] ? formatDecimal(discs[c.id], 2, { trim: true, group: false }) : '' });
   openSheet((close) => h('form', {
     onsubmit: async (e) => {
       e.preventDefault();
       try {
         const data = { name: name.value, phone: phone.value, note: note.value };
+        const bp = disc.value.trim() ? parseDecimal(disc.value, 2) : 0;
+        if (bp === null || bp < 0 || bp >= 10000) { feedback.error(); toast('الخصم بين 0% و 99%', { kind: 'error' }); return; }
         const saved = c ? await app.customers.update(c.id, data) : await app.customers.create(data);
+        if (app.can('discount') && (bp || 0) !== (discs[saved.id] || 0)) {
+          const next = { ...(app.shop?.settings?.customerDiscounts || {}) };
+          if (bp) next[saved.id] = bp; else delete next[saved.id];
+          await app.updateShopSettings({ customerDiscounts: next });
+        }
         feedback.ok();
         close();
         if (onSaved) onSaved(saved);
@@ -249,6 +259,7 @@ export function editCustomer(c, onSaved, onDelete = null) {
     },
   },
     field('الاسم', name), field('رقم الجوال (للتذكير وإرسال الفواتير على واتساب)', phone), field('ملاحظة', note),
+    app.can('discount') ? field('خصم دائم لهذا الزبون %', disc, 'يُطبَّق على فواتيره تلقائيًا (زبون جملة مثلًا)') : null,
     button('حفظ', { type: 'submit', block: true, size: 'lg', icon: 'check' }),
     c && onDelete ? button('حذف الزبون', { kind: 'text', onclick: () => { close(); onDelete(); } }) : null,
   ), { title: c ? 'تعديل الزبون' : 'زبون جديد' });

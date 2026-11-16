@@ -8,6 +8,7 @@ import { feedback } from '../../ui/feedback.js';
 import { startInlineScanner } from '../../ui/scanner.js';
 import { listenKeyScanner, isDesktop } from '../../ui/keyscan.js';
 import { makeLine, addLine, lineTotal, cartTotals } from '../../domain/cart.js';
+import { applyOffers, localDay } from '../../domain/offers.js';
 import { searchProducts, normalizeBarcode } from '../../domain/product.js';
 import { formatQty, parseQty, unit as unitOf, QTY_SCALE } from '../../domain/units.js';
 import { parseMoney, formatMoney, CURRENCIES } from '../../domain/currency.js';
@@ -29,6 +30,7 @@ export function renderSale(el) {
   const showProfit = app.can('see_profit') && readPrefs().saleProfit === true;
   let cart = { lines: [], discount: null, customer: null };
   let products = null;          // تُحمَّل بعد الرسم (لا تؤخر فتح الشاشة)
+  let byId = new Map();         // للعروض على التصنيفات
   let scanner = null;
   let cameraOn = readPref();
 
@@ -76,20 +78,27 @@ export function renderSale(el) {
     return { lines: cart.lines, discount: cart.discount, customer: cart.customer ? { id: cart.customer.id, name: cart.customer.name, phone: cart.customer.phone } : null };
   }
 
+  // العروض تُحسب من جديد مع كل تغيير: السطور كما في السلة + خصم العرض (domain/offers.js)
+  function priced() {
+    return applyOffers(cart.lines, app.shop?.settings?.offers, { today: localDay(), categoryOf: (id) => byId.get(id)?.category_id || null, currency: base });
+  }
+
   function paint() {
-    const t = cartTotals(cart.lines, cart.discount);
+    const pr = priced();
+    const t = cartTotals(pr.lines, cart.discount);
     if (!cart.lines.length) {
       fill(cartEl, emptyState('cart', 'السلة فارغة', cameraOn ? 'امسح باركود الصنف بالكاميرا أو ابحث باسمه.' : 'ابحث باسم الصنف أو اكتب الباركود.'));
     } else {
-      fill(cartEl, h('div', { class: 'list cart-list' }, ...cart.lines.map((l, i) => lineRow(l, i))));
+      fill(cartEl, h('div', { class: 'list cart-list' }, ...pr.lines.map((l, i) => lineRow(l, i))));
     }
     fill(custEl, cart.customer ? h('div', { class: 'cust-chip' }, icon('user', 16), h('span', null, cart.customer.name),
-      h('button', { class: 'icon-btn sm', type: 'button', 'aria-label': 'إزالة الزبون', onclick: () => { cart.customer = null; changed(); } }, icon('x', 16))) : null);
+      h('button', { class: 'icon-btn sm', type: 'button', 'aria-label': 'إزالة الزبون', onclick: () => { cart.customer = null; customerDiscount(); changed(); } }, icon('x', 16))) : null);
     fill(totalEl,
       h('div', { class: 'pt-main' }, money(t.total)),
       h('div', { class: 'pt-sub' },
         h('span', null, `${t.count} صنف`),
         t.discount ? h('span', null, ' · خصم ', num(formatMoney(t.discount, base))) : null,
+        pr.saved ? h('span', { class: 'pt-saved' }, ' · العروض وفّرت ', num(formatMoney(pr.saved, base))) : null,
         showProfit && t.count ? h('span', { class: `pt-profit ${t.profit < 0 ? 'neg' : ''}` }, ' · ربح ', num(formatMoney(t.profit, base))) : null,
       ));
     payBtn.disabled = !cart.lines.length;
@@ -101,7 +110,8 @@ export function renderSale(el) {
       h('button', { class: 'cl-main', type: 'button', onclick: () => editLine(i) },
         h('span', { class: 'row-title' }, l.name),
         h('span', { class: 'row-sub' }, num(formatQty(l.qty)), ` ${measured ? unitOf(l.unit).short : ''} × `, num(formatMoney(l.unit_price, base)),
-          l.discount ? h('span', { class: 'cl-disc' }, ' − ', num(formatMoney(l.discount, base))) : null)),
+          l.discount ? h('span', { class: 'cl-disc' }, ' − ', num(formatMoney(l.discount, base))) : null,
+          l.offer ? h('span', { class: 'offer-badge' }, icon('tag', 13), l.offer) : null)),
       measured ? null : h('div', { class: 'stepper' },
         h('button', { type: 'button', 'aria-label': 'إنقاص', onclick: () => step(i, -1) }, icon(l.qty <= QTY_SCALE ? 'trash' : 'minus', 18)),
         h('button', { type: 'button', 'aria-label': 'زيادة', onclick: () => step(i, +1) }, icon('plus', 18))),
@@ -247,7 +257,9 @@ export function renderSale(el) {
 
   async function loadProducts() {
     products = await app.products.list();
+    byId = new Map(products.map((p) => [p.id, p]));
     paintQuick();
+    paint();
   }
 
   // أزرار البيع السريع: الأصناف بلا باركود (خبز، أكياس، فلافل…) بضغطة. على الحاسوب والشاشة العريضة
@@ -323,7 +335,14 @@ export function renderSale(el) {
   async function chooseCustomer() {
     const { pickCustomer } = await import('../customers/picker.js');
     const c = await pickCustomer({ title: 'زبون هذه الفاتورة' });
-    if (c) { cart.customer = c; changed(); }
+    if (c) { cart.customer = c; customerDiscount(); changed(); }
+  }
+
+  // خصم دائم للزبون (من بطاقته): يُطبَّق على الفاتورة حين يُختار، ولا يغيّر خصمًا كتبه الكاشير
+  function customerDiscount() {
+    const bp = cart.customer ? (app.shop?.settings?.customerDiscounts || {})[cart.customer.id] : 0;
+    if (bp > 0 && (!cart.discount || cart.discount.auto)) cart.discount = { type: 'percent', value: bp, auto: true };
+    else if (!bp && cart.discount && cart.discount.auto) cart.discount = null;
   }
 
   async function holdCart() {
@@ -365,14 +384,15 @@ export function renderSale(el) {
 
   // ---------- الدفع ----------
   function pay() {
-    const t = cartTotals(cart.lines, cart.discount);
+    const pr = priced();
+    const t = cartTotals(pr.lines, cart.discount);
     if (!t.count) return;
     if (scanner) scanner.pause();
     openPay({
       total: t.total,
       customer: cart.customer,
       onConfirm: async ({ payments, customer }) => {
-        const r = await app.sales.checkout({ lines: cart.lines, discount: cart.discount, payments, customerId: customer ? customer.id : null, currency: base });
+        const r = await app.sales.checkout({ lines: pr.lines, discount: cart.discount, payments, customerId: customer ? customer.id : null, currency: base });
         if (customer) {
           // بيع بالآجل: رسالة SMS للزبون إن شغّلها صاحب المحل
           const credit = (await app.db.customer_entries.where('customer_id').equals(customer.id).toArray())

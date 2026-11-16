@@ -22,6 +22,7 @@ import { renderSubscribe } from './subscribe/subscribe.js';
 import { renderAccount, renderAccountRequired } from './account/account.js';
 import { renderSmsSettings } from './settings/sms.js';
 import { renderLock, renderStaff } from './staff/staff.js';
+import { renderOffers } from './offers/offers.js';
 import { renderScaleSettings } from './settings/scale.js';
 import {
   renderSettings, renderShopProfile, renderFeatures, renderCurrencies,
@@ -45,6 +46,7 @@ export const MODULES = [
       { path: '/products', tab: 'products', render: renderProducts },
       { path: '/products/edit', perm: 'products', write: true, tab: 'products', chrome: false, render: renderProductForm },
       { path: '/products/rapid', perm: 'products', write: true, tab: 'products', chrome: false, render: renderRapidAdd },
+      { path: '/offers', perm: 'products', tab: 'settings', chrome: false, render: renderOffers },
       { path: '/settings/categories', perm: 'products', tab: 'settings', chrome: false, render: renderCategories },
     ],
   },

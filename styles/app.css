@@ -992,3 +992,15 @@ body{font-weight:500}
 .user-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 6px;border-radius:var(--radius-pill);
   background:rgba(255,255,255,.18);color:inherit;font-size:14px;font-weight:600;min-height:36px}
 .feature-list{margin:var(--space-3) 0 var(--space-4);padding-right:22px;line-height:1.9;color:var(--color-text)}
+
+/* ---------------- العروض ---------------- */
+.offer-badge{display:inline-flex;align-items:center;gap:3px;margin-right:6px;padding:1px 8px;border-radius:var(--radius-pill);
+  background:var(--amber-100);color:var(--amber-700);font-size:12px;font-weight:700;vertical-align:middle;font-family:var(--font-num)}
+.pt-saved{color:var(--brand-700);font-weight:700}
+.offer-preview{margin:var(--space-3) 0;padding:var(--space-3);border-radius:var(--radius-md);background:var(--brand-100);color:var(--brand-700);font-weight:700;min-height:48px}
+.state-chip{flex:none;padding:3px 10px;border-radius:var(--radius-pill);font-size:12px;font-weight:700;background:var(--neutral-200);color:var(--color-muted)}
+.state-chip.ok{background:var(--brand-100);color:var(--brand-700)}
+.state-chip.info{background:var(--blue-100);color:var(--blue-700)}
+.row-dim{opacity:.6}
+.grid-2 > .field{min-width:0}
+.input[type=date]{min-width:0;width:100%}

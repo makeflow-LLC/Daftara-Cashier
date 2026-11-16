@@ -27,6 +27,7 @@ export function renderMore(el) {
       tile('cash', 'الصندوق', 'amber', go('/cash'), can('cash')),
       tile('box', 'المخزون', 'violet', go('/inventory'), can('purchases')),
       tile('truck', 'الموردون', 'teal', go('/suppliers'), can('purchases')),
+      tile('star', 'العروض', 'green', go('/offers'), can('products')),
       tile('tag', 'أدوات', 'pink', go('/tools'), can('products')),
       tile('users', 'الموظفون', 'blue', go('/settings/staff'), !app.staff || !!app.user?.owner)),
     h('h2', { class: 'section-title' }, 'التطبيق'),
