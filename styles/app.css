@@ -1031,3 +1031,4 @@ body{font-weight:500}
 .daily-page{width:100%;height:auto;border-radius:var(--radius-md);box-shadow:var(--shadow-md);background:#fff}
 .daily-nav{justify-content:center}
 .row-on{background:var(--brand-100)}
+.catalog-link{padding:var(--space-3);border-radius:var(--radius-md);background:var(--color-card);box-shadow:var(--shadow-sm);font-size:14px;word-break:break-all;text-align:left;margin-bottom:var(--space-3)}
