@@ -2,6 +2,7 @@
 // مستقلة عن الواجهة فتُختبر وحدها (tests/products.test.mjs).
 import { signedQty } from '../../domain/stock.js';
 import { normalizeBarcode, internalBarcode, isShareableBarcode, validateProduct, validatePack } from '../../domain/product.js';
+import { normalizeScaleCode, parseScaleBarcode, scaleQuantity } from '../../domain/scale.js';
 
 export function createProductRepo({ db, store, getContext }) {
   async function stockMap() {
@@ -49,6 +50,29 @@ export function createProductRepo({ db, store, getContext }) {
       return null;
     },
 
+    /** الصنف برقمه في الميزان (PLU). */
+    async findByScaleCode(raw) {
+      const code = normalizeScaleCode(raw);
+      if (!code) return null;
+      return (await db.products.where('scale_code').equals(code).toArray()).find((x) => !x.deleted) || null;
+    },
+
+    /**
+     * ما يقرؤه الماسح: باركود الصنف أو العبوة أولًا، ثم ملصق الميزان (إن شُغّل في الإعدادات).
+     * يرجع { product, pack, qty?, discount?, scale? } أو null. scale = ما قُرئ من الملصق إن لم يُعرف صنفه.
+     */
+    async resolveScan(raw, scaleCfg) {
+      const hit = await repo.findByCode(raw);
+      if (hit) return hit;
+      const parsed = parseScaleBarcode(normalizeBarcode(raw), scaleCfg);
+      if (!parsed) return null;
+      const product = await repo.findByScaleCode(parsed.code);
+      if (!product) return { product: null, pack: null, scale: parsed };
+      const q = scaleQuantity(product, parsed);
+      if (!q) return { product, pack: null, scale: parsed, invalid: true };
+      return { product, pack: null, qty: q.qty, discount: q.discount, scale: parsed };
+    },
+
     /** باركود داخلي جديد لصنف بلا باركود (فريد لهذا الجهاز). */
     async nextInternalBarcode() {
       const ctx = getContext();
@@ -70,8 +94,14 @@ export function createProductRepo({ db, store, getContext }) {
      */
     async save(input, { qty = null, packs = null } = {}) {
       const data = { ...input, barcode: input.barcode ? normalizeBarcode(input.barcode) : null, name: String(input.name || '').trim() };
+      if ('scale_code' in input) data.scale_code = input.scale_code ? normalizeScaleCode(input.scale_code) : null;
       const v = validateProduct(data);
+      if (input.scale_code && !data.scale_code) { v.ok = false; v.errors.scale_code = 'رقم الميزان أرقام فقط (حتى 6)'; }
       if (!v.ok) throw Object.assign(new Error('invalid'), { errors: v.errors });
+      if (data.scale_code) {
+        const dup = await repo.findByScaleCode(data.scale_code);
+        if (dup && dup.id !== data.id) throw Object.assign(new Error('duplicate'), { errors: { scale_code: `رقم الميزان مسجّل لـ «${dup.name}»` } });
+      }
       if (data.barcode) {
         const dup = await repo.findByCode(data.barcode);
         if (dup && dup.product.id !== data.id) throw Object.assign(new Error('duplicate'), { errors: { barcode: `هذا الباركود مسجّل لـ «${dup.product.name}»` } });

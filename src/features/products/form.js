@@ -26,7 +26,7 @@ export async function renderProductForm(el, params) {
   const p = editing || {
     id: null, name: params.name || '', barcode: params.barcode || null, category_id: params.category || null, unit: 'piece',
     cost_price: 0, sell_price: null, currency: base, low_stock: null, track_expiry: false, expiry_date: null,
-    is_quick: false, note: null, qty: 0, units: [], images: [],
+    is_quick: params.quick === '1', note: null, qty: 0, units: [], images: [], scale_code: null,
   };
   let unitId = p.unit;
   let catId = p.category_id;
@@ -44,6 +44,8 @@ export async function renderProductForm(el, params) {
   const low = input({ value: formatQty(p.low_stock ?? DEFAULT_LOW_STOCK_THRESHOLD * QTY_SCALE), dir: 'ltr', inputmode: 'decimal' });
   const expiry = input({ type: 'date', value: p.expiry_date || '', dir: 'ltr' });
   const note = input({ value: p.note || '', maxlength: 200 });
+  const scaleOn = !!app.shop?.settings?.scale?.enabled;
+  const scaleCode = input({ value: p.scale_code || '', dir: 'ltr', inputmode: 'numeric', maxlength: 6, placeholder: 'مثال: 123' });
   const margin = h('div', { class: 'field-hint margin-hint' });
   const catalogHint = h('div', { class: 'field-hint' });
   let isQuick = !!p.is_quick;
@@ -279,6 +281,7 @@ export async function renderProductForm(el, params) {
         sell_price: sellP, cost_price: costP, currency, unit: unitId, category_id: catId,
         low_stock: lowV, track_expiry: !!(f.expiry && expiry.value), expiry_date: f.expiry && expiry.value ? expiry.value : null,
         is_quick: isQuick, note: note.value.trim() || null,
+        ...(scaleOn || editing?.scale_code ? { scale_code: scaleCode.value.trim() || null } : {}),
       }, { qty: qtyP, packs: packsOut });
       for (const c of newImages) await app.media.addProductImage(product.id, c);
       feedback.ok();
@@ -300,11 +303,12 @@ export async function renderProductForm(el, params) {
   }
 
   // ---------- خيارات إضافية (مطوية للصنف الجديد: الأساس اسم وسعر فقط) ----------
-  const hasAdvanced = !!(editing && (editing.category_id || editing.units.length || editing.expiry_date || editing.is_quick || editing.note || editing.unit !== 'piece' || editing.low_stock !== null));
+  const hasAdvanced = params.quick === '1' || !!(editing && (editing.scale_code || editing.category_id || editing.units.length || editing.expiry_date || editing.is_quick || editing.note || editing.unit !== 'piece' || editing.low_stock !== null));
   const adv = h('div', { class: 'adv', hidden: !hasAdvanced },
     f.multiCurrency ? currencyPicker(() => currency, (c) => { currency = c; paintMargin(); }) : null,
     f.units ? h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'يُباع بـ'), unitChips) : null,
     h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'التصنيف'), catChips),
+    scaleOn || editing?.scale_code ? h('div', null, field('رقم الصنف في الميزان', scaleCode, 'نفس الرقم (PLU) المبرمج في الميزان: ملصق الميزان يُقرأ بوزنه أو سعره'), errorEl('scale_code')) : null,
     field('نبّهني عندما تقل الكمية عن', low),
     f.units ? section('العبوات', packList, h('p', { class: 'muted small' }, 'المخزون يبقى بالقطعة: بيع كرتونة ينقص 24 قطعة تلقائيًا.'), errorEl('packs')) : null,
     f.expiry ? field('تاريخ انتهاء الصلاحية', expiry, 'ننبهك قبل الانتهاء بـ 30 يومًا') : null,

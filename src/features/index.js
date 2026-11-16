@@ -21,6 +21,7 @@ import { renderHelp } from './help/help.js';
 import { renderSubscribe } from './subscribe/subscribe.js';
 import { renderAccount, renderAccountRequired } from './account/account.js';
 import { renderSmsSettings } from './settings/sms.js';
+import { renderScaleSettings } from './settings/scale.js';
 import {
   renderSettings, renderShopProfile, renderFeatures, renderCurrencies,
   renderPayments, renderSync, renderAppearance, renderAbout,
@@ -84,6 +85,7 @@ export const MODULES = [
       { path: '/account', tab: 'settings', chrome: false, render: renderAccount },
       { path: '/account/required', chrome: false, render: renderAccountRequired },
       { path: '/settings/sms', tab: 'settings', chrome: false, render: renderSmsSettings },
+      { path: '/settings/scale', tab: 'settings', chrome: false, render: renderScaleSettings },
       { path: '/settings', tab: 'settings', chrome: false, render: renderSettings },
       { path: '/settings/shop', tab: 'settings', chrome: false, render: renderShopProfile },
       { path: '/settings/features', tab: 'settings', chrome: false, render: renderFeatures },

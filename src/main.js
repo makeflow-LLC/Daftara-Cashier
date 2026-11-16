@@ -8,9 +8,11 @@ import { readPrefs, applyTheme } from './features/settings/settings.js';
 import { configureFeedback } from './ui/feedback.js';
 import { closeTopSheet, closeAllSheets, toast } from './ui/overlay.js';
 import { closeScanner } from './ui/scanner.js';
+import { startPwa } from './core/pwa.js';
 
 async function start() {
   if (window.__oldWebView) return;
+  startPwa(); // نسخة الويب: تعمل بلا إنترنت وتُثبَّت على الشاشة الرئيسية
   const prefs = readPrefs();
   applyTheme(prefs.theme);
   configureFeedback({ sound: prefs.sound, vibrate: prefs.vibrate });

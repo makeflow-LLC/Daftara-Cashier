@@ -24,6 +24,7 @@ main{max-width:620px;margin:-40px auto 0;padding:0 16px 40px}
 .btn svg{flex:none;width:40px;height:40px}
 .android{background:var(--grad)}
 .windows{background:linear-gradient(135deg,#1d6fd6,#1552a3);box-shadow:0 8px 20px rgba(29,111,214,.25)}
+.web{background:linear-gradient(135deg,#3b3a40,#1f1e22);box-shadow:0 8px 20px rgba(0,0,0,.2)}
 .card{background:var(--card);border:2px solid var(--line);border-radius:20px;padding:16px 18px;margin-top:16px}
 .card h2{margin:0 0 8px;font-size:18px}
 ol{margin:0;padding-inline-start:22px}li{margin:4px 0}
@@ -53,6 +54,10 @@ footer{text-align:center;color:var(--muted);font-size:14px;padding:10px 16px 30p
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
       <span><b>تنزيل للحاسوب (ويندوز)</b><small>ويندوز 10 و 11 — يعمل مع قارئ الباركود</small></span>
     </a>
+    <a class="btn web" href="app/">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M2.5 12h19M12 2.5c2.6 2.8 3.8 6 3.8 9.5s-1.2 6.7-3.8 9.5c-2.6-2.8-3.8-6-3.8-9.5s1.2-6.7 3.8-9.5z"/></svg>
+      <span><b>افتحه من المتصفح (آيفون وآيباد)</b><small>بلا تنزيل — يعمل على أي جوال أو حاسوب، وبلا إنترنت بعد أول فتح</small></span>
+    </a>
   </div>
 
   <p id="ver" class="muted" style="text-align:center;margin:10px 0 0" hidden></p>
@@ -81,6 +86,16 @@ footer{text-align:center;color:var(--muted);font-size:14px;padding:10px 16px 30p
       <li>اضغط «تنزيل للجوال» وانتظر انتهاء التنزيل.</li>
       <li>افتح الملف من الإشعارات أو من «التنزيلات».</li>
       <li>إن سألك الجوال، اسمح بـ«التثبيت من هذا المصدر» ثم «تثبيت».</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>على الآيفون والآيباد</h2>
+    <ol>
+      <li>افتح <a href="app/">makeflow.tech/apps/cashier/app</a> في <b>سفاري</b>.</li>
+      <li>اضغط زر المشاركة <span aria-hidden="true">⬆︎</span> ثم «إضافة إلى الشاشة الرئيسية».</li>
+      <li>افتحه من أيقونته: يعمل كتطبيق، ويمسح الباركود بالكاميرا، وبياناتك على جهازك.</li>
+      <li>عندك حساب على جوال آخر؟ ادخل برقمك وكلمة السر فيرجع محلك كاملًا.</li>
     </ol>
   </div>
 

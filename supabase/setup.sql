@@ -1,4 +1,4 @@
--- دفترة كاشير — إعداد الخادم كاملًا (0001_init.sql + 0002_invoice_line_position.sql + 0003_licensing.sql + 0004_accounts.sql)
+-- دفترة كاشير — إعداد الخادم كاملًا (0001_init.sql + 0002_invoice_line_position.sql + 0003_licensing.sql + 0004_accounts.sql + 0005_scale_code.sql)
 -- يُبنى تلقائيًا من supabase/migrations — لا تعدّله هنا. آمن لإعادة التشغيل.
 -- Supabase Studio ← SQL Editor ← New query ← الصق كل الملف ← Run
 
@@ -145,6 +145,7 @@ create table if not exists public.cashier_products (
   parent_id     uuid,                                 -- المرحلة 2: الصنف الأم للمقاسات والألوان
   variant       jsonb,                                -- المرحلة 2: {"size":"L","color":"أحمر"}
   note          text,
+  scale_code    text,                                 -- رقم الصنف في الميزان (PLU) لباركود الميزان
   created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
   deleted boolean not null default false, server_seq bigint, server_at timestamptz
 );
@@ -1028,5 +1029,10 @@ grant execute on function public.cashier_account_get(uuid) to authenticated;
 grant execute on function public.cashier_account_login(text, text) to authenticated;
 grant execute on function public.cashier_account_reset_request(text) to authenticated;
 grant execute on function public.cashier_account_reset(text, text, text) to authenticated;
+
+-- ===== 0005_scale_code.sql =====
+-- رقم الصنف في الميزان (PLU): ملصق الميزان (EAN-13 يبدأ بـ 20–29) فيه رقم الصنف والوزن أو السعر.
+-- لمن شغّل 0001 قبل إضافة العمود. آمن لإعادة التشغيل.
+alter table public.cashier_products add column if not exists scale_code text;
 
 select 'دفترة كاشير: تم تجهيز الخادم ✓' as result;

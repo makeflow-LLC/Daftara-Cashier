@@ -21,7 +21,7 @@ export const TABLES = [
   { name: 'products', remote: 'cashier_products', mode: 'lww', columns: {
     id: null, shop_id: null, name: '', barcode: null, internal_code: false, category_id: null, unit: 'piece',
     cost_price: 0, sell_price: 0, currency: 'ILS', low_stock: null, track_expiry: false, expiry_date: null,
-    is_quick: false, quick_sort: 0, parent_id: null, variant: null, note: null, ...LWW } },
+    is_quick: false, quick_sort: 0, parent_id: null, variant: null, note: null, scale_code: null, ...LWW } },
   { name: 'product_units', remote: 'cashier_product_units', mode: 'lww', columns: {
     id: null, shop_id: null, product_id: null, name: '', factor: 1000, barcode: null, sell_price: null, ...LWW } },
   { name: 'product_images', remote: 'cashier_product_images', mode: 'lww', columns: {

@@ -10,6 +10,7 @@ import { openFeedback } from '../help/feedback.js';
 import { licenseBanner } from '../subscribe/subscribe.js';
 import { accountBanner } from '../account/account.js';
 import { reminderBanner } from '../customers/remind.js';
+import { shouldShowInstallHint, dismissInstallHint, isIos } from '../../core/pwa.js';
 
 export function renderHome(el) {
   const kpis = h('div', { class: 'kpis' });
@@ -29,6 +30,7 @@ export function renderHome(el) {
         syncBadge()),
       kpis),
     h('div', { class: 'page home-page' },
+      installBanner(),
       licenseBanner(),
       reminderBanner(),
       accountBanner(),
@@ -107,4 +109,17 @@ export function renderHome(el) {
 
 function quick(ic, label, onclick, tone = '') {
   return h('button', { class: `quick-btn ${tone ? `quick-${tone}` : ''}`.trim(), type: 'button', onclick }, icon(ic, 26), h('span', null, label));
+}
+
+// نسخة الويب في المتصفح: كيف تضعها على الشاشة الرئيسية فتفتح كتطبيق وتعمل بلا إنترنت
+function installBanner() {
+  if (!shouldShowInstallHint()) return null;
+  const how = isIos()
+    ? 'اضغط زر المشاركة ⬆︎ في سفاري ثم «إضافة إلى الشاشة الرئيسية».'
+    : 'من قائمة المتصفح ⋮ اختر «إضافة إلى الشاشة الرئيسية» أو «تثبيت التطبيق».';
+  const el = h('div', { class: 'beta-banner install-banner' },
+    icon('phone', 26),
+    h('span', { class: 'row-main' }, h('strong', null, 'ضع دفترة كاشير على شاشة جوالك'), h('span', null, how)),
+    h('button', { class: 'icon-btn sm', type: 'button', 'aria-label': 'إخفاء', onclick: () => { dismissInstallHint(); el.remove(); } }, icon('x', 18)));
+  return el;
 }

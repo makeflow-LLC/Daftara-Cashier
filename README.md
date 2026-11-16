@@ -161,6 +161,22 @@ payments and backup stay open.
 - Sending by itself needs the `direct` APK (`SmsPlugin.java`, `SEND_SMS` in `src/direct/AndroidManifest.xml`);
   Google Play does not allow that permission, so `play` and desktop open WhatsApp / the messages app per customer.
 
+## Scale barcodes, quick buttons, web app
+
+- `src/domain/scale.js` — pure: scale label parsing (EAN-13, prefixes like `20-29`, 4/5/6-digit item code, weight in grams
+  or price in agorot), quantity from weight or price (price labels: rounded up, the 1–2 agorot difference becomes a line
+  discount so the line equals the label). Settings → «ميزان الباركود» (`shop.settings.scale`, off by default).
+  Products carry `scale_code` (PLU, normalized without leading zeros; migration `0005`). `repo.resolveScan()`:
+  an exact product/pack barcode always wins, then the scale label. Each label is its own cart line.
+- Quick buttons (products with `is_quick`, usually no barcode): a «زر جديد» tile on the sale screen opens the product
+  form with the switch on. At ≥900px (desktop, tablets) the sale screen is two columns: cart on the right, a large
+  quick-button grid with category chips on the left.
+- Web app (flavor `web`, `npm run serve:web`): same files plus `manifest.webmanifest`, iPhone icons, `sw.js` (precaches
+  every file, offline after the first visit) and ZXing WebAssembly (`zxing-wasm`, copied at build, web only) for the
+  camera, since Safari has no `BarcodeDetector` (`src/ui/detector.js`). Published with the site at
+  `https://makeflow.tech/apps/cashier/app/`. The device key on the web is the random id stored in the browser, so
+  clearing site data gives a new device (trial/activation codes are per device).
+
 ## Windows (desktop) and releases
 
 - `desktop/` — Electron wrapper (same `www`, flavor `desktop`): pages served from `app://cashier` (ES modules,

@@ -38,7 +38,10 @@ export function renderSale(el) {
   const search = input({ type: 'search', placeholder: 'ابحث بالاسم أو اكتب الباركود', enterkeyhint: 'search', autocomplete: 'off' });
   const results = h('div', { class: 'search-results', hidden: true });
   const quick = h('div', { class: 'quick-grid' });
-  const custEl = h('div');
+  const quickCats = h('div', { class: 'chips quick-cats', hidden: true });
+  const quickWrap = h('div', { class: 'quick-wrap' }, quickCats, quick);
+  let quickCat = null;          // تصنيف أزرار البيع السريع المختار (الشاشة العريضة)
+  const custEl = h('div', { class: 'sale-cust' });
   const cartEl = h('div', { class: 'cart' });
   const totalEl = h('div', { class: 'paybar-total' });
   // أزرار بأيقونة واسم ظاهر: لا تخمين
@@ -53,7 +56,7 @@ export function renderSale(el) {
     header('بيع', { back: true, actions: [torchBtn, camBtn, heldBtn, labeled('undo', 'مرتجع', 'مرتجع', () => navigate('/sale/returns'))] }),
     scanBox, camStatus,
     h('div', { class: 'sale-search' }, h('div', { class: 'search-row' }, icon('search', 20), search), results),
-    quick, custEl, cartEl,
+    quickWrap, custEl, cartEl,
     h('div', { class: 'paybar paybar-2' },
       h('div', { class: 'paybar-tools' },
         labeled('tag', 'خصم', 'خصم على الفاتورة', openDiscount, 'pill'),
@@ -180,7 +183,8 @@ export function renderSale(el) {
 
   async function onCode(raw) {
     const code = normalizeBarcode(raw);
-    const hit = await app.products.findByCode(code);
+    const hit = await app.products.resolveScan(code, app.shop?.settings?.scale);
+    if (hit && hit.scale) return addScaled(hit, code);
     if (!hit) {
       feedback.error();
       toast('باركود غير مسجّل', { kind: 'error' });
@@ -188,6 +192,24 @@ export function renderSale(el) {
       return;
     }
     await addProduct(hit.product, hit.pack);
+  }
+
+  // ملصق الميزان: الوزن (أو السعر) من الباركود نفسه، سطر مستقل لكل ملصق
+  async function addScaled(hit, code) {
+    if (!hit.product) {
+      feedback.error();
+      toast(`ملصق ميزان: لا صنف برقم ${hit.scale.code}`, { kind: 'error', ms: 4000 });
+      return;
+    }
+    if (hit.invalid) {
+      feedback.error();
+      toast(`«${hit.product.name}» بلا سعر بيع — اكتب سعره في بطاقة الصنف`, { kind: 'error', ms: 4000 });
+      return;
+    }
+    const s = await app.db.stock.get(hit.product.id);
+    const line = makeLine(hit.product, { qty: hit.qty, avgCost: s ? s.avgCost : null, key: `${hit.product.id}:scale:${code}:${Date.now()}` });
+    cart.lines = addLine(cart.lines, { ...line, discount: hit.discount || 0 });
+    changed();
   }
 
   function offerNew(code) {
@@ -225,11 +247,27 @@ export function renderSale(el) {
 
   async function loadProducts() {
     products = await app.products.list();
-    const q = products.filter((p) => p.is_quick).sort((a, b) => (a.quick_sort - b.quick_sort) || a.name.localeCompare(b.name, 'ar'));
-    if (!app.feature('quickItems') || !q.length) { quick.hidden = true; return; }
-    quick.hidden = false;
-    fill(quick, ...q.map((p) => h('button', { class: 'quick-item', type: 'button', onclick: () => { feedback.tap(); addProduct(p); } },
-      productThumb(p, 44), h('span', { class: 'qi-name' }, p.name), h('span', { class: 'qi-price' }, money(p.sell_price, p.currency)))));
+    paintQuick();
+  }
+
+  // أزرار البيع السريع: الأصناف بلا باركود (خبز، أكياس، فلافل…) بضغطة. على الحاسوب والشاشة العريضة
+  // تصير شبكة كبيرة بجانب السلة، مع تصنيفات للتصفية. الزر الأخير يضيف زرًا جديدًا.
+  async function paintQuick() {
+    if (!app.feature('quickItems') || !products) { quickWrap.hidden = true; return; }
+    const all = products.filter((p) => p.is_quick).sort((a, b) => (a.quick_sort - b.quick_sort) || a.name.localeCompare(b.name, 'ar'));
+    const catIds = [...new Set(all.map((p) => p.category_id).filter(Boolean))];
+    const cats = catIds.length ? (await app.products.categories()).filter((c) => catIds.includes(c.id)) : [];
+    if (quickCat && !cats.some((c) => c.id === quickCat)) quickCat = null;
+    const shown = quickCat ? all.filter((p) => p.category_id === quickCat) : all;
+    quickWrap.hidden = false;
+    quickWrap.classList.toggle('empty', !all.length);
+    quickCats.hidden = cats.length < 1 || all.length < 6;
+    const chip = (id, label) => h('button', { class: `chip ${quickCat === id ? 'on' : ''}`, type: 'button', onclick: () => { quickCat = id; paintQuick(); } }, label);
+    fill(quickCats, chip(null, 'الكل'), ...cats.map((c) => chip(c.id, c.name)));
+    fill(quick, ...shown.map((p) => h('button', { class: 'quick-item', type: 'button', title: p.name, onclick: () => { feedback.tap(); addProduct(p); } },
+      productThumb(p, 44), h('span', { class: 'qi-name' }, p.name), h('span', { class: 'qi-price' }, money(p.sell_price, p.currency)))),
+    h('button', { class: 'quick-item quick-add', type: 'button', title: 'زر بيع سريع لصنف بلا باركود', onclick: () => navigate('/products/edit?quick=1') },
+      icon('plus', 26), h('span', { class: 'qi-name' }, all.length ? 'زر جديد' : 'أضف زرًا لصنف بلا باركود')));
   }
 
   // ---------- الكاميرا ----------
@@ -371,7 +409,9 @@ export function renderSale(el) {
 }
 
 function readPref() {
-  try { return localStorage.getItem(PREF) !== 'off'; } catch { return true; }
+  // نسخة الويب على حاسوب (فأرة): الكاميرا مطفأة حتى يشغّلها، فالقارئ USB هو المعتاد
+  const pc = (globalThis.CASHIER_CONFIG || {}).flavor === 'web' && globalThis.matchMedia?.('(pointer:fine)').matches;
+  try { const v = localStorage.getItem(PREF); return v ? v !== 'off' : !pc; } catch { return !pc; }
 }
 function writePref(on) {
   try { localStorage.setItem(PREF, on ? 'on' : 'off'); } catch { /* */ }

@@ -279,11 +279,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
       - name: Site files
         run: |
           cp -r site _site
           cp tools/license-generator.html _site/admin/index.html
           ls -la _site _site/admin
+      # نسخة الويب (آيفون وأي متصفح): makeflow.tech/apps/cashier/app/ — نفس التطبيق، تعمل بلا إنترنت بعد أول فتح
+      - name: Web app
+        env:
+          VERSION_NAME: ${{ needs.meta.outputs.version }}
+          VERSION_CODE: ${{ github.run_number }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: node scripts/build-www.mjs _site/app web
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
       - name: Upload over FTPS
         env:
@@ -310,15 +323,16 @@ jobs:
           done
           if [ -n "$T" ]; then
             echo "upload: Daftara account -> apps/cashier/"
-            lftp -c "$L; cd '$T'; mkdir -pf cashier/admin; mirror --reverse --verbose --parallel=4 _site/ cashier/"
+            lftp -c "$L; cd '$T'; mkdir -pf cashier/admin cashier/app; mirror --reverse --verbose --parallel=4 _site/ cashier/"
           else
             echo "upload: dedicated account (opens on apps/cashier) -> account root"
-            lftp -c "$L; rm -rf cashier; mkdir -pf admin; mirror --reverse --verbose --parallel=4 _site/ ./"
+            lftp -c "$L; rm -rf cashier; mkdir -pf admin app; mirror --reverse --verbose --parallel=4 _site/ ./"
           fi
           # تحقّق من الموقع الحي
           sleep 5
           code=$(curl -s -o /dev/null -w '%{http_code}' "https://makeflow.tech/apps/cashier/?v=${{ github.run_number }}")
           admin=$(curl -s -o /dev/null -w '%{http_code}' "https://makeflow.tech/apps/cashier/admin/?v=${{ github.run_number }}")
-          echo "download page: $code, code page: $admin"
-          [ "$code" = 200 ] && [ "$admin" = 200 ] || { echo "::error::makeflow.tech/apps/cashier/ is not live ($code / $admin)"; exit 1; }
+          web=$(curl -s -o /dev/null -w '%{http_code}' "https://makeflow.tech/apps/cashier/app/?v=${{ github.run_number }}")
+          echo "download page: $code, code page: $admin, web app: $web"
+          [ "$code" = 200 ] && [ "$admin" = 200 ] && [ "$web" = 200 ] || { echo "::error::makeflow.tech/apps/cashier/ is not live ($code / $admin / $web)"; exit 1; }
           echo "::notice::https://makeflow.tech/apps/cashier/ updated"

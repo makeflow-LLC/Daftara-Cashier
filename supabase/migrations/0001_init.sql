@@ -140,6 +140,7 @@ create table if not exists public.cashier_products (
   parent_id     uuid,                                 -- المرحلة 2: الصنف الأم للمقاسات والألوان
   variant       jsonb,                                -- المرحلة 2: {"size":"L","color":"أحمر"}
   note          text,
+  scale_code    text,                                 -- رقم الصنف في الميزان (PLU) لباركود الميزان
   created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
   deleted boolean not null default false, server_seq bigint, server_at timestamptz
 );

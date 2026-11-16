@@ -2,11 +2,12 @@
 // زر الفلاش، وحقل لكتابة الباركود يدويًا دائمًا (كاميرا معطلة، باركود ممسوح، أو تجربة في المتصفح).
 //
 // على أندرويد تعمل الكاميرا خلف صفحة التطبيق: نجعل الصفحة شفافة في وسطها ونُظهر الإطار فوقها.
-// في المتصفح: BarcodeDetector إن وُجد، وإلا الكتابة اليدوية فقط.
+// في المتصفح (نسخة الويب، آيفون): كاميرا الصفحة مع BarcodeDetector أو ZXing (ui/detector.js)، وإلا الكتابة اليدوية.
 import { h } from './dom.js';
 import { icon } from './icons.js';
 import { feedback } from './feedback.js';
 import { normalizeBarcode } from '../domain/product.js';
+import { createDetector, cameraVideo, cameraStream } from './detector.js';
 
 const FORMATS = ['EAN_13', 'EAN_8', 'UPC_A', 'UPC_E', 'CODE_128', 'CODE_39', 'CODE_93', 'ITF', 'CODABAR'];
 // الباركود يُحسب مرة واحدة ما دام أمام الكاميرا. ليُحسب ثانية: أبعد الكاميرا عنه (ثانية ونصف) ثم امسحه من جديد،
@@ -163,26 +164,32 @@ export function openScanner({ title = 'امسح الباركود', onCode, conti
   }
 
   async function startWeb() {
-    const BD = globalThis.BarcodeDetector;
-    if (!BD || !navigator.mediaDevices?.getUserMedia) {
-      say((globalThis.CASHIER_CONFIG || {}).flavor === 'desktop' ? 'امسح بقارئ الباركود أو اكتبه هنا' : 'اكتب الباركود (الكاميرا تعمل في تطبيق الجوال)');
+    const desktop = (globalThis.CASHIER_CONFIG || {}).flavor === 'desktop';
+    if (desktop || !navigator.mediaDevices?.getUserMedia) {
+      say(desktop ? 'امسح بقارئ الباركود أو اكتبه هنا' : 'اكتب الباركود (الكاميرا تحتاج متصفحًا حديثًا)');
       setTimeout(() => manual.focus(), 100);
       return;
     }
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      say('الكاميرا تفتح…');
+      stream = await cameraStream();
       if (closed) { stream.getTracks().forEach((t) => t.stop()); return; }
-      video = h('video', { class: 'scan-video', playsinline: true, muted: true, autoplay: true });
+      video = cameraVideo('scan-video');
       video.srcObject = stream;
       ui.prepend(video);
-      const det = new BD({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf'] });
+      video.play().catch(() => {});
+      const det = await createDetector();
+      if (closed) return;
+      if (!det) { say('تعذّرت قراءة الباركود بهذا المتصفح. اكتبه هنا.', 'warn'); return; }
+      let busy = false;
       detectTimer = setInterval(async () => {
-        if (paused || video.readyState < 2) return;
-        try { const r = await det.detect(video); if (r[0]) handle(r[0].rawValue); } catch { /* إطار غير جاهز */ }
-      }, 250);
+        if (busy || paused || video.readyState < 2) return;
+        busy = true;
+        try { const r = await det.detect(video); if (r[0]) handle(r[0]); } catch { /* إطار غير جاهز */ } finally { busy = false; }
+      }, 200);
       say('وجّه الكاميرا نحو الباركود');
     } catch {
-      say('لا يمكن فتح الكاميرا. اكتب الباركود.', 'warn');
+      say('لا يمكن فتح الكاميرا: اسمح للموقع باستخدامها، أو اكتب الباركود.', 'warn');
     }
   }
 
@@ -318,21 +325,29 @@ export async function startInlineScanner({ box, onCode, onStatus = () => {} }) {
       return null;
     }
   }
-  const BD = globalThis.BarcodeDetector;
-  if (!BD || !navigator.mediaDevices?.getUserMedia) { onStatus((globalThis.CASHIER_CONFIG || {}).flavor === 'desktop' ? '' : 'الكاميرا تعمل في تطبيق الجوال — ابحث بالاسم أو اكتب الباركود'); return null; }
+  const desktop = (globalThis.CASHIER_CONFIG || {}).flavor === 'desktop';
+  if (desktop || !navigator.mediaDevices?.getUserMedia) { onStatus(desktop ? '' : 'ابحث بالاسم أو اكتب الباركود'); return null; }
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-    const video = h('video', { class: 'scan-video', playsinline: true, muted: true, autoplay: true });
+    stream = await cameraStream();
+    if (stopped) { stream.getTracks().forEach((t) => t.stop()); return null; }
+    const video = cameraVideo('scan-video');
     video.srcObject = stream;
     box.prepend(video);
-    const det = new BD({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf'] });
+    video.play().catch(() => {});
+    const det = await createDetector();
+    if (!det) { await ctl.stop(); onStatus('تعذّرت قراءة الباركود بهذا المتصفح — ابحث بالاسم أو اكتب الباركود'); return null; }
+    let busy = false;
     timer = setInterval(async () => {
-      if (paused || video.readyState < 2) return;
-      try { const r = await det.detect(video); if (r[0]) handle(r[0].rawValue); } catch { /* */ }
-    }, 250);
+      if (busy || paused || stopped || video.readyState < 2) return;
+      busy = true;
+      try { const r = await det.detect(video); if (r[0]) handle(r[0]); } catch { /* */ } finally { busy = false; }
+    }, 200);
+    overlay = h('div', { class: 'cam-overlay' }, h('span', { class: 'cam-hint' }, 'وجّه الكاميرا نحو الباركود'));
+    box.append(overlay);
     return ctl;
   } catch {
-    onStatus('لا يمكن فتح الكاميرا — ابحث بالاسم أو اكتب الباركود');
+    await ctl.stop();
+    onStatus('لا يمكن فتح الكاميرا: اسمح للموقع باستخدامها — أو ابحث بالاسم واكتب الباركود');
     return null;
   }
 }

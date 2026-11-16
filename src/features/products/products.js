@@ -101,8 +101,9 @@ export function renderProducts(el) {
   async function findByScan() {
     const code = await scanOnce('امسح لتجد الصنف');
     if (!code) return;
-    const hit = await app.products.findByCode(code);
-    if (hit) navigate(`/products/edit?id=${hit.product.id}`);
+    const hit = await app.products.resolveScan(code, app.shop?.settings?.scale);
+    if (hit && hit.product) navigate(`/products/edit?id=${hit.product.id}`);
+    else if (hit && hit.scale) toast(`ملصق ميزان: لا صنف برقم ${hit.scale.code} — اكتبه في «رقم الصنف في الميزان»`, { kind: 'info', ms: 4000 });
     else {
       toast('باركود غير مسجّل — أضفه الآن', { kind: 'info' });
       navigate(`/products/edit?barcode=${encodeURIComponent(code)}`);

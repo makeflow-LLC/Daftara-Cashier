@@ -39,5 +39,7 @@ export function createDb(Dexie, name = DB_NAME) {
     held: 'id, created_at',
     files: 'id, kind, state',
   });
+  // 2: رقم الصنف في الميزان (باركود الميزان)
+  db.version(2).stores({ products: 'id, barcode, scale_code, category_id, name, updated_at' });
   return db;
 }
