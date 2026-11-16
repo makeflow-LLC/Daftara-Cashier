@@ -231,6 +231,7 @@ codes page; the code works once.
 
 1. Supabase Studio → SQL Editor → paste `supabase/setup.sql` (all migrations in one file, built by
    `node scripts/build-setup-sql.mjs`) → Run. Safe to re-run after every update.
+   (1.1.0 adds `0006_shop_catalog.sql`: the WhatsApp catalog link shows "not available" until this is run.)
 2. Auth settings: enable **anonymous sign-ins** (`GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED=true`).
 3. GitHub → Settings → Secrets and variables → Actions: add `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
    Without them the app builds and works fully on the device, with sync off.
