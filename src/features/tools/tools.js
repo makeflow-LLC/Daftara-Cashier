@@ -2,7 +2,7 @@
 // ملصقات الباركود A4، والنسخة الاحتياطية.
 import { h, fill, num } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
-import { header, row, button, input, field, emptyState, money } from '../../ui/components.js';
+import { header, row, button, input, field, emptyState, money, switchRow } from '../../ui/components.js';
 import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
 import { readTable } from '../../domain/files.js';
@@ -11,7 +11,7 @@ import { pdfFromJpegs } from '../../domain/invoice.js';
 import { parseMoney, formatMoney, CURRENCIES } from '../../domain/currency.js';
 import { parseDecimal } from '../../domain/money.js';
 import { formatQty, QTY_SCALE } from '../../domain/units.js';
-import { isInternalBarcode } from '../../domain/product.js';
+import { isInternalBarcode, normalizeArabic } from '../../domain/product.js';
 import { uuid } from '../../core/ids.js';
 import { app } from '../../core/app.js';
 import { navigate } from '../../core/router.js';
@@ -104,9 +104,23 @@ export function renderImport(el) {
   let mapping = {};
   let header1 = true;
 
+  let update = true; // الموجود (نفس الباركود أو نفس الاسم): حدّث سعره بدل تخطيه
+
   function start() {
     fill(body, emptyState('clipboard', 'اختر ملف الأصناف', 'ملف Excel (‎.xlsx) أو CSV، كل صنف في سطر. يكفي عمود الاسم وعمود سعر البيع.',
-      button('اختر الملف', { icon: 'clipboard', onclick: choose })));
+      button('اختر الملف', { icon: 'clipboard', onclick: choose })),
+      h('div', { class: 'list section' },
+        row({ icon: 'receipt', title: 'نزّل نموذج Excel جاهز', sub: 'املأه بأصنافك ثم استورده هنا', onclick: template }),
+        row({ icon: 'tag', title: 'تعديل الأسعار في Excel', sub: '«تصدير الأصناف» ← عدّل الأسعار في الملف ← استورده هنا فتتحدّث', onclick: exportProducts })));
+  }
+  async function template() {
+    try {
+      await loadXlsx();
+      const mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      const rows = [['الاسم', 'الباركود', 'سعر البيع', 'سعر التكلفة', 'الكمية', 'التصنيف'],
+        ['سكر 1 كغم', '6291003000017', 5, 4, 20, 'تموين'], ['صابون نابلسي', '', 3.5, 2.25, 48, 'منظفات']];
+      await sendFile({ blob: new Blob([globalThis.Xlsx.build([{ name: 'الأصناف', cols: [32, 18, 12, 12, 10, 16], rows }])], { type: mime }), name: 'products-template.xlsx', mime }, '', 'نموذج أصناف دفترة كاشير', { chooser: true });
+    } catch (e) { console.error(e); feedback.error(); toast('تعذّر تجهيز النموذج', { kind: 'error' }); }
   }
   async function choose() {
     const file = await pickFile('.xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -143,25 +157,40 @@ export function renderImport(el) {
           ...Array.from({ length: width }, (_, i) => h('option', { value: String(i), selected: mapping[f.key] === i }, colLabel(i))));
         return field(f.label + (f.required ? ' *' : ''), sel);
       }),
+      switchRow({ title: 'حدّث أسعار الأصناف الموجودة', sub: 'نفس الباركود (أو نفس الاسم بلا باركود): يتغيّر سعر البيع والتكلفة، والمخزون كما هو', checked: update, onchange: (on) => { update = on; } }),
       summary,
       button('ملف آخر', { kind: 'text', onclick: choose }));
     paintSummary();
   }
   async function run(items) {
-    fill(body, emptyState('refresh', 'جارٍ الاستيراد…', 'لا تغلق التطبيق.'));
-    let added = 0, exists = 0, failed = 0;
+    const progress = h('p', { class: 'num' });
+    fill(body, emptyState('refresh', 'جارٍ الاستيراد…', 'لا تغلق التطبيق.'), progress);
+    let added = 0, updated = 0, same = 0, failed = 0;
     const cats = new Map();
+    // بلا باركود نطابق بالاسم (فإعادة استيراد الملف لا تكرر الأصناف)
+    const byName = new Map((await app.products.list()).filter((p) => !p.barcode).map((p) => [normalizeArabic(p.name), p]));
+    let n = 0;
     for (const it of items) {
+      if (++n % 20 === 0) progress.textContent = `${n} / ${items.length}`;
       try {
-        if (it.barcode && await app.products.findByCode(it.barcode)) { exists++; continue; }
+        const old = it.barcode ? (await app.products.findByCode(it.barcode))?.product : byName.get(normalizeArabic(it.name));
+        if (old) {
+          const changed = old.sell_price !== it.sell_price || (it.cost_price && old.cost_price !== it.cost_price);
+          if (!update || !changed) { same++; continue; }
+          await app.products.save({ ...old, sell_price: it.sell_price, cost_price: it.cost_price || old.cost_price });
+          updated++;
+          continue;
+        }
         let category_id = null;
         if (it.category) { if (!cats.has(it.category)) cats.set(it.category, (await app.products.addCategory(it.category)).id); category_id = cats.get(it.category); }
-        await app.products.save({ name: it.name, barcode: it.barcode, sell_price: it.sell_price, cost_price: it.cost_price, category_id }, { qty: it.qty || null });
+        const r = await app.products.save({ name: it.name, barcode: it.barcode, sell_price: it.sell_price, cost_price: it.cost_price, category_id }, { qty: it.qty || null });
+        if (!it.barcode) byName.set(normalizeArabic(it.name), r.product);
         added++;
       } catch { failed++; }
     }
     feedback.ok();
-    fill(body, emptyState('check', `أُضيف ${added} صنف`, [exists ? `${exists} موجود من قبل (نفس الباركود). ` : '', failed ? `${failed} لم يُحفظ.` : ''].join('') || 'كل شيء تمام.',
+    const parts = [updated ? `تحدّث سعر ${updated} صنف. ` : '', same ? `${same} موجود من قبل بلا تغيير. ` : '', failed ? `${failed} لم يُحفظ.` : ''];
+    fill(body, emptyState('check', added ? `أُضيف ${added} صنف` : updated ? `تحدّث ${updated} صنف` : 'لا جديد في الملف', parts.join('') || 'كل شيء تمام.',
       button('إلى الأصناف', { icon: 'box', onclick: () => navigate('/products', { replace: true }) })));
   }
   start();
