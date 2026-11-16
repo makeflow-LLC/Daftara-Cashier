@@ -1030,3 +1030,4 @@ body{font-weight:500}
 .daily-pages{display:flex;flex-direction:column;gap:var(--space-3);margin:var(--space-4) 0}
 .daily-page{width:100%;height:auto;border-radius:var(--radius-md);box-shadow:var(--shadow-md);background:#fff}
 .daily-nav{justify-content:center}
+.row-on{background:var(--brand-100)}

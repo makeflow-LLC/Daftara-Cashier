@@ -46,6 +46,11 @@
     <!-- الكاميرا لمسح الباركود وتصوير الأصناف فقط؛ تُطلب عند أول مسح، والصور لا تخرج إلا إلى خادم المحل -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <!-- طابعة الفواتير الحرارية عبر بلوتوث: الاتصال بطابعة مقترنة فقط (لا بحث عن أجهزة، فلا إذن موقع) -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
     <!-- إرسال الفاتورة إلى واتساب (العادي أو للأعمال) مباشرة -->
     <queries>
         <package android:name="com.whatsapp" />

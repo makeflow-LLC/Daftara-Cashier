@@ -26,6 +26,7 @@ import { renderSmsSettings } from './settings/sms.js';
 import { renderLock, renderStaff } from './staff/staff.js';
 import { renderOffers } from './offers/offers.js';
 import { renderScaleSettings } from './settings/scale.js';
+import { renderPrinterSettings } from './settings/printer.js';
 import {
   renderSettings, renderShopProfile, renderFeatures, renderCurrencies,
   renderPayments, renderSync, renderAppearance, renderAbout,
@@ -100,6 +101,7 @@ export const MODULES = [
       { path: '/lock', chrome: false, render: renderLock },
       { path: '/settings/staff', perm: 'owner', tab: 'settings', chrome: false, render: renderStaff },
       { path: '/settings/sms', perm: 'settings', tab: 'settings', chrome: false, render: renderSmsSettings },
+      { path: '/settings/printer', perm: 'settings', tab: 'settings', chrome: false, render: renderPrinterSettings },
       { path: '/settings/scale', perm: 'settings', tab: 'settings', chrome: false, render: renderScaleSettings },
       { path: '/settings', perm: 'settings', tab: 'settings', chrome: false, render: renderSettings },
       { path: '/settings/shop', perm: 'settings', tab: 'settings', chrome: false, render: renderShopProfile },

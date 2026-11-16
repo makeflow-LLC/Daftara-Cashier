@@ -18,7 +18,8 @@ import { bus } from '../../core/bus.js';
 import { navigate } from '../../core/router.js';
 import { productThumb } from '../products/thumb.js';
 import { openPay } from './pay.js';
-import { showReceipt } from './receipt.js';
+import { showReceipt, printReceipt } from './receipt.js';
+import { printer } from '../../core/printer.js';
 import { readPrefs } from '../settings/settings.js';
 
 const PREF = 'cashier-sale-camera';
@@ -411,6 +412,8 @@ export function renderSale(el) {
   // بعد الدفع: الفاتورة نفسها (بلا ربح — قد يراها الزبون)، وزر واحد لبيع جديد
   function done(r) {
     if (scanner) scanner.pause();
+    // الطباعة التلقائية إن فعّلها صاحب المحل لهذا الجهاز
+    printer.settings().then(async (s) => { if (s.auto && (await printer.ready())) printReceipt(r.invoice.id); });
     showReceipt(r.invoice.id, { onClose: () => { if (scanner) scanner.resume(); search.blur(); } });
   }
 
