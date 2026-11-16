@@ -21,12 +21,14 @@ import { renderHelp } from './help/help.js';
 import { renderSubscribe } from './subscribe/subscribe.js';
 import { renderAccount, renderAccountRequired } from './account/account.js';
 import { renderSmsSettings } from './settings/sms.js';
+import { renderLock, renderStaff } from './staff/staff.js';
 import { renderScaleSettings } from './settings/scale.js';
 import {
   renderSettings, renderShopProfile, renderFeatures, renderCurrencies,
   renderPayments, renderSync, renderAppearance, renderAbout,
 } from './settings/settings.js';
 
+// perm: صلاحية الموظف المطلوبة لفتح الشاشة (domain/staff.js)، و 'owner' لصاحب المحل وحده.
 // write: true = شاشة كتابة (بيع، شراء، تعديل أصناف): في وضع القراءة فقط تُحوَّل إلى «الاشتراك».
 export const MODULES = [
   { id: 'home', routes: [{ path: '/', tab: 'home', render: renderHome }] },
@@ -34,16 +36,16 @@ export const MODULES = [
     id: 'sale',
     routes: [
       { path: '/sale', write: true, chrome: false, render: renderSale },
-      { path: '/sale/returns', write: true, chrome: false, render: renderReturns },
+      { path: '/sale/returns', perm: 'returns', write: true, chrome: false, render: renderReturns },
     ],
   },
   {
     id: 'products',
     routes: [
       { path: '/products', tab: 'products', render: renderProducts },
-      { path: '/products/edit', write: true, tab: 'products', chrome: false, render: renderProductForm },
-      { path: '/products/rapid', write: true, tab: 'products', chrome: false, render: renderRapidAdd },
-      { path: '/settings/categories', tab: 'settings', chrome: false, render: renderCategories },
+      { path: '/products/edit', perm: 'products', write: true, tab: 'products', chrome: false, render: renderProductForm },
+      { path: '/products/rapid', perm: 'products', write: true, tab: 'products', chrome: false, render: renderRapidAdd },
+      { path: '/settings/categories', perm: 'products', tab: 'settings', chrome: false, render: renderCategories },
     ],
   },
   {
@@ -57,23 +59,23 @@ export const MODULES = [
   {
     id: 'tools',
     routes: [
-      { path: '/tools', tab: 'settings', chrome: false, render: renderTools },
-      { path: '/tools/import', write: true, chrome: false, render: renderImport },
-      { path: '/tools/prices', write: true, chrome: false, render: renderPrices },
-      { path: '/tools/labels', chrome: false, render: renderLabels },
+      { path: '/tools', perm: 'products', tab: 'settings', chrome: false, render: renderTools },
+      { path: '/tools/import', perm: 'products', write: true, chrome: false, render: renderImport },
+      { path: '/tools/prices', perm: 'products', write: true, chrome: false, render: renderPrices },
+      { path: '/tools/labels', perm: 'products', chrome: false, render: renderLabels },
     ],
   },
-  { id: 'reports', routes: [{ path: '/reports', tab: 'settings', chrome: false, render: renderReports }] },
-  { id: 'cash', routes: [{ path: '/cash', tab: 'settings', chrome: false, render: renderCash }] },
+  { id: 'reports', routes: [{ path: '/reports', perm: 'reports', tab: 'settings', chrome: false, render: renderReports }] },
+  { id: 'cash', routes: [{ path: '/cash', perm: 'cash', tab: 'settings', chrome: false, render: renderCash }] },
   { id: 'invoices', routes: [{ path: '/invoices', tab: 'settings', chrome: false, render: renderInvoices }] },
   {
     id: 'inventory',
     routes: [
-      { path: '/inventory', tab: 'settings', chrome: false, render: renderInventory },
-      { path: '/inventory/purchase', write: true, chrome: false, render: renderPurchase },
-      { path: '/inventory/count', write: true, chrome: false, render: renderCount },
-      { path: '/suppliers', chrome: false, render: renderSuppliers },
-      { path: '/suppliers/view', chrome: false, render: renderSupplier },
+      { path: '/inventory', perm: 'purchases', tab: 'settings', chrome: false, render: renderInventory },
+      { path: '/inventory/purchase', perm: 'purchases', write: true, chrome: false, render: renderPurchase },
+      { path: '/inventory/count', perm: 'purchases', write: true, chrome: false, render: renderCount },
+      { path: '/suppliers', perm: 'purchases', chrome: false, render: renderSuppliers },
+      { path: '/suppliers/view', perm: 'purchases', chrome: false, render: renderSupplier },
     ],
   },
   {
@@ -82,17 +84,19 @@ export const MODULES = [
       { path: '/more', tab: 'settings', render: renderMore },
       { path: '/help', tab: 'settings', chrome: false, render: renderHelp },
       { path: '/subscribe', tab: 'settings', chrome: false, render: renderSubscribe },
-      { path: '/account', tab: 'settings', chrome: false, render: renderAccount },
+      { path: '/account', perm: 'settings', tab: 'settings', chrome: false, render: renderAccount },
       { path: '/account/required', chrome: false, render: renderAccountRequired },
-      { path: '/settings/sms', tab: 'settings', chrome: false, render: renderSmsSettings },
-      { path: '/settings/scale', tab: 'settings', chrome: false, render: renderScaleSettings },
-      { path: '/settings', tab: 'settings', chrome: false, render: renderSettings },
-      { path: '/settings/shop', tab: 'settings', chrome: false, render: renderShopProfile },
-      { path: '/settings/features', tab: 'settings', chrome: false, render: renderFeatures },
-      { path: '/settings/currencies', tab: 'settings', chrome: false, render: renderCurrencies },
-      { path: '/settings/payments', tab: 'settings', chrome: false, render: renderPayments },
-      { path: '/settings/sync', tab: 'settings', chrome: false, render: renderSync },
-      { path: '/settings/appearance', tab: 'settings', chrome: false, render: renderAppearance },
+      { path: '/lock', chrome: false, render: renderLock },
+      { path: '/settings/staff', perm: 'owner', tab: 'settings', chrome: false, render: renderStaff },
+      { path: '/settings/sms', perm: 'settings', tab: 'settings', chrome: false, render: renderSmsSettings },
+      { path: '/settings/scale', perm: 'settings', tab: 'settings', chrome: false, render: renderScaleSettings },
+      { path: '/settings', perm: 'settings', tab: 'settings', chrome: false, render: renderSettings },
+      { path: '/settings/shop', perm: 'settings', tab: 'settings', chrome: false, render: renderShopProfile },
+      { path: '/settings/features', perm: 'settings', tab: 'settings', chrome: false, render: renderFeatures },
+      { path: '/settings/currencies', perm: 'settings', tab: 'settings', chrome: false, render: renderCurrencies },
+      { path: '/settings/payments', perm: 'settings', tab: 'settings', chrome: false, render: renderPayments },
+      { path: '/settings/sync', perm: 'settings', tab: 'settings', chrome: false, render: renderSync },
+      { path: '/settings/appearance', perm: 'settings', tab: 'settings', chrome: false, render: renderAppearance },
       { path: '/settings/about', tab: 'settings', chrome: false, render: renderAbout },
     ],
   },

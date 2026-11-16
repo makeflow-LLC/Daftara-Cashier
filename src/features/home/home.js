@@ -10,6 +10,7 @@ import { openFeedback } from '../help/feedback.js';
 import { licenseBanner } from '../subscribe/subscribe.js';
 import { accountBanner, maybeNudgeAccount } from '../account/account.js';
 import { reminderBanner } from '../customers/remind.js';
+import { userChip } from '../staff/staff.js';
 import { shouldShowInstallHint, dismissInstallHint, isIos } from '../../core/pwa.js';
 
 export function renderHome(el) {
@@ -27,7 +28,7 @@ export function renderHome(el) {
     h('div', { class: 'home-top' },
       h('div', { class: 'home-head' },
         h('div', { class: 'topbar-title' }, h('div', { class: 'home-greet' }, `${greet} 👋`), h('h1', null, app.shop?.name || 'محلي'), h('div', { class: 'home-date' }, dateText)),
-        syncBadge()),
+        h('div', { class: 'home-badges' }, userChip(), syncBadge())),
       kpis),
     h('div', { class: 'page home-page' },
       installBanner(),
@@ -37,8 +38,8 @@ export function renderHome(el) {
       stats,
       h('div', { class: 'quick' },
         quick('scan', 'بيع جديد', () => navigate('/sale'), 'brand'),
-        quick('truck', 'شراء بضاعة', () => navigate('/inventory/purchase')),
-        quick('box', 'المخزون', () => navigate('/inventory')),
+        app.can('purchases') ? quick('truck', 'شراء بضاعة', () => navigate('/inventory/purchase')) : null,
+        app.can('purchases') ? quick('box', 'المخزون', () => navigate('/inventory')) : null,
         quick('users', 'الزبائن والديون', () => navigate('/customers')),
       ),
       guide,

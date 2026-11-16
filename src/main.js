@@ -27,6 +27,13 @@ async function start() {
   setGuard((route, path) => {
     // بعد فترة التجربة الحرة (3 أيام أو 20 فاتورة): بلا حساب لا تُفتح أي شاشة غير شاشة إنشائه
     if (app.account.required) return path === '/account/required' ? null : '/account/required';
+    // الموظفون: لا أحد دخل ← «من أنت؟»، ومن لا يملك صلاحية الشاشة يرجع للرئيسية
+    if (app.locked) return path === '/lock' ? null : '/lock';
+    if (path === '/lock' && !app.locked) return '/';
+    if (route && route.perm && !(route.perm === 'owner' ? !app.staff || app.user?.owner : app.can(route.perm))) {
+      setTimeout(() => toast('هذه الشاشة لصاحب المحل — اطلب منه الصلاحية', { kind: 'error' }), 0);
+      return '/';
+    }
     return route && route.write && app.license.compute().readOnly ? '/subscribe' : null;
   });
   window.addEventListener('unhandledrejection', (e) => {

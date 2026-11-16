@@ -21,6 +21,7 @@ export function renderSettings(el) {
     h('div', { class: 'page' },
       section('المحل', h('div', { class: 'list' },
         row({ icon: 'store', title: 'بيانات المحل والشعار', sub: app.shop?.name, onclick: go('/settings/shop') }),
+        row({ icon: 'users', title: 'الموظفون والصلاحيات', sub: app.staff ? `مفعّل — ${(app.staff.members || []).filter((m) => m.active !== false).length} موظف` : 'رمز لكل موظف، والكاشير لا يرى الأرباح', onclick: go('/settings/staff') }),
         row({ icon: 'sliders', title: 'الميزات', sub: `${SHOP_TYPES[app.shop?.shop_type]?.name || ''} — شغّل وأطفئ ما تحتاجه`, onclick: go('/settings/features') }),
         row({ icon: 'tag', title: 'التصنيفات', sub: 'ألبان، معلبات، منظفات…', onclick: go('/settings/categories') }),
         f.multiCurrency ? row({ icon: 'coins', title: 'العملات وأسعار الصرف', onclick: go('/settings/currencies') }) : null,

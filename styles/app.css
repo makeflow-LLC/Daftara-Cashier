@@ -962,3 +962,33 @@ body{font-weight:500}
 }
 .scan-box{isolation:isolate}
 .install-banner{margin:0 0 var(--space-4);background:var(--blue-100);border-color:#a9c9f3;color:var(--blue-700)}
+
+/* ---------------- الموظفون: شاشة القفل ولوحة الرمز ---------------- */
+.people{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:var(--space-3)}
+.person{display:flex;flex-direction:column;align-items:center;gap:6px;padding:var(--space-4) var(--space-2);border-radius:var(--radius-lg);
+  background:var(--color-card);box-shadow:var(--shadow-sm);border:1.5px solid transparent;min-height:132px;color:var(--color-text)}
+.person:active{border-color:var(--brand);background:var(--brand-100)}
+.person-name{font-weight:700;font-size:17px}
+.person-role{font-size:13px;color:var(--color-muted)}
+.person-av{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:24px;
+  background:var(--blue-100);color:var(--blue-700);flex:none}
+.person-av.owner{background:var(--brand-100);color:var(--brand-700)}
+.person-av.sm{width:46px;height:46px;font-size:19px}
+.person-av.xs{width:26px;height:26px;font-size:13px}
+.pin-box{text-align:center;max-width:340px;margin:0 auto;width:100%}
+.pin-box h2{font-size:22px;margin:0 0 4px}
+.pin-dots{display:flex;justify-content:center;gap:14px;margin:var(--space-4) 0 var(--space-2);min-height:20px}
+.pin-dots span{width:16px;height:16px;border-radius:50%;border:2px solid var(--neutral-400)}
+.pin-dots span.on{background:var(--brand);border-color:var(--brand)}
+.pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-3);margin-top:var(--space-3);direction:ltr}
+.pin-key{height:64px;border-radius:var(--radius-md);background:var(--color-card);box-shadow:var(--shadow-sm);font-size:26px;font-weight:700;
+  font-family:var(--font-num);color:var(--color-text);display:grid;place-items:center}
+.pin-key:active{background:var(--brand-100)}
+.pin-ok{background:var(--brand);color:#fff}
+.pin-ok:active{background:var(--brand-600)}
+.pin-del{color:var(--color-muted)}
+.lock .setup-body{gap:var(--space-3)}
+.home-badges{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap;justify-content:flex-end}
+.user-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 6px;border-radius:var(--radius-pill);
+  background:rgba(255,255,255,.18);color:inherit;font-size:14px;font-weight:600;min-height:36px}
+.feature-list{margin:var(--space-3) 0 var(--space-4);padding-right:22px;line-height:1.9;color:var(--color-text)}

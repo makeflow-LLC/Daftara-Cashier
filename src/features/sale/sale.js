@@ -53,13 +53,13 @@ export function renderSale(el) {
   const payBtn = h('button', { class: 'btn btn-primary btn-lg paybtn', type: 'button', onclick: pay }, icon('check', 22), h('span', null, 'ادفع'));
 
   el.append(h('div', { class: 'sale' },
-    header('بيع', { back: true, actions: [torchBtn, camBtn, heldBtn, labeled('undo', 'مرتجع', 'مرتجع', () => navigate('/sale/returns'))] }),
+    header('بيع', { back: true, actions: [torchBtn, camBtn, heldBtn, app.can('returns') ? labeled('undo', 'مرتجع', 'مرتجع', () => navigate('/sale/returns')) : null].filter(Boolean) }),
     scanBox, camStatus,
     h('div', { class: 'sale-search' }, h('div', { class: 'search-row' }, icon('search', 20), search), results),
     quickWrap, custEl, cartEl,
     h('div', { class: 'paybar paybar-2' },
       h('div', { class: 'paybar-tools' },
-        labeled('tag', 'خصم', 'خصم على الفاتورة', openDiscount, 'pill'),
+        app.can('discount') ? labeled('tag', 'خصم', 'خصم على الفاتورة', openDiscount, 'pill') : null,
         labeled('user', 'زبون', 'الزبون', chooseCustomer, 'pill'),
         labeled('clipboard', 'علّق', 'علّق السلة', holdCart, 'pill')),
       h('div', { class: 'paybar-main' }, totalEl, payBtn)),
@@ -143,7 +143,7 @@ export function renderSale(el) {
       },
     },
       field(`الكمية${unitOf(l.unit).measured && !l.unit_id ? ` (${unitOf(l.unit).name})` : ''}`, q),
-      h('div', { class: 'grid-2' }, field('السعر', p), field('خصم على السطر', d)),
+      app.can('discount') ? h('div', { class: 'grid-2' }, field('السعر', p), field('خصم على السطر', d)) : null,
       button('حفظ', { type: 'submit', block: true, size: 'lg', icon: 'check' }),
       button('أزل من السلة', { kind: 'text', onclick: () => { close(); removeLine(i); } }),
     ), { title: l.name });

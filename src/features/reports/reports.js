@@ -12,6 +12,7 @@ import { stockValue } from '../../domain/stock.js';
 import { formatMoney } from '../../domain/currency.js';
 import { app } from '../../core/app.js';
 import { sendFile } from '../invoices/share.js';
+import { staffName } from '../../domain/staff.js';
 
 const KINDS = [['today', 'اليوم'], ['week', '7 أيام'], ['month', 'هذا الشهر'], ['custom', 'مخصص']];
 const FONT = '"Noto Naskh Arabic","Noto Sans Arabic",system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif';
@@ -107,7 +108,8 @@ export function renderReports(el) {
     customRow.hidden = kind !== 'custom';
     const rg = range();
     const [r, snap] = await Promise.all([loadData(rg).then(buildReport), snapshot()]);
-    const sections = reportSections(r, snap, { currency: cur, showProfit });
+    const st = app.shop?.settings?.staff;
+    const sections = reportSections(r, snap, { currency: cur, showProfit, staffName: st && st.members?.length ? (id) => staffName(st, id) : null });
     current = { r, sections, label: rg.label };
     const maxDay = Math.max(1, ...r.byDay.map((d) => d.sales));
     const table = (s) => h('div', { class: 'section' }, h('h2', { class: 'section-title' }, s.title),

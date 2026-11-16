@@ -48,7 +48,7 @@ export function renderTools(el) {
       row({ icon: 'tag', title: 'تحديث الأسعار', sub: 'رفع أو تخفيض بنسبة أو مبلغ، لتصنيف أو للكل', onclick: go('/tools/prices') }),
       app.feature('labels') ? row({ icon: 'scan', title: 'ملصقات الباركود', sub: 'ورقة A4 للطباعة للأصناف بلا باركود', onclick: go('/tools/labels') }) : null,
       row({ icon: 'receipt', title: 'تصدير الأصناف إلى Excel', sub: 'كل الأصناف بأسعارها ومخزونها', onclick: exportProducts }))),
-    h('div', { class: 'section' }, h('h2', { class: 'section-title' }, 'النسخة الاحتياطية'), h('div', { class: 'list' },
+    !app.can('settings') ? null : h('div', { class: 'section' }, h('h2', { class: 'section-title' }, 'النسخة الاحتياطية'), h('div', { class: 'list' },
       row({ icon: 'cloudUp', title: 'احفظ نسخة احتياطية', sub: 'ملف فيه كل بيانات المحل — أرسله لنفسك على واتساب', onclick: saveBackup }),
       row({ icon: 'undo', title: 'استعادة نسخة', sub: 'تستبدل كل ما على هذا الجوال بما في الملف', onclick: () => restoreFromFile() }))),
   ));
