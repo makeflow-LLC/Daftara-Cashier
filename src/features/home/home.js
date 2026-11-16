@@ -20,6 +20,7 @@ import { formatQty } from '../../domain/units.js';
 import { shouldShowInstallHint, dismissInstallHint, isIos } from '../../core/pwa.js';
 
 export function renderHome(el) {
+  assistantMemo = null; // كل فتح للرئيسية بأرقام جديدة؛ إعادة الرسم بعد كل بيع تستعمل المحفوظ
   const kpis = h('div', { class: 'kpis' });
   const alerts = h('div');
   const stats = h('div', { class: 'stats' });
@@ -101,7 +102,7 @@ export function renderHome(el) {
     paintGuide();
     const a = await app.inventory.alerts({ expiry: app.feature('expiry') });
     // المساعد: ما يخلص قريبًا حسب سرعة البيع (أوضح من «منخفض»)
-    const soon = app.can('purchases') ? (await app.inventory.assistant()).soon.filter((x) => x.p.qty > 0).slice(0, 3) : [];
+    const soon = app.can('purchases') ? (await assistantCached()).soon.filter((x) => x.p.qty > 0).slice(0, 3) : [];
     const soonIds = new Set(soon.map((x) => x.p.id));
     // مواعيد الدفع للموردين: متأخر أو خلال 3 أيام
     const dues = app.can('purchases') ? supplierDues(await app.inventory.suppliers(), app.shop?.settings?.supplierDues, localDay()) : [];
@@ -124,6 +125,13 @@ export function renderHome(el) {
   const offShop = bus.on('shop', paint);
   const offDaily = bus.on('dailyReport', () => fill(dailyBox, dailyReportBanner()));
   return () => { off(); offShop(); offDaily(); };
+}
+
+// الرئيسية تُرسم من جديد بعد كل بيع: حساب «يخلص قريبًا» (حركات 30 يومًا) يكفي مرة في الدقيقة وهي مفتوحة
+let assistantMemo = null;
+function assistantCached() {
+  if (!assistantMemo || Date.now() - assistantMemo.at > 60000) assistantMemo = { at: Date.now(), p: app.inventory.assistant() };
+  return assistantMemo.p;
 }
 
 function quick(ic, label, onclick, tone = '') {

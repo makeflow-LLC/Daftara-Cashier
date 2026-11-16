@@ -85,6 +85,13 @@ Nothing else needs to change.
   WhatsApp text; invoice history filter (number, party, product, type, date); `pdfFromJpeg` (no library).
 - `src/features/invoices/` — canvas renderer (device shapes the Arabic), share (image / PDF / text),
   history screen. The receipt sheet has an optional one-tap «أرسل واتساب».
+- Android: `ThermalPrinterPlugin` sends ESC/POS raster bytes to an already-paired Bluetooth receipt printer (SPP,
+  `BLUETOOTH_CONNECT` only — no scanning, no location). The page draws the receipt as an image and encodes it
+  (`src/domain/printer.js`), so Arabic prints on any printer. Desktop/web print the same image via the system dialog.
+- Shop catalog: `shop.html?s=<shop id>` (web build) reads `cashier_shop_catalog` (`0006_shop_catalog.sql`, callable
+  without sign-in, returns data only when the owner enabled the catalog; never cost, stock or customers).
+- Staff (`src/domain/staff.js`), offers (`offers.js`), supplier due dates (`dues.js`) and the daily report settings
+  live in `cashier_shops.settings` — no new synced tables. Invoices/payments carry the employee id in `created_by`.
 - Android: `InvoiceSharePlugin` opens WhatsApp (or WhatsApp Business) on the customer's chat with the
   file attached; falls back to the system share sheet.
 
