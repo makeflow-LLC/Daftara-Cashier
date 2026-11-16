@@ -46,6 +46,32 @@ export function pickProduct({ title = 'اختر الصنف' } = {}) {
   });
 }
 
+// طلبية للمورّد: كل الأصناف محددة والكمية مقترحة؛ عدّل بسرعة ثم اختر المورّد وأرسل على واتساب.
+// items: [{ p, qty }]
+export function openReorder(list) {
+  const items = list.map((x) => ({ p: x.p, on: true, qty: x.qty }));
+  const rows = h('div', { class: 'list picker-list' });
+  const paintRows = () => fill(rows, ...items.map((it) => h('div', { class: `row ${it.on ? '' : 'row-muted'}` },
+    h('button', { class: `check ${it.on ? 'on' : ''}`, type: 'button', 'aria-label': 'تحديد', onclick: () => { it.on = !it.on; paintRows(); } }, it.on ? icon('check', 18) : null),
+    h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, it.p.name), h('span', { class: 'row-sub' }, 'عندك ', num(formatQty(it.p.qty)))),
+    h('div', { class: 'stepper' },
+      h('button', { type: 'button', 'aria-label': 'إنقاص', onclick: () => { it.qty = Math.max(QTY_SCALE, it.qty - QTY_SCALE); paintRows(); } }, icon('minus', 18)),
+      h('span', { class: 'stepper-val num' }, formatQty(it.qty)),
+      h('button', { type: 'button', 'aria-label': 'زيادة', onclick: () => { it.qty += QTY_SCALE; paintRows(); } }, icon('plus', 18))))));
+  paintRows();
+  openSheet((close) => h('div', null, rows, h('div', { class: 'rc-actions' }, button('اختر المورّد وأرسل', {
+    block: true, size: 'lg', icon: 'truck',
+    onclick: async () => {
+      const chosen = items.filter((it) => it.on);
+      if (!chosen.length) { feedback.error(); return; }
+      const s = await pickSupplier({ title: 'أرسل الطلبية إلى…' });
+      if (!s) return;
+      close();
+      openLink(whatsappLink(s.phone, reorderText({ shopName: app.shop.name, supplierName: s.name, items: chosen.map((it) => ({ name: it.p.name, unit: it.p.unit, qty: it.qty })) })));
+    },
+  }))), { title: 'طلبية للمورّد' });
+}
+
 export function renderInventory(el, params) {
   let alerts = { out: [], low: [], expiring: [], dead: [] };
   let tab = 'out';
@@ -55,7 +81,8 @@ export function renderInventory(el, params) {
   const body = h('div');
   const tabs = TABS.filter((t) => !t.feature || app.feature(t.feature));
 
-  el.append(header('المخزون', { back: true }), h('div', { class: 'page' }, actions, valueEl, h('h2', { class: 'section-title' }, 'التنبيهات'), chips, body));
+  const helper = h('div');
+  el.append(header('المخزون', { back: true }), h('div', { class: 'page' }, actions, helper, valueEl, h('h2', { class: 'section-title' }, 'التنبيهات'), chips, body));
   const act = (ic, label, fn, tone = '') => h('button', { class: `quick-btn ${tone}`, type: 'button', onclick: fn }, icon(ic, 26), h('span', null, label));
   fill(actions,
     act('truck', 'شراء بضاعة', () => navigate('/inventory/purchase'), 'quick-brand'),
@@ -79,29 +106,10 @@ export function renderInventory(el, params) {
         : emptyState('check', 'لا شيء هنا', 'كل شيء على ما يرام في هذا القسم.'));
   }
 
-  // طلبية: كل الأصناف محددة والكمية مقترحة؛ عدّل بسرعة ثم أرسل
-  function reorder(list) {
-    const items = list.map((p) => ({ p, on: true, qty: suggestedOrderQty(p) }));
-    const rows = h('div', { class: 'list picker-list' });
-    const paintRows = () => fill(rows, ...items.map((it) => h('div', { class: `row ${it.on ? '' : 'row-muted'}` },
-      h('button', { class: `check ${it.on ? 'on' : ''}`, type: 'button', 'aria-label': 'تحديد', onclick: () => { it.on = !it.on; paintRows(); } }, it.on ? icon('check', 18) : null),
-      h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, it.p.name), h('span', { class: 'row-sub' }, 'عندك ', num(formatQty(it.p.qty)))),
-      h('div', { class: 'stepper' },
-        h('button', { type: 'button', 'aria-label': 'إنقاص', onclick: () => { it.qty = Math.max(QTY_SCALE, it.qty - QTY_SCALE); paintRows(); } }, icon('minus', 18)),
-        h('span', { class: 'stepper-val num' }, formatQty(it.qty)),
-        h('button', { type: 'button', 'aria-label': 'زيادة', onclick: () => { it.qty += QTY_SCALE; paintRows(); } }, icon('plus', 18))))));
-    paintRows();
-    openSheet((close) => h('div', null, rows, h('div', { class: 'rc-actions' }, button('اختر المورّد وأرسل', {
-      block: true, size: 'lg', icon: 'truck',
-      onclick: async () => {
-        const chosen = items.filter((it) => it.on);
-        if (!chosen.length) { feedback.error(); return; }
-        const s = await pickSupplier({ title: 'أرسل الطلبية إلى…' });
-        if (!s) return;
-        close();
-        openLink(whatsappLink(s.phone, reorderText({ shopName: app.shop.name, supplierName: s.name, items: chosen.map((it) => ({ name: it.p.name, unit: it.p.unit, qty: it.qty })) })));
-      },
-    }))), { title: 'طلبية للمورّد' });
+  // طلبية: الكمية من سرعة البيع إن عُرفت (المساعد)، وإلا ضعف حدّ التنبيه
+  async function reorder(list) {
+    const plan = new Map((await app.inventory.assistant()).soon.map((x) => [x.p.id, x.qty]));
+    openReorder(list.map((p) => ({ p, qty: plan.get(p.id) || suggestedOrderQty(p) })));
   }
 
   async function damage() {
@@ -131,6 +139,12 @@ export function renderInventory(el, params) {
     fill(valueEl, app.can('see_cost') ? h('div', { class: 'stats inv-value' },
       h('div', { class: 'stat' }, h('div', { class: 'stat-label' }, 'قيمة المخزون بالتكلفة'), h('div', { class: 'stat-value' }, money(cost))),
       h('div', { class: 'stat' }, h('div', { class: 'stat-label' }, 'قيمته بسعر البيع'), h('div', { class: 'stat-value' }, money(sell)))) : null);
+    const as = await app.inventory.assistant();
+    fill(helper, as.soon.length || as.dead.length ? h('button', { class: 'beta-banner helper-banner', type: 'button', onclick: () => navigate('/inventory/assistant') },
+      icon('bulb', 26),
+      h('span', { class: 'row-main' }, h('strong', null, 'المساعد'),
+        h('span', null, [as.soon.length ? `${as.soon.length} صنف يخلص خلال أسبوع` : '', as.dead.length ? `${as.dead.length} صنف راكد` : ''].filter(Boolean).join(' · '))),
+      icon('chevron', 20)) : null);
     paint();
     if (params.reorder && (alerts.out.length || alerts.low.length)) { params.reorder = null; reorder([...alerts.out, ...alerts.low]); }
   }

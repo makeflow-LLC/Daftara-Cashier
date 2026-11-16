@@ -16,6 +16,7 @@ import { renderInventory } from './inventory/hub.js';
 import { renderPurchase } from './inventory/purchase.js';
 import { renderSuppliers, renderSupplier } from './inventory/suppliers.js';
 import { renderCount } from './inventory/count.js';
+import { renderAssistant } from './inventory/assistant.js';
 import { renderMore } from './more/more.js';
 import { renderHelp } from './help/help.js';
 import { renderSubscribe } from './subscribe/subscribe.js';
@@ -75,6 +76,7 @@ export const MODULES = [
     routes: [
       { path: '/inventory', perm: 'purchases', tab: 'settings', chrome: false, render: renderInventory },
       { path: '/inventory/purchase', perm: 'purchases', write: true, chrome: false, render: renderPurchase },
+      { path: '/inventory/assistant', perm: 'purchases', chrome: false, render: renderAssistant },
       { path: '/inventory/count', perm: 'purchases', write: true, chrome: false, render: renderCount },
       { path: '/suppliers', perm: 'purchases', chrome: false, render: renderSuppliers },
       { path: '/suppliers/view', perm: 'purchases', chrome: false, render: renderSupplier },

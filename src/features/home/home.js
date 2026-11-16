@@ -11,6 +11,8 @@ import { licenseBanner } from '../subscribe/subscribe.js';
 import { accountBanner, maybeNudgeAccount } from '../account/account.js';
 import { reminderBanner } from '../customers/remind.js';
 import { userChip } from '../staff/staff.js';
+import { daysLeftText } from '../../domain/inventory.js';
+import { formatQty } from '../../domain/units.js';
 import { shouldShowInstallHint, dismissInstallHint, isIos } from '../../core/pwa.js';
 
 export function renderHome(el) {
@@ -92,9 +94,13 @@ export function renderHome(el) {
     );
     paintGuide();
     const a = await app.inventory.alerts({ expiry: app.feature('expiry') });
+    // المساعد: ما يخلص قريبًا حسب سرعة البيع (أوضح من «منخفض»)
+    const soon = app.can('purchases') ? (await app.inventory.assistant()).soon.filter((x) => x.p.qty > 0).slice(0, 3) : [];
+    const soonIds = new Set(soon.map((x) => x.p.id));
     const items = [
+      ...soon.map((x) => row({ icon: 'bulb', title: x.p.name, sub: `${daysLeftText(x.daysLeft)} — اطلب ${formatQty(x.qty)}`, tone: 'warn', onclick: () => navigate('/inventory/assistant') })),
       ...a.out.slice(0, 3).map((p) => row({ icon: 'alert', title: p.name, sub: 'نفد من المخزون', tone: 'danger' })),
-      ...a.low.slice(0, 3).map((p) => row({ icon: 'box', title: p.name, sub: 'المخزون منخفض', tone: 'warn' })),
+      ...a.low.filter((p) => !soonIds.has(p.id)).slice(0, 3).map((p) => row({ icon: 'box', title: p.name, sub: 'المخزون منخفض', tone: 'warn' })),
       ...a.expiring.slice(0, 3).map((p) => row({ icon: 'alert', title: p.name, sub: `ينتهي ${p.expiry_date}`, tone: 'warn' })),
     ];
     fill(alerts, items.length

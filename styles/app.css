@@ -1004,3 +1004,11 @@ body{font-weight:500}
 .row-dim{opacity:.6}
 .grid-2 > .field{min-width:0}
 .input[type=date]{min-width:0;width:100%}
+
+/* ---------------- المساعد ---------------- */
+.helper-banner{margin:var(--space-3) 0;background:var(--amber-100);border-color:#f3cf8f;color:var(--amber-700)}
+.txt-danger{color:var(--danger-700)}
+.txt-warn{color:var(--amber-700)}
+.order-pill{flex:none;display:flex;flex-direction:column;align-items:center;padding:4px 12px;border-radius:var(--radius-md);background:var(--brand-100);color:var(--brand-700);font-weight:700}
+.order-pill small{font-size:11px;font-weight:600}
+.chip-action{flex:none;display:inline-flex;align-items:center;gap:4px;background:var(--amber-100);color:var(--amber-700)}
