@@ -47,3 +47,27 @@ export function baseToPack(baseMilli, factorMilli) {
 export function perBaseUnitPrice(packPriceMinor, factorMilli) {
   return divRound(assertInt(packPriceMinor) * QTY_SCALE, assertInt(factorMilli));
 }
+
+// ---------- العبوة الرئيسية: التاجر يفكر بالكرتونة، والمخزون بالقطعة ----------
+/** العبوة التي سعّر بها التاجر (لها سعر بيع)، وإلا الأكبر. null إن لا عبوات. */
+export function mainPack(units) {
+  const live = (units || []).filter((u) => !u.deleted && u.factor > QTY_SCALE);
+  if (!live.length) return null;
+  return live.find((u) => Number.isSafeInteger(u.sell_price)) || live.reduce((a, b) => (b.factor > a.factor ? b : a));
+}
+
+/** يقسم الكمية (بالألف) إلى عبوات كاملة وباقٍ بالوحدة: 46 قطعة وكرتونة 24 ← { packs: 1, rest: 22000 }. */
+export function splitByPack(qtyMilli, factor) {
+  if (!(factor > QTY_SCALE) || qtyMilli <= 0) return { packs: 0, rest: qtyMilli };
+  const packs = Math.floor(qtyMilli / factor);
+  return { packs, rest: qtyMilli - packs * factor };
+}
+
+/** «1 كرتونة و22 قطعة» / «3 كرتونة» / «22 قطعة» (بلا عبوة: الكمية بوحدتها). */
+export function packQtyText(qtyMilli, pack, unitId = 'piece') {
+  const u = unit(unitId).short;
+  if (!pack || qtyMilli <= 0) return `${formatQty(qtyMilli)} ${u}`;
+  const { packs, rest } = splitByPack(qtyMilli, pack.factor);
+  if (!packs) return `${formatQty(rest)} ${u}`;
+  return rest ? `${packs} ${pack.name} و${formatQty(rest)} ${u}` : `${packs} ${pack.name}`;
+}

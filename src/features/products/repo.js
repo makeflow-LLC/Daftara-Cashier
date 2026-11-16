@@ -3,6 +3,7 @@
 import { signedQty } from '../../domain/stock.js';
 import { normalizeBarcode, internalBarcode, isShareableBarcode, validateProduct, validatePack } from '../../domain/product.js';
 import { normalizeScaleCode, parseScaleBarcode, scaleQuantity } from '../../domain/scale.js';
+import { mainPack } from '../../domain/units.js';
 
 export function createProductRepo({ db, store, getContext }) {
   async function stockMap() {
@@ -12,10 +13,13 @@ export function createProductRepo({ db, store, getContext }) {
 
   const repo = {
     async list() {
-      const [products, stock] = await Promise.all([db.products.toArray(), stockMap()]);
+      const [products, stock, units] = await Promise.all([db.products.toArray(), stockMap(), db.product_units.toArray()]);
+      // العبوة الرئيسية لكل صنف (الكرتونة): للعرض «1 كرتونة و22 قطعة» وللبيع والشراء بالكرتونة
+      const byProduct = new Map();
+      for (const u of units) { if (!u.deleted) byProduct.set(u.product_id, [...(byProduct.get(u.product_id) || []), u]); }
       return products
         .filter((p) => !p.deleted)
-        .map((p) => ({ ...p, qty: stock.get(p.id)?.qty ?? 0, avg_cost: stock.get(p.id)?.avgCost ?? p.cost_price }))
+        .map((p) => ({ ...p, qty: stock.get(p.id)?.qty ?? 0, avg_cost: stock.get(p.id)?.avgCost ?? p.cost_price, pack: mainPack(byProduct.get(p.id)) }))
         .sort((a, b) => a.name.localeCompare(b.name, 'ar'));
     },
 

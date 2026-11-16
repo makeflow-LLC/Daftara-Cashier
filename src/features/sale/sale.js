@@ -237,10 +237,14 @@ export function renderSale(el) {
     if (!q || !products) { results.hidden = true; return; }
     const hits = searchProducts(products, q, 8);
     results.hidden = false;
-    fill(results, hits.length ? hits.map((p) => h('button', {
-      class: 'row row-tap', type: 'button',
-      onclick: () => { search.value = ''; results.hidden = true; addProduct(p); },
-    }, productThumb(p, 36), h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, p.name)), money(p.sell_price, p.currency)))
+    const pick = (p, pack = null) => { search.value = ''; results.hidden = true; addProduct(p, pack); };
+    // صنف بكرتونة: زرّان واضحان — قطعة أو كرتونة كاملة
+    fill(results, hits.length ? hits.map((p) => (p.pack && Number.isSafeInteger(p.pack.sell_price)
+      ? h('div', { class: 'row pick-row' }, productThumb(p, 36), h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, p.name)),
+        h('button', { class: 'pick-btn', type: 'button', onclick: () => pick(p) }, h('small', null, unitOf(p.unit).name), money(p.sell_price, p.currency)),
+        h('button', { class: 'pick-btn pick-pack', type: 'button', onclick: () => pick(p, p.pack) }, h('small', null, p.pack.name), money(p.pack.sell_price, p.currency)))
+      : h('button', { class: 'row row-tap', type: 'button', onclick: () => pick(p) },
+        productThumb(p, 36), h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, p.name)), money(p.sell_price, p.currency))))
       : h('div', { class: 'row muted' }, 'لا نتائج'));
   }
   search.addEventListener('input', paintResults);

@@ -9,7 +9,7 @@ import { feedback } from '../../ui/feedback.js';
 import { startInlineScanner } from '../../ui/scanner.js';
 import { purchaseLine, purchaseTotal } from '../../domain/inventory.js';
 import { searchProducts, normalizeBarcode } from '../../domain/product.js';
-import { formatQty, parseQty, lineAmount, QTY_SCALE } from '../../domain/units.js';
+import { formatQty, parseQty, lineAmount, QTY_SCALE, packQtyText, unit as unitOf } from '../../domain/units.js';
 import { parseMoney, formatMoney, CURRENCIES } from '../../domain/currency.js';
 import { formatDecimal } from '../../domain/money.js';
 import { app } from '../../core/app.js';
@@ -76,7 +76,8 @@ export async function renderPurchase(el, params) {
         close(); changed();
       },
     },
-      h('div', { class: 'grid-2' }, field(`الكمية (${l.unit_id ? l.unit : 'بالوحدة'})`, q), field('تكلفة الواحدة', c)),
+      h('div', { class: 'grid-2' }, field(l.unit_id ? `كم ${l.unit}؟` : 'الكمية', q), field(l.unit_id ? `تكلفة ${l.unit.startsWith('ال') ? l.unit : `ال${l.unit}`}` : 'تكلفة الواحدة', c)),
+      l.unit_id ? h('p', { class: 'muted small' }, `${l.unit} = ${formatQty(l.factor)} ${unitOf('piece').short} — المخزون يزيد بالقطع تلقائيًا`) : null,
       button('تم', { type: 'submit', block: true, size: 'lg', icon: 'check' }),
       button('أزل من الفاتورة', { kind: 'text', onclick: () => { draft.lines = draft.lines.filter((_, j) => j !== i); close(); changed(); } }),
     ), { title: l.name, onClose: () => { if (scanner) scanner.resume(); } });
@@ -123,8 +124,15 @@ export async function renderPurchase(el, params) {
     if (!q) { results.hidden = true; return; }
     const hits = searchProducts(products, q, 8);
     results.hidden = false;
-    fill(results, hits.length ? hits.map((p) => h('button', { class: 'row row-tap', type: 'button', onclick: () => { search.value = ''; results.hidden = true; addProduct(p); } },
-      productThumb(p, 36), h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, p.name)), h('span', { class: 'muted small' }, 'مخزون ', num(formatQty(p.qty)))))
+    const pick = (p, pack = null) => { search.value = ''; results.hidden = true; addProduct(p, pack); };
+    // صنف بكرتونة: البضاعة تصل كراتين — «كرتونة» أولًا، و«قطعة» إن اشترى قطعًا
+    fill(results, hits.length ? hits.map((p) => (p.pack
+      ? h('div', { class: 'row pick-row' }, productThumb(p, 36),
+        h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, p.name), h('span', { class: 'row-sub' }, 'عندك ', packQtyText(p.qty, p.pack, p.unit))),
+        h('button', { class: 'pick-btn', type: 'button', onclick: () => pick(p) }, h('small', null, 'شراء بـ'), unitOf(p.unit).name),
+        h('button', { class: 'pick-btn pick-pack', type: 'button', onclick: () => pick(p, p.pack) }, h('small', null, 'شراء بـ'), p.pack.name))
+      : h('button', { class: 'row row-tap', type: 'button', onclick: () => pick(p) },
+        productThumb(p, 36), h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, p.name)), h('span', { class: 'muted small' }, 'مخزون ', num(formatQty(p.qty))))))
       : h('div', { class: 'row muted' }, 'لا نتائج — امسح الباركود لإضافته كصنف جديد'));
   }
   search.addEventListener('input', paintResults);

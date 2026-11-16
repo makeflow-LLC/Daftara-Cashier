@@ -6,7 +6,7 @@ import { header, iconButton, emptyState, syncBadge, button, money } from '../../
 import { toast } from '../../ui/overlay.js';
 import { scanOnce } from '../../ui/scanner.js';
 import { searchProducts } from '../../domain/product.js';
-import { formatQty, unit } from '../../domain/units.js';
+import { formatQty, unit, splitByPack } from '../../domain/units.js';
 import { stockLevel } from '../../domain/stock.js';
 import { DEFAULT_LOW_STOCK_THRESHOLD } from '../../domain/features.js';
 import { QTY_SCALE } from '../../domain/units.js';
@@ -91,10 +91,17 @@ export function renderProducts(el) {
       productThumb(p, 48),
       h('span', { class: 'row-main' },
         h('span', { class: 'row-title' }, p.name),
-        h('span', { class: 'row-sub' }, money(p.sell_price, p.currency), u.id !== 'piece' ? ` / ${u.short}` : ''),
+        // صنف بكرتونة: السعران معًا، والمخزون كراتين وقطع (لا «22 قطعة» وحدها ولا «0.9 كرتونة»)
+        p.pack && Number.isSafeInteger(p.pack.sell_price)
+          ? h('span', { class: 'row-sub' }, `${p.pack.name} `, money(p.pack.sell_price, p.currency), ` · ${u.name} `, money(p.sell_price, p.currency))
+          : h('span', { class: 'row-sub' }, money(p.sell_price, p.currency), u.id !== 'piece' ? ` / ${u.short}` : ''),
       ),
-      h('span', { class: `stock-badge ${lvl ? `stock-${lvl}` : ''}` },
-        h('span', { class: 'num' }, formatQty(p.qty)), h('small', null, u.short)),
+      p.pack && p.qty >= p.pack.factor
+        ? h('span', { class: `stock-badge stock-pack ${lvl ? `stock-${lvl}` : ''}` },
+          h('span', { class: 'num' }, String(splitByPack(p.qty, p.pack.factor).packs)), h('small', null, p.pack.name),
+          splitByPack(p.qty, p.pack.factor).rest ? h('small', { class: 'pack-rest' }, '+', h('span', { class: 'num' }, formatQty(splitByPack(p.qty, p.pack.factor).rest)), ` ${u.short}`) : null)
+        : h('span', { class: `stock-badge ${lvl ? `stock-${lvl}` : ''}` },
+          h('span', { class: 'num' }, formatQty(p.qty)), h('small', null, u.short)),
     );
   }
 
