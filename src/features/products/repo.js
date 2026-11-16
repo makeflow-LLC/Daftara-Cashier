@@ -4,6 +4,8 @@ import { signedQty } from '../../domain/stock.js';
 import { normalizeBarcode, internalBarcode, isShareableBarcode, validateProduct, validatePack } from '../../domain/product.js';
 import { normalizeScaleCode, parseScaleBarcode, scaleQuantity } from '../../domain/scale.js';
 import { mainPack } from '../../domain/units.js';
+import { linkPlan } from '../../domain/link.js';
+import { uuid } from '../../core/ids.js';
 
 export function createProductRepo({ db, store, getContext }) {
   async function stockMap() {
@@ -163,6 +165,48 @@ export function createProductRepo({ db, store, getContext }) {
         return p;
       });
       return { product, isNew, warnings: v.warnings, deviceId: ctx.deviceId };
+    },
+
+    /**
+     * يربط الحبة بالكرتونة في صنف واحد (domain/link.js). args: { cartonId, pieceId?, pieceBarcode?, count, piecePrice? }
+     * في معاملة واحدة: الصنف بسعر الحبة وباركودها، الكرتونة عبوته، المخزون بالحبات، والمكرر يُدمج ويُحذف.
+     */
+    async linkPiece({ cartonId, pieceId = null, pieceBarcode = null, count, piecePrice = null }) {
+      const carton = await db.products.get(cartonId);
+      const piece = pieceId ? await db.products.get(pieceId) : null;
+      if (!carton || carton.deleted) throw new Error('الصنف غير موجود');
+      const units = (await db.product_units.where('product_id').equals(cartonId).toArray()).filter((u) => !u.deleted);
+      const cartonPack = mainPack(units);
+      const code = pieceBarcode ? normalizeBarcode(pieceBarcode) : null;
+      const st = async (id) => { const x = await db.stock.get(id); return { qty: x?.qty ?? 0, avgCost: x?.avgCost ?? 0 }; };
+      const plan = linkPlan({
+        carton, cartonPack, cartonStock: await st(cartonId), piece, pieceStock: piece ? await st(piece.id) : undefined,
+        pieceBarcode: code, count, piecePrice, makeId: uuid,
+      });
+      for (const c of [plan.product.barcode, plan.pack.barcode].filter(Boolean)) {
+        const dup = await repo.findByCode(c);
+        if (dup && dup.product.id !== cartonId && dup.product.id !== pieceId) throw new Error(`الباركود ${c} مسجّل لـ «${dup.product.name}»`);
+      }
+      await store.write(async (w) => {
+        if (piece) await w.put('products', { ...piece, barcode: null, deleted: true });
+        const p = await w.put('products', plan.product);
+        if (carton.sell_price !== p.sell_price || carton.cost_price !== p.cost_price) {
+          await w.append('price_history', { product_id: p.id, old_sell: carton.sell_price, new_sell: p.sell_price, old_cost: carton.cost_price, new_cost: p.cost_price, reason: 'link' });
+        }
+        await w.put('product_units', plan.pack);
+        for (const m of plan.movements) await w.append('movements', m);
+      });
+      return plan;
+    },
+
+    /** «كرتونة لصنف موجود»: يضيف عبوة بباركودها لصنف يُباع بالحبة. */
+    async addPack(productId, { barcode, count, sellPrice = null, name = 'كرتونة' }) {
+      const prod = await repo.get(productId);
+      if (!prod) throw new Error('الصنف غير موجود');
+      if (prod.barcode && normalizeBarcode(barcode) === prod.barcode) throw new Error('هذا باركود الحبة نفسها، لا الكرتونة');
+      const packs = [...prod.units.filter((u) => u.barcode !== normalizeBarcode(barcode)), { id: uuid(), name, factor: count, barcode: normalizeBarcode(barcode), sell_price: sellPrice }];
+      const { units, images, qty, avg_cost, ...rest } = prod;
+      return repo.save(rest, { packs });
     },
 
     remove(id) {

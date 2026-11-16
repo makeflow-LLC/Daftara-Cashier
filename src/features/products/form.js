@@ -9,6 +9,7 @@ import { scanOnce } from '../../ui/scanner.js';
 import { parseMoney, formatMoney, CURRENCIES } from '../../domain/currency.js';
 import { formatDecimal } from '../../domain/money.js';
 import { parseQty, formatQty, UNITS, unit as unitOf, QTY_SCALE, mainPack, splitByPack, lineAmount } from '../../domain/units.js';
+import { linkSheet, mergeFrom } from './link.js';
 import { marginBp, normalizeBarcode, isInternalBarcode, packToPiece, upsertPack } from '../../domain/product.js';
 import { DEFAULT_LOW_STOCK_THRESHOLD } from '../../domain/features.js';
 import { uuid } from '../../core/ids.js';
@@ -351,6 +352,12 @@ export async function renderProductForm(el, params) {
     f.expiry ? field('تاريخ انتهاء الصلاحية', expiry, 'ننبهك قبل الانتهاء بـ 30 يومًا') : null,
     f.quickItems ? h('div', { class: 'list' }, switchRow({ title: 'زر في شاشة البيع', sub: 'للأصناف بلا باركود: خبز، أكياس، فكّة…', checked: isQuick, onchange: (v) => { isQuick = v; } })) : null,
     field('ملاحظة', note));
+  // الحبة والكرتونة صنف واحد: ربط باركود الحبة، أو دمج صنف مكرر (أُدخلت الكرتونة والحبة صنفين)
+  const linkBox = editing && unitId === 'piece' ? h('div', { class: 'list section link-box' },
+    h('button', { class: 'row row-tap', type: 'button', onclick: async () => { const code = await scanOnce('امسح باركود الحبة التي داخل الكرتونة'); if (code) linkSheet({ carton: editing, pieceBarcode: code, onDone: () => history.back() }); } },
+      h('span', { class: 'row-ic' }, icon('scan', 20)), h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, 'هذا كرتونة؟ اربط باركود الحبة التي بداخلها'), h('span', { class: 'row-sub' }, 'فيُباع بالحبة وبالكرتونة من صنف واحد')), icon('chevron', 20)),
+    h('button', { class: 'row row-tap', type: 'button', onclick: () => mergeFrom(editing, () => history.back()) },
+      h('span', { class: 'row-ic' }, icon('copy', 20)), h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, 'مكرر؟ ادمج الحبة والكرتونة'), h('span', { class: 'row-sub' }, 'أُدخلت الكرتونة صنفًا والحبة صنفًا آخر')), icon('chevron', 20))) : null;
   const advToggle = h('button', { class: 'adv-toggle', type: 'button', onclick: () => { adv.hidden = !adv.hidden; advToggle.classList.toggle('open', !adv.hidden); } },
     icon('sliders', 20), h('span', null, 'خيارات إضافية'), h('small', null, [f.units ? 'الوحدة والعبوات' : null, 'التصنيف', f.expiry ? 'الصلاحية' : null, 'التنبيه'].filter(Boolean).join('، ')), icon('chevron', 18));
   if (hasAdvanced) advToggle.classList.add('open');
@@ -377,6 +384,7 @@ export async function renderProductForm(el, params) {
       margin,
       h('div', { class: 'qty-pair' }, h('div', null, h('label', { class: 'field' }, qtyLabel, qty), errorEl('qty')), looseField),
       pieceHint,
+      linkBox,
       advToggle,
       adv,
       h('div', { class: 'sticky-save' }, button(editing ? 'حفظ التعديل' : 'حفظ الصنف', { type: 'submit', block: true, size: 'lg', icon: 'check' })),

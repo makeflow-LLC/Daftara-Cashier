@@ -19,6 +19,7 @@ import { navigate } from '../../core/router.js';
 import { productThumb } from '../products/thumb.js';
 import { openPay } from './pay.js';
 import { showReceipt, printReceipt } from './receipt.js';
+import { unknownBarcode } from '../products/link.js';
 import { printer } from '../../core/printer.js';
 import { readPrefs } from '../settings/settings.js';
 
@@ -198,8 +199,7 @@ export function renderSale(el) {
     if (hit && hit.scale) return addScaled(hit, code);
     if (!hit) {
       feedback.error();
-      toast('باركود غير مسجّل', { kind: 'error' });
-      offerNew(code);
+      offerNew(code); // الورقة نفسها تقول «غير مسجّل» وتسأل ما هو
       return;
     }
     await addProduct(hit.product, hit.pack);
@@ -223,12 +223,14 @@ export function renderSale(el) {
     changed();
   }
 
+  // باركود غير مسجّل: قد يكون حبة من كرتونة مسجّلة — نسأل بدل إنشاء صنف مكرر
   function offerNew(code) {
-    openSheet((close) => h('div', null,
-      h('p', null, 'هذا الباركود غير مسجّل: ', num(code)),
-      button('أضفه كصنف جديد', { block: true, icon: 'plus', onclick: () => { close(); navigate(`/products/edit?barcode=${encodeURIComponent(code)}`); } }),
-      button('تجاهل', { kind: 'text', onclick: close }),
-    ), { title: 'صنف غير معروف' });
+    if (!app.can('products')) { toast('باركود غير مسجّل — اطلب من صاحب المحل إضافته', { kind: 'error', ms: 4000 }); return; }
+    unknownBarcode(code, {
+      context: 'sale',
+      onNew: () => navigate(`/products/edit?barcode=${encodeURIComponent(code)}`),
+      onDone: async () => { await loadProducts(); onCode(code); },
+    });
   }
 
   // ---------- البحث ----------

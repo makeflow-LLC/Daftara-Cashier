@@ -17,6 +17,7 @@ import { compressImage, pickImage } from '../../core/media.js';
 import { uuid } from '../../core/ids.js';
 import { productThumb } from '../products/thumb.js';
 import { pickSupplier, setSupplierDue } from './suppliers.js';
+import { unknownBarcode } from '../products/link.js';
 import { addDays } from '../../domain/dues.js';
 import { localDay } from '../../domain/offers.js';
 import { showReceipt } from '../sale/receipt.js';
@@ -97,6 +98,15 @@ export async function renderPurchase(el, params) {
     const code = normalizeBarcode(raw);
     const hit = await app.products.findByCode(code);
     if (hit) return addProduct(hit.product, hit.pack);
+    // باركود غير مسجّل: غالبًا كرتونة لصنف مسجّل بالحبة (أو العكس) — نسأل قبل إنشاء صنف مكرر
+    if (products.length) {
+      unknownBarcode(code, { context: 'purchase', onNew: () => newProduct(code), onDone: async () => { products = await app.products.list(); onCode(code); } });
+      return;
+    }
+    newProduct(code);
+  }
+
+  function newProduct(code) {
     // صنف جديد وصل مع البضاعة: اسم وسعر بيع، ثم يدخل الفاتورة
     const name = input({ maxlength: 120, placeholder: 'اسم الصنف' });
     const sell = input({ dir: 'ltr', inputmode: 'decimal', placeholder: '0.00' });
