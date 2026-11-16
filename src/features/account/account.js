@@ -171,7 +171,7 @@ export function renderAccountRequired(el) {
   el.append(h('div', { class: 'setup' },
     h('div', { class: 'setup-hero acc-hero' }, h('span', { class: 'acc-ic' }, icon('lock', 30)),
       h('h1', null, 'أنشئ حسابك'),
-      h('p', null, 'رقم جوالك وكلمة سر: بهما تحفظ بيانات محلك، وترجع كاملة إن ضاع الجوال أو غيّرته، وتعمل من الحاسوب أيضًا.')),
+      h('p', null, 'جرّبت دفترة كاشير — الآن احفظ عملك. رقم جوالك وكلمة سر: بهما تحفظ بيانات محلك، وترجع كاملة إن ضاع الجوال أو غيّرته، وتعمل من الحاسوب أيضًا.')),
     h('form', {
       class: 'setup-body',
       onsubmit: (e) => {
@@ -197,12 +197,25 @@ export function renderAccountRequired(el) {
   app.account.refresh().then((p) => { if (p) enter('حسابك مفعّل ✓'); });
 }
 
-/** لافتة صغيرة للرئيسية: تظهر حتى يحمي صاحب المحل بياناته. */
+/** تذكير لطيف مرة واحدة بعد أول فواتير (مع «لاحقًا»): يُعرض في الرئيسية حين يكون صاحب المحل مرتاحًا. */
+export async function maybeNudgeAccount() {
+  if (!app.account.missing || (await app.account.check()) !== 'nudge') return;
+  if (await app.meta.get('account:nudged')) return;
+  await app.meta.set('account:nudged', true);
+  openSheet((close) => h('div', { class: 'done' },
+    h('span', { class: 'acc-ic' }, icon('cloudUp', 34)),
+    h('h2', null, 'محلك بدأ يشتغل 👏'),
+    h('p', null, 'سجّلت أول فواتيرك. احمِ تعبك برقم جوالك وكلمة سر: إن ضاع الجوال أو تعطّل يرجع محلك كاملًا، وتشتغل من الحاسوب أيضًا.'),
+    button('احمِ بياناتي الآن', { block: true, size: 'lg', icon: 'lock', onclick: () => { close(); navigate('/account'); } }),
+    button('لاحقًا', { kind: 'text', block: true, onclick: () => close() })));
+}
+
+/** لافتة صغيرة للرئيسية: تظهر بعد فترة التجول الأولى، حتى يحمي صاحب المحل بياناته. */
 export function accountBanner() {
   const box = h('div');
   if (!app.config.syncEnabled) return box;
-  app.account.phone().then((p) => {
-    if (p) return;
+  Promise.all([app.account.phone(), app.account.check()]).then(([p, stage]) => {
+    if (p || stage === 'explore') return;
     fill(box, h('button', { class: 'lic-banner lic-info', type: 'button', onclick: () => { location.hash = '#/account'; } },
       icon('lock', 26),
       h('span', { class: 'row-main' }, h('strong', null, 'احمِ بياناتك برقم هاتفك'), h('span', null, 'حتى لا تضيع إن ضاع الجوال')),

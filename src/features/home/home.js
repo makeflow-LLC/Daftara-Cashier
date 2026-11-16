@@ -8,7 +8,7 @@ import { todaySummary } from '../../core/queries.js';
 import { navigate } from '../../core/router.js';
 import { openFeedback } from '../help/feedback.js';
 import { licenseBanner } from '../subscribe/subscribe.js';
-import { accountBanner } from '../account/account.js';
+import { accountBanner, maybeNudgeAccount } from '../account/account.js';
 import { reminderBanner } from '../customers/remind.js';
 import { shouldShowInstallHint, dismissInstallHint, isIos } from '../../core/pwa.js';
 
@@ -47,6 +47,8 @@ export function renderHome(el) {
         icon('chat', 26), h('span', { class: 'row-main' }, h('strong', null, app.config.release ? 'رأيك يهمنا' : 'نسخة تجريبية — رأيك يهمنا'), h('span', null, 'بلّغ عن مشكلة أو اطلب ميزة بضغطة')), icon('chevron', 20)),
     ),
   );
+
+  maybeNudgeAccount();
 
   // «ابدأ من هنا»: ثلاث خطوات للمحل الجديد، تختفي حين تكتمل أو يخفيها صاحب المحل
   async function paintGuide() {

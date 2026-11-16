@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import nacl from 'tweetnacl';
 import {
-  accountPhone, displayPhone, passwordProblem, resetRequestMessage, parseResetRequest, resetMessage, extractResetCode, loginProblem,
+  accountPhone, displayPhone, passwordProblem, resetRequestMessage, parseResetRequest, resetMessage, extractResetCode, loginProblem, accountStage,
 } from '../src/domain/account.js';
 
 test('account phone: local, international, Arabic digits → one form', () => {
@@ -29,4 +29,17 @@ test('forgot password: request message → MakeFlow signs → code extracted fro
   const code = `DCR-${Buffer.from(sig).toString('base64url')}`;
   assert.equal(extractResetCode(`تفضل:\n${code}\nشكرًا`), code);
   assert.equal(extractResetCode('لا شيء'), null);
+});
+
+test('account stage: explore freely, nudge after 3 sales, required after 20 sales or 3 days', () => {
+  const now = Date.parse('2026-11-16T12:00:00Z');
+  const ago = (d) => new Date(now - d * 86400000).toISOString();
+  assert.equal(accountStage({ sales: 0, createdAt: ago(0), now }), 'explore');
+  assert.equal(accountStage({ sales: 2, createdAt: ago(2.9), now }), 'explore');
+  assert.equal(accountStage({ sales: 3, createdAt: ago(1), now }), 'nudge');
+  assert.equal(accountStage({ sales: 19, createdAt: ago(1), now }), 'nudge');
+  assert.equal(accountStage({ sales: 20, createdAt: ago(0), now }), 'required');
+  assert.equal(accountStage({ sales: 0, createdAt: ago(3), now }), 'required');
+  assert.equal(accountStage({ sales: 0, createdAt: null, now }), 'explore');
+  assert.equal(accountStage({ sales: 0, createdAt: 'bad', now }), 'explore');
 });

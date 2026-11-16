@@ -21,9 +21,11 @@ async function start() {
   const view = document.getElementById('view');
   mount(view);
   onRoute(closeAllSheets);
+  // مرحلة الحساب تُحدَّث مع كل تنقّل؛ لا نقاطع شاشة مفتوحة (بيع جارٍ مثلًا): الطلب يظهر عند التنقّل التالي
+  onRoute(() => { app.account.check(); });
   // الترخيص: بعد انتهاء المدة تُفتح «الاشتراك» بدل شاشات الكتابة، وأي حفظ مرفوض يدلّ عليها
   setGuard((route, path) => {
-    // الحساب إلزامي: بلا حساب لا تُفتح أي شاشة غير شاشة إنشائه
+    // بعد فترة التجربة الحرة (3 أيام أو 20 فاتورة): بلا حساب لا تُفتح أي شاشة غير شاشة إنشائه
     if (app.account.required) return path === '/account/required' ? null : '/account/required';
     return route && route.write && app.license.compute().readOnly ? '/subscribe' : null;
   });
