@@ -1024,3 +1024,9 @@ body{font-weight:500}
 .due-line{display:flex;align-items:center;gap:4px;margin-top:6px;font-weight:700}
 .due-chips{align-items:center;margin-top:var(--space-3)}
 .due-row .due-main{display:block;line-height:1.9}
+
+/* ---------------- تقرير اليوم ---------------- */
+.daily-banner{margin:0 0 var(--space-4);background:var(--brand-100);border-color:var(--brand-200);color:var(--brand-700)}
+.daily-pages{display:flex;flex-direction:column;gap:var(--space-3);margin:var(--space-4) 0}
+.daily-page{width:100%;height:auto;border-radius:var(--radius-md);box-shadow:var(--shadow-md);background:#fff}
+.daily-nav{justify-content:center}

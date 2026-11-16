@@ -11,6 +11,7 @@ import { licenseBanner } from '../subscribe/subscribe.js';
 import { accountBanner, maybeNudgeAccount } from '../account/account.js';
 import { reminderBanner } from '../customers/remind.js';
 import { userChip } from '../staff/staff.js';
+import { dailyReportBanner } from '../reports/daily.js';
 import { daysLeftText } from '../../domain/inventory.js';
 import { supplierDues, dueText } from '../../domain/dues.js';
 import { localDay } from '../../domain/offers.js';
@@ -26,6 +27,7 @@ export function renderHome(el) {
   const dateText = today.toLocaleDateString('ar-PS-u-nu-latn', { weekday: 'long', day: 'numeric', month: 'long' });
 
   const guide = h('div');
+  const dailyBox = h('div', null, dailyReportBanner());
   const hour = today.getHours();
   const greet = hour < 12 ? 'صباح الخير' : hour < 17 ? 'نهارك سعيد' : 'مساء الخير';
 
@@ -39,6 +41,7 @@ export function renderHome(el) {
       installBanner(),
       licenseBanner(),
       reminderBanner(),
+      dailyBox,
       accountBanner(),
       stats,
       h('div', { class: 'quick' },
@@ -119,7 +122,8 @@ export function renderHome(el) {
     if (e.tables.some((t) => ['invoices', 'payments', 'cash_sessions', 'movements', 'products', 'customer_entries', 'customers'].includes(t))) paint();
   });
   const offShop = bus.on('shop', paint);
-  return () => { off(); offShop(); };
+  const offDaily = bus.on('dailyReport', () => fill(dailyBox, dailyReportBanner()));
+  return () => { off(); offShop(); offDaily(); };
 }
 
 function quick(ic, label, onclick, tone = '') {

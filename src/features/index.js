@@ -11,6 +11,7 @@ import { renderRemind } from './customers/remind.js';
 import { renderInvoices } from './invoices/history.js';
 import { renderCash } from './cash/cash.js';
 import { renderReports } from './reports/reports.js';
+import { renderDailyReport } from './reports/daily.js';
 import { renderTools, renderImport, renderPrices, renderLabels } from './tools/tools.js';
 import { renderInventory } from './inventory/hub.js';
 import { renderPurchase } from './inventory/purchase.js';
@@ -68,7 +69,13 @@ export const MODULES = [
       { path: '/tools/labels', perm: 'products', chrome: false, render: renderLabels },
     ],
   },
-  { id: 'reports', routes: [{ path: '/reports', perm: 'reports', tab: 'settings', chrome: false, render: renderReports }] },
+  {
+    id: 'reports',
+    routes: [
+      { path: '/reports', perm: 'reports', tab: 'settings', chrome: false, render: renderReports },
+      { path: '/reports/daily', perm: 'reports', tab: 'settings', chrome: false, render: renderDailyReport },
+    ],
+  },
   { id: 'cash', routes: [{ path: '/cash', perm: 'cash', tab: 'settings', chrome: false, render: renderCash }] },
   { id: 'invoices', routes: [{ path: '/invoices', tab: 'settings', chrome: false, render: renderInvoices }] },
   {

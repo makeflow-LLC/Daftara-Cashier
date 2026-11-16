@@ -9,6 +9,7 @@ import { configureFeedback } from './ui/feedback.js';
 import { closeTopSheet, closeAllSheets, toast } from './ui/overlay.js';
 import { closeScanner } from './ui/scanner.js';
 import { startPwa } from './core/pwa.js';
+import { watchDailyReport } from './features/reports/daily.js';
 
 async function start() {
   if (window.__oldWebView) return;
@@ -45,6 +46,7 @@ async function start() {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) app.license.compute(); });
   app.bus.on('toast', (a) => toast(...a)); // رسائل من الخدمات (مثل SMS) تظهر للمستخدم
   if (app.ctx.shopId) app.reminders.start(); // التذكير الدوري بالديون
+  watchDailyReport(); // «📊 تقرير اليوم جاهز» في الساعة التي يختارها صاحب المحل
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTopSheet(); });
 
   if (!app.ctx.shopId) {
