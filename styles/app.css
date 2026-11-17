@@ -1050,3 +1050,8 @@ body{font-weight:500}
 .link-side span{font-size:14px;color:var(--color-muted)}
 .link-preview div{margin:2px 0}
 .link-box{margin-top:var(--space-3)}
+
+/* ---------------- التحديثات ---------------- */
+.update-banner{margin:0 0 var(--space-4);background:var(--violet-100);border-color:#cbb6f2;color:var(--violet-700)}
+.update-notes li{margin-bottom:6px}
+.update-notes b{display:block}

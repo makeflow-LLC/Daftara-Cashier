@@ -11,6 +11,7 @@ import { app } from '../../core/app.js';
 import { bus } from '../../core/bus.js';
 import { navigate } from '../../core/router.js';
 import { pickImage } from '../../core/media.js';
+import { checkRow } from './update.js';
 
 const go = (p) => () => navigate(p);
 
@@ -262,6 +263,7 @@ export function renderAbout(el) {
         row({ title: 'دفترة كاشير', end: num(app.info.version) }),
         row({ title: 'النسخة', end: app.info.flavor === 'play' ? 'Google Play' : app.info.flavor === 'direct' ? 'تثبيت مباشر' : app.info.flavor === 'desktop' ? 'نسخة الحاسوب' : 'تجريبية' }),
         row({ title: 'رقم البناء', end: num(String(app.info.build)) }),
+        checkRow(),
       )),
       card(h('div', { class: 'list' },
         row({ icon: 'lock', title: 'سياسة الخصوصية', onclick: () => window.open('https://makeflow.tech/apps/cashier/privacy.html', '_blank') }),

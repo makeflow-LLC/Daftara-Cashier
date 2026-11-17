@@ -12,6 +12,7 @@ import { accountBanner, maybeNudgeAccount } from '../account/account.js';
 import { reminderBanner } from '../customers/remind.js';
 import { userChip } from '../staff/staff.js';
 import { dailyReportBanner } from '../reports/daily.js';
+import { updateBanner } from '../settings/update.js';
 import { daysLeftText } from '../../domain/inventory.js';
 import { supplierDues, dueText } from '../../domain/dues.js';
 import { localDay } from '../../domain/offers.js';
@@ -29,6 +30,7 @@ export function renderHome(el) {
 
   const guide = h('div');
   const dailyBox = h('div', null, dailyReportBanner());
+  const updateBox = updateBanner();
   const hour = today.getHours();
   const greet = hour < 12 ? 'صباح الخير' : hour < 17 ? 'نهارك سعيد' : 'مساء الخير';
 
@@ -39,6 +41,7 @@ export function renderHome(el) {
         h('div', { class: 'home-badges' }, userChip(), syncBadge())),
       kpis),
     h('div', { class: 'page home-page' },
+      updateBox,
       installBanner(),
       licenseBanner(),
       reminderBanner(),
@@ -124,7 +127,7 @@ export function renderHome(el) {
   });
   const offShop = bus.on('shop', paint);
   const offDaily = bus.on('dailyReport', () => fill(dailyBox, dailyReportBanner()));
-  return () => { off(); offShop(); offDaily(); };
+  return () => { off(); offShop(); offDaily(); if (updateBox.cleanup) updateBox.cleanup(); };
 }
 
 // الرئيسية تُرسم من جديد بعد كل بيع: حساب «يخلص قريبًا» (حركات 30 يومًا) يكفي مرة في الدقيقة وهي مفتوحة
