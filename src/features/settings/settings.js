@@ -4,7 +4,7 @@ import { icon } from '../../ui/icons.js';
 import { header, section, row, switchRow, field, input, button, card } from '../../ui/components.js';
 import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback, configureFeedback } from '../../ui/feedback.js';
-import { FEATURES, SHOP_TYPES } from '../../domain/features.js';
+import { FEATURES, SHOP_TYPES, missingWallets } from '../../domain/features.js';
 import { CURRENCIES, EXTRA_CURRENCIES, parseRate } from '../../domain/currency.js';
 import { formatDecimal, normalizeDigits, parseDecimal } from '../../domain/money.js';
 import { app } from '../../core/app.js';
@@ -154,9 +154,22 @@ export function renderCurrencies(el) {
 
 export function renderPayments(el) {
   const list = h('div', { class: 'list' });
+  const wallets = h('div');
   const kinds = { cash: 'نقدًا', transfer: 'تحويل / محفظة', credit: 'آجل (دين على الزبون)' };
+  async function addWallet(name, sort) {
+    await app.store.put('payment_methods', { name, kind: 'transfer', fee_bp: 0, active: true, sort });
+    feedback.ok();
+    toast(`أُضيفت ${name}`, { kind: 'ok' });
+    paint();
+  }
   async function paint() {
     const methods = (await app.db.payment_methods.orderBy('sort').toArray()).filter((m) => !m.deleted);
+    const missing = missingWallets(methods);
+    const nextSort = methods.reduce((mx, m) => Math.max(mx, Number(m.sort) || 0), 0) + 1;
+    fill(wallets, missing.length ? section('محافظ يمكن إضافتها',
+      h('div', { class: 'chips' }, ...missing.map((w, i) =>
+        h('button', { class: 'chip', type: 'button', onclick: () => addWallet(w, nextSort + i) }, icon('plus', 16), ' ', w))),
+    ) : null);
     fill(list, ...methods.map((m) => row({
       icon: m.kind === 'cash' ? 'cash' : m.kind === 'credit' ? 'user' : 'wallet',
       title: m.name,
@@ -168,7 +181,7 @@ export function renderPayments(el) {
   function edit(m) {
     const isNew = !m;
     m = m || { name: '', kind: 'transfer', fee_bp: 0, active: true, sort: 99 };
-    const name = input({ value: m.name, maxlength: 40, placeholder: 'مثال: بنك فلسطين، جوال باي' });
+    const name = input({ value: m.name, maxlength: 40, placeholder: 'مثال: بنك فلسطين، بال باي، رفلكت' });
     let kind = m.kind;
     let active = m.active;
     const kindChips = h('div', { class: 'chips' });
@@ -198,6 +211,7 @@ export function renderPayments(el) {
     header('طرق الدفع', { back: true }),
     h('div', { class: 'page' },
       list,
+      wallets,
       button('أضف طريقة دفع', { kind: 'outline', icon: 'plus', block: true, onclick: () => edit(null) }),
     ),
   );

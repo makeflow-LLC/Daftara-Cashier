@@ -53,6 +53,16 @@ export function defaultPaymentMethods() {
   ];
 }
 
+/** محافظ إلكترونية معروفة تُضاف بضغطة من شاشة طرق الدفع. */
+export const KNOWN_WALLETS = Object.freeze(['محفظة بال باي', 'جوال باي', 'مالتشات', 'رفلكت']);
+
+/** المحافظ المعروفة التي لم تُضف بعد (المقارنة بالاسم بعد حذف المسافات الزائدة). */
+export function missingWallets(methods) {
+  const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+  const have = new Set(methods.filter((m) => !m.deleted).map((m) => norm(m.name)));
+  return KNOWN_WALLETS.filter((w) => !have.has(norm(w)));
+}
+
 export const DEFAULT_LOW_STOCK_THRESHOLD = 5;
 export const EXPIRY_WARNING_DAYS = 30;
 export const DEAD_STOCK_DAYS = 60;
