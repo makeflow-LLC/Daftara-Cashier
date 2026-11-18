@@ -48,7 +48,7 @@ export function defaultPaymentMethods() {
   return [
     { key: 'cash', name: 'نقدًا', kind: 'cash', fee_bp: 0 },
     { key: 'bank', name: 'تحويل بنكي', kind: 'transfer', fee_bp: 0 },
-    { key: 'wallet', name: 'محفظة إلكترونية', kind: 'transfer', fee_bp: 0 },
+    ...KNOWN_WALLETS.map((name, i) => ({ key: `wallet${i + 1}`, name, kind: 'transfer', fee_bp: 0 })),
     { key: 'credit', name: 'آجل (دين)', kind: 'credit', fee_bp: 0 },
   ];
 }

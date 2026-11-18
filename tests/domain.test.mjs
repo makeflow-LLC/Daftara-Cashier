@@ -5,7 +5,7 @@ import { parseMoney, formatMoney, convertToBase, convertFromBase, parseRate } fr
 import { parseQty, formatQty, lineAmount, packToBase, baseToPack, perBaseUnitPrice } from '../src/domain/units.js';
 import { signedQty, stockByProduct, foldProduct, stockLevel, stockValue } from '../src/domain/stock.js';
 import { deviceLetter, formatInvoiceNumber, matchesInvoiceNumber } from '../src/domain/numbering.js';
-import { presetFor, resolveFeatures, SHOP_TYPES, FEATURES, KNOWN_WALLETS, missingWallets } from '../src/domain/features.js';
+import { presetFor, resolveFeatures, SHOP_TYPES, FEATURES, KNOWN_WALLETS, missingWallets, defaultPaymentMethods } from '../src/domain/features.js';
 import { remoteWins, appendWins, makeClock } from '../src/domain/merge.js';
 
 test('divRound rounds half away from zero', () => {
@@ -182,4 +182,11 @@ test('missingWallets: يعرض المحافظ المعروفة غير المضا
   assert.deepEqual(missingWallets([]), [...KNOWN_WALLETS]);
   const methods = [{ name: ' جوال  باي ' }, { name: 'رفلكت', deleted: true }, { name: 'نقدًا' }];
   assert.deepEqual(missingWallets(methods), ['محفظة بال باي', 'مالتشات', 'رفلكت']);
+});
+
+test('defaultPaymentMethods: المحافظ المعروفة جاهزة في المحل الجديد', () => {
+  const names = defaultPaymentMethods().map((m) => m.name);
+  assert.deepEqual(names, ['نقدًا', 'تحويل بنكي', ...KNOWN_WALLETS, 'آجل (دين)']);
+  assert.deepEqual(missingWallets(defaultPaymentMethods()), []);
+  assert.equal(new Set(defaultPaymentMethods().map((m) => m.key)).size, names.length);
 });
