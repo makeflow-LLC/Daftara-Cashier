@@ -11,6 +11,7 @@ import { app } from '../../core/app.js';
 import { bus } from '../../core/bus.js';
 import { navigate } from '../../core/router.js';
 import { pickImage } from '../../core/media.js';
+import { checkRow } from './update.js';
 
 const go = (p) => () => navigate(p);
 
@@ -21,10 +22,12 @@ export function renderSettings(el) {
     h('div', { class: 'page' },
       section('المحل', h('div', { class: 'list' },
         row({ icon: 'store', title: 'بيانات المحل والشعار', sub: app.shop?.name, onclick: go('/settings/shop') }),
+        row({ icon: 'users', title: 'الموظفون والصلاحيات', sub: app.staff ? `مفعّل — ${(app.staff.members || []).filter((m) => m.active !== false).length} موظف` : 'رمز لكل موظف، والكاشير لا يرى الأرباح', onclick: go('/settings/staff') }),
         row({ icon: 'sliders', title: 'الميزات', sub: `${SHOP_TYPES[app.shop?.shop_type]?.name || ''} — شغّل وأطفئ ما تحتاجه`, onclick: go('/settings/features') }),
         row({ icon: 'tag', title: 'التصنيفات', sub: 'ألبان، معلبات، منظفات…', onclick: go('/settings/categories') }),
         f.multiCurrency ? row({ icon: 'coins', title: 'العملات وأسعار الصرف', onclick: go('/settings/currencies') }) : null,
         row({ icon: 'wallet', title: 'طرق الدفع', sub: 'نقدًا، تحويل، محافظ، آجل', onclick: go('/settings/payments') }),
+        row({ icon: 'printer', title: 'طابعة الفواتير', sub: 'طابعة حرارية بلوتوث أو USB — طباعة تلقائية بعد البيع', onclick: go('/settings/printer') }),
         row({ icon: 'scan', title: 'ميزان الباركود', sub: app.shop?.settings?.scale?.enabled ? 'مفعّل — ملصق الميزان يُقرأ بوزنه' : 'مطفأ — امسح ملصق الميزان بوزنه أو سعره', onclick: go('/settings/scale') }),
         row({ icon: 'chat', title: 'رسائل SMS للزبائن', sub: app.shop?.settings?.sms?.enabled ? 'مفعّلة' : 'مطفأة — رسالة تلقائية بعد الدين والدفعة', onclick: go('/settings/sms') }),
       )),
@@ -274,6 +277,7 @@ export function renderAbout(el) {
         row({ title: 'دفترة كاشير', end: num(app.info.version) }),
         row({ title: 'النسخة', end: app.info.flavor === 'play' ? 'Google Play' : app.info.flavor === 'direct' ? 'تثبيت مباشر' : app.info.flavor === 'desktop' ? 'نسخة الحاسوب' : 'تجريبية' }),
         row({ title: 'رقم البناء', end: num(String(app.info.build)) }),
+        checkRow(),
       )),
       card(h('div', { class: 'list' },
         row({ icon: 'lock', title: 'سياسة الخصوصية', onclick: () => window.open('https://makeflow.tech/apps/cashier/privacy.html', '_blank') }),

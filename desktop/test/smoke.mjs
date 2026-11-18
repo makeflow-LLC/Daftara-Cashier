@@ -30,13 +30,20 @@ try {
     const { app } = await import('/src/core/app.js');
     await app.createShop({ name: 'Shop PC', phone: '', shopType: 'grocery' });
     await app.products.save({ name: 'Sugar', barcode: '6291003000017', sell_price: 500, cost_price: 400 }, { qty: 10000 });
-    const mustCreateAccount = app.account.required;
-    await app.meta.set('account:phone', '970599000000'); // محل له حساب (الحساب إلزامي في النسخة المتصلة بالخادم)
-    return { mustCreateAccount, sync: app.config.syncEnabled, flavor: app.info.flavor, device: app.license.device, status: app.license.state.status, days: app.license.state.daysLeft, deviceKey: app.info.deviceKey };
+    const freeAtFirst = !app.account.required; // جرّب قبل أن تسجّل
+    // محل عمره 3 أيام بلا حساب: الحساب مطلوب (في النسخة المتصلة بالخادم)
+    const shop = await app.db.shops.get(app.ctx.shopId);
+    await app.db.shops.put({ ...shop, created_at: new Date(Date.now() - 4 * 86400000).toISOString() });
+    await app.account.check();
+    const requiredLater = app.account.required;
+    await app.db.shops.put(shop);
+    await app.meta.set('account:phone', '970599000000'); // محل له حساب
+    return { freeAtFirst, requiredLater, sync: app.config.syncEnabled, flavor: app.info.flavor, device: app.license.device, status: app.license.state.status, days: app.license.state.daysLeft, deviceKey: app.info.deviceKey };
   });
   console.log('info:', JSON.stringify({ ...info, deviceKey: info.deviceKey ? 'set' : null }));
   if (info.flavor !== 'desktop') fail('not running as desktop');
-  if (info.sync && !info.mustCreateAccount) fail('a new shop was not asked to create an account');
+  if (!info.freeAtFirst) fail('a new shop was asked for an account before trying the app');
+  if (info.sync && !info.requiredLater) fail('a 3-day-old shop was not asked to create an account');
   if (!info.deviceKey) fail('no device key from Windows');
   if (!/^[2-9A-HJ-NP-Z]{5}-[2-9A-HJ-NP-Z]{5}$/.test(info.device)) fail('device code missing');
   if (info.status !== 'trial' || info.days !== 30) fail('trial is not 30 days');

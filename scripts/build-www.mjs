@@ -36,6 +36,8 @@ console.log(`www ready in ${out} — sync ${cfg.supabaseUrl ? 'ON' : 'OFF (no SU
 // نسخة الويب (آيفون وأي متصفح): قارئ باركود ZXing للكاميرا، ملف التثبيت (manifest)، أيقونات آيفون،
 // وعامل الخدمة sw.js الذي يخزّن كل الملفات فيعمل التطبيق بلا إنترنت بعد أول فتح.
 function buildWeb(dir, c) {
+  // كتالوج المحل للزبائن (رابط واتساب): نفس الإعداد config.js ونفس وحدات src/domain
+  cpSync('shop.html', `${dir}/shop.html`);
   const z = 'node_modules/zxing-wasm/dist';
   mkdirSync(`${dir}/vendor/zxing`, { recursive: true });
   cpSync(`${z}/iife/reader/index.js`, `${dir}/vendor/zxing/zxing_reader.js`);

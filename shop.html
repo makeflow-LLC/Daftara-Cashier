@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0e7a51">
+<title>كتالوج المحل</title>
+<!-- كتالوج المحل للزبائن: أصناف المحل وأسعارها، يختار الزبون ثم «اطلب عبر واتساب» فتصل رسالة الطلب جاهزة لصاحب المحل.
+     shop.html?s=<معرّف المحل> — البيانات من دالة cashier_shop_catalog (تعمل فقط إن شغّل صاحب المحل الكتالوج). -->
+<style>
+:root{--bg:#f3f2f2;--card:#fff;--ink:#201e1d;--muted:#605d5d;--line:rgba(32,30,29,.12);--brand:#0e7a51;--brand-100:#e8f5ee;--brand-700:#085134;
+  --grad:linear-gradient(135deg,#0e7a51 0%,#0b6b63 55%,#0a5577 100%);--danger:#aa0b56;
+  --font:"Noto Naskh Arabic","Noto Sans Arabic","Geeza Pro",system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;
+  --num:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color-scheme:only light}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:16px}
+button{font:inherit;cursor:pointer;border:0}
+[hidden]{display:none!important}
+.num{font-family:var(--num);direction:ltr;unicode-bidi:isolate}
+header{background:var(--grad);color:#fff;padding:calc(env(safe-area-inset-top,0px) + 26px) 16px 22px;border-radius:0 0 24px 24px}
+header h1{margin:0 0 4px;font-size:26px}
+header p{margin:2px 0;opacity:.9;font-size:15px}
+.msg{margin-top:10px;background:rgba(255,255,255,.16);padding:10px 12px;border-radius:12px;font-size:15px}
+main{max-width:860px;margin:0 auto;padding:16px 16px 120px}
+.search{display:flex;align-items:center;gap:8px;background:var(--card);border:2px solid var(--line);border-radius:14px;padding:0 12px;min-height:50px}
+.search:focus-within{border-color:var(--brand)}
+.search input{flex:1;min-width:0;border:0;outline:0;font:inherit;font-size:16px;background:transparent;padding:12px 0}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:12px 0 4px;scrollbar-width:none}
+.chip{flex:none;padding:8px 14px;border-radius:999px;background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(45,43,43,.12);font-size:15px;min-height:40px}
+.chip.on{background:var(--brand);color:#fff}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-top:12px}
+.item{background:var(--card);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:6px;box-shadow:0 1px 2px rgba(45,43,43,.12);min-height:140px}
+.item .name{font-weight:700;font-size:16px;line-height:1.4}
+.item .price{color:var(--brand-700);font-weight:700;font-size:17px;margin-top:auto}
+.item .unit{color:var(--muted);font-size:13px;font-weight:400}
+.item.off{opacity:.55}
+.add{background:var(--brand);color:#fff;border-radius:12px;min-height:44px;font-weight:700;font-size:15px}
+.step{display:flex;align-items:center;justify-content:space-between;background:var(--brand-100);border-radius:12px;min-height:44px}
+.step button{width:44px;height:44px;background:transparent;color:var(--brand-700);font-size:22px;font-weight:700}
+.step span{font-weight:700;color:var(--brand-700)}
+.na{color:var(--danger);font-size:14px;font-weight:700}
+.empty{text-align:center;color:var(--muted);padding:40px 10px}
+.bar{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));background:rgba(243,242,242,.96);border-top:1px solid var(--line)}
+.bar button{width:100%;max-width:828px;display:flex;margin:0 auto;align-items:center;justify-content:space-between;gap:10px;background:#1fa855;color:#fff;border-radius:16px;min-height:58px;padding:0 18px;font-weight:700;font-size:17px;box-shadow:0 8px 20px rgba(14,122,81,.3)}
+.sheet{position:fixed;left:0;right:0;top:0;bottom:0;background:rgba(0,0,0,.4);display:flex;align-items:flex-end;justify-content:center;z-index:5}
+.sheet>div{background:var(--bg);width:100%;max-width:640px;max-height:90vh;overflow:auto;border-radius:22px 22px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px))}
+.sheet h2{margin:0 0 10px;font-size:20px}
+.line{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.total{display:flex;justify-content:space-between;font-weight:700;font-size:18px;padding:12px 0}
+label{display:block;margin:10px 0 4px;color:var(--muted);font-size:14px}
+.field{width:100%;font:inherit;font-size:16px;padding:12px;border-radius:12px;border:2px solid var(--line);background:#fff}
+.go{width:100%;margin-top:14px;background:#1fa855;color:#fff;border-radius:14px;min-height:54px;font-weight:700;font-size:17px}
+.ghost{width:100%;margin-top:8px;background:transparent;color:var(--muted);min-height:44px}
+footer{text-align:center;color:var(--muted);font-size:13px;margin-top:28px}
+footer a{color:var(--brand-700)}
+</style>
+</head>
+<body>
+<header id="head"><h1>…</h1></header>
+<main>
+  <div class="search"><span aria-hidden="true">🔍</span><input id="q" type="search" placeholder="ابحث عن صنف" autocomplete="off"></div>
+  <div class="chips" id="cats"></div>
+  <div class="grid" id="grid"></div>
+  <p class="empty" id="empty" hidden></p>
+  <footer>كتالوج بواسطة <a href="https://makeflow.tech/apps/cashier/" rel="noopener">دفترة كاشير</a></footer>
+</main>
+<div class="bar" id="bar" hidden><button id="order" type="button"><span>اطلب عبر واتساب</span><span id="sum"></span></button></div>
+<script src="config.js"></script>
+<script type="module">
+import { normalizePhone, whatsappLink } from './src/domain/ledger.js';
+import { formatMoney } from './src/domain/currency.js';
+import { unit as unitOf } from './src/domain/units.js';
+import { normalizeArabic } from './src/domain/product.js';
+
+const $ = (id) => document.getElementById(id);
+// بديل حديث غير مدعوم في متصفحات الجوالات القديمة: نفرّغ العنصر ثم نضيف
+const fill = (e, ...kids) => { e.textContent = ''; for (const c of kids.flat()) if (c != null) e.append(c instanceof Node ? c : String(c)); };
+const el = (tag, props = {}, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(props)) { if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else if (k === 'class') e.className = v; else e.setAttribute(k, v); } for (const c of kids.flat()) if (c != null) e.append(c instanceof Node ? c : String(c)); return e; };
+const shopId = new URLSearchParams(location.search).get('s') || '';
+const cfg = window.CASHIER_CONFIG || {};
+const key = `catalog-cart:${shopId}`;
+let shop = null, cat = null;
+let cart = {};
+try { cart = JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch { cart = {}; }
+const saveCart = () => { try { localStorage.setItem(key, JSON.stringify(cart)); } catch { /* */ } };
+const money = (v) => formatMoney(v, shop?.currency || 'ILS');
+
+function fail(text) {
+  fill($('head'), el('h1', {}, 'الكتالوج غير متاح'), el('p', {}, text));
+  document.querySelector('main').hidden = true;
+}
+
+async function load() {
+  if (!/^[0-9a-f-]{36}$/i.test(shopId) || !cfg.supabaseUrl) { fail('الرابط غير صحيح. اطلب من المحل الرابط من جديد.'); return; }
+  try {
+    const r = await fetch(`${cfg.supabaseUrl}/rest/v1/rpc/cashier_shop_catalog`, {
+      method: 'POST', headers: { apikey: cfg.supabaseAnonKey, Authorization: `Bearer ${cfg.supabaseAnonKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_shop: shopId }),
+    });
+    if (!r.ok) throw new Error(String(r.status));
+    shop = await r.json();
+  } catch { fail('تعذّر الاتصال — تأكد من الإنترنت ثم أعد فتح الرابط.'); return; }
+  if (!shop) { fail('أوقف المحل الكتالوج مؤقتًا. تواصل معهم مباشرة.'); return; }
+  document.title = `${shop.name} — اطلب عبر واتساب`;
+  fill($('head'), 
+    el('h1', {}, shop.name),
+    shop.address ? el('p', {}, '📍 ', shop.address) : null,
+    shop.phone ? el('p', {}, '📞 ', el('span', { class: 'num' }, shop.phone)) : null,
+    shop.message ? el('div', { class: 'msg' }, shop.message) : null);
+  const ids = new Set(shop.products.map((p) => p.id));
+  for (const id of Object.keys(cart)) if (!ids.has(id)) delete cart[id];
+  paint();
+}
+
+function paint() {
+  const used = new Set(shop.products.map((p) => p.category_id).filter(Boolean));
+  const cats = shop.categories.filter((c) => used.has(c.id));
+  const chip = (id, name) => el('button', { class: `chip ${cat === id ? 'on' : ''}`, type: 'button', onclick: () => { cat = id; paint(); } }, name);
+  fill($('cats'), ...(cats.length ? [chip(null, 'الكل'), ...cats.map((c) => chip(c.id, c.name))] : []));
+  const q = normalizeArabic($('q').value || '');
+  const list = shop.products.filter((p) => (!cat || p.category_id === cat) && (!q || normalizeArabic(p.name).includes(q)));
+  fill($('grid'), ...list.map(card));
+  $('empty').hidden = list.length > 0;
+  $('empty').textContent = shop.products.length ? 'لا أصناف بهذا الاسم' : 'لا أصناف في الكتالوج بعد';
+  paintBar();
+}
+
+function card(p) {
+  const n = cart[p.id] || 0;
+  const u = unitOf(p.unit);
+  const ctl = !p.available ? el('span', { class: 'na' }, 'غير متوفر الآن')
+    : n ? el('div', { class: 'step' },
+      el('button', { type: 'button', 'aria-label': 'زيادة', onclick: () => set(p, n + 1) }, '+'),
+      el('span', { class: 'num' }, String(n)),
+      el('button', { type: 'button', 'aria-label': 'إنقاص', onclick: () => set(p, n - 1) }, '−'))
+      : el('button', { class: 'add', type: 'button', onclick: () => set(p, 1) }, 'أضف للطلب');
+  return el('div', { class: `item ${p.available ? '' : 'off'}` },
+    el('div', { class: 'name' }, p.name),
+    el('div', { class: 'price' }, el('span', { class: 'num' }, money(p.price)), u.measured ? el('span', { class: 'unit' }, ` / ${u.name}`) : null),
+    ctl);
+}
+
+function set(p, n) {
+  if (n > 0) cart[p.id] = Math.min(n, 999); else delete cart[p.id];
+  saveCart(); paint();
+}
+
+function chosen() {
+  const by = new Map(shop.products.map((p) => [p.id, p]));
+  return Object.entries(cart).map(([id, n]) => ({ p: by.get(id), n })).filter((x) => x.p && x.p.available);
+}
+
+function paintBar() {
+  const items = chosen();
+  const total = items.reduce((a, x) => a + x.p.price * x.n, 0);
+  $('bar').hidden = !items.length;
+  fill($('sum'), el('span', {}, `${items.length} صنف · `, el('span', { class: 'num' }, money(total))));
+}
+
+$('order').addEventListener('click', () => {
+  const items = chosen();
+  const total = items.reduce((a, x) => a + x.p.price * x.n, 0);
+  const name = el('input', { class: 'field', autocomplete: 'name', placeholder: 'اختياري' });
+  const note = el('textarea', { class: 'field', rows: '2', placeholder: 'توصيل، وقت الاستلام… (اختياري)' });
+  const sheet = el('div', { class: 'sheet', onclick: (e) => { if (e.target === sheet) sheet.remove(); } }, el('div', {},
+    el('h2', {}, 'طلبك'),
+    ...items.map((x) => el('div', { class: 'line' }, el('span', {}, `${x.p.name} × `, el('span', { class: 'num' }, String(x.n))), el('span', { class: 'num' }, money(x.p.price * x.n)))),
+    el('div', { class: 'total' }, el('span', {}, 'المجموع التقريبي'), el('span', { class: 'num' }, money(total))),
+    el('label', {}, 'اسمك'), name, el('label', {}, 'ملاحظة'), note,
+    el('button', { class: 'go', type: 'button', onclick: () => send(items, total, name.value.trim(), note.value.trim()) }, 'أرسل الطلب على واتساب'),
+    el('button', { class: 'ghost', type: 'button', onclick: () => sheet.remove() }, 'رجوع')));
+  document.body.append(sheet);
+});
+
+function send(items, total, name, note) {
+  const lines = [`مرحبًا ${shop.name}، أريد أن أطلب:`];
+  items.forEach((x, i) => lines.push(`${i + 1}. ${x.p.name} × ${x.n} = ${money(x.p.price * x.n)}`));
+  lines.push(`المجموع: ${money(total)}`);
+  if (name) lines.push(`الاسم: ${name}`);
+  if (note) lines.push(`ملاحظة: ${note}`);
+  lines.push('(من كتالوج المحل)');
+  const phone = normalizePhone(shop.phone || '');
+  location.href = whatsappLink(phone, lines.join('\n'));
+}
+
+$('q').addEventListener('input', () => shop && paint());
+load();
+</script>
+</body>
+</html>

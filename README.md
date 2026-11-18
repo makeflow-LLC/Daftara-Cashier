@@ -85,6 +85,13 @@ Nothing else needs to change.
   WhatsApp text; invoice history filter (number, party, product, type, date); `pdfFromJpeg` (no library).
 - `src/features/invoices/` — canvas renderer (device shapes the Arabic), share (image / PDF / text),
   history screen. The receipt sheet has an optional one-tap «أرسل واتساب».
+- Android: `ThermalPrinterPlugin` sends ESC/POS raster bytes to an already-paired Bluetooth receipt printer (SPP,
+  `BLUETOOTH_CONNECT` only — no scanning, no location). The page draws the receipt as an image and encodes it
+  (`src/domain/printer.js`), so Arabic prints on any printer. Desktop/web print the same image via the system dialog.
+- Shop catalog: `shop.html?s=<shop id>` (web build) reads `cashier_shop_catalog` (`0006_shop_catalog.sql`, callable
+  without sign-in, returns data only when the owner enabled the catalog; never cost, stock or customers).
+- Staff (`src/domain/staff.js`), offers (`offers.js`), supplier due dates (`dues.js`) and the daily report settings
+  live in `cashier_shops.settings` — no new synced tables. Invoices/payments carry the employee id in `created_by`.
 - Android: `InvoiceSharePlugin` opens WhatsApp (or WhatsApp Business) on the customer's chat with the
   file attached; falls back to the system share sheet.
 
@@ -224,6 +231,7 @@ codes page; the code works once.
 
 1. Supabase Studio → SQL Editor → paste `supabase/setup.sql` (all migrations in one file, built by
    `node scripts/build-setup-sql.mjs`) → Run. Safe to re-run after every update.
+   (1.1.0 adds `0006_shop_catalog.sql`: the WhatsApp catalog link shows "not available" until this is run.)
 2. Auth settings: enable **anonymous sign-ins** (`GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED=true`).
 3. GitHub → Settings → Secrets and variables → Actions: add `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
    Without them the app builds and works fully on the device, with sync off.

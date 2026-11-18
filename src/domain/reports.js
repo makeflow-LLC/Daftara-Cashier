@@ -85,8 +85,19 @@ export function buildReport({ invoices, lines, payments, products = [], categori
     byMethod.set(name, (byMethod.get(name) || 0) + p.amount);
   }
 
+  // حسب الموظف (created_by: معرّف الموظف، أو null لصاحب المحل)
+  const staff = new Map();
+  for (const i of [...sales, ...returns]) {
+    const k = i.created_by || null;
+    const d = staff.get(k) || { id: k, sales: 0, count: 0, discount: 0 };
+    d.sales += (i.type === 'sale' ? 1 : -1) * i.total;
+    if (i.type === 'sale') { d.count += 1; d.discount += i.discount || 0; }
+    staff.set(k, d);
+  }
+
   return {
     salesTotal, returnsTotal, net, profit, invoiceCount: sales.length, returnCount: returns.length,
+    byStaff: [...staff.values()].sort((a, b) => b.sales - a.sales),
     avgInvoice: sales.length ? Math.round(salesTotal / sales.length) : 0,
     purchasesTotal: sum(purchases, (i) => i.total),
     byDay: [...days.values()].sort((a, b) => (a.day < b.day ? -1 : 1)),
@@ -100,7 +111,7 @@ export function buildReport({ invoices, lines, payments, products = [], categori
  * نموذج واحد للعرض والتصدير: أقسام، كل قسم جدول (عناوين + صفوف نصية جاهزة).
  * snapshot: { stockCost, stockSell, customerDebts, supplierBalances } — أرقام «الآن» لا الفترة.
  */
-export function reportSections(r, snapshot, { currency = 'ILS', showProfit = true, top = 10 } = {}) {
+export function reportSections(r, snapshot, { currency = 'ILS', showProfit = true, top = 10, staffName = null } = {}) {
   const m = (v) => formatMoney(v, currency);
   const cols = (...c) => (showProfit ? c : c.slice(0, -1));
   const sections = [
@@ -110,6 +121,8 @@ export function reportSections(r, snapshot, { currency = 'ILS', showProfit = tru
       ['عدد الفواتير', String(r.invoiceCount)], ['متوسط الفاتورة', m(r.avgInvoice)], ['المشتريات', m(r.purchasesTotal)],
     ] },
     { title: 'حسب طريقة الدفع', head: ['الطريقة', 'المبلغ'], rows: r.byMethod.map((x) => [x.name, m(x.total)]) },
+    ...(staffName && (r.byStaff || []).some((x) => x.id) ? [{ title: 'حسب الموظف', head: ['الموظف', 'الفواتير', 'المبيعات'],
+      rows: r.byStaff.map((x) => [staffName(x.id), String(x.count), m(x.sales)]) }] : []),
     { title: 'حسب التصنيف', head: cols('التصنيف', 'المبيعات', 'الربح'), rows: r.byCategory.map((x) => cols(x.name, m(x.amount), m(x.profit))) },
     { title: 'الأكثر مبيعًا', head: cols('الصنف', 'الكمية', 'المبيعات', 'الربح'), rows: r.best.slice(0, top).map((x) => cols(x.name, formatQty(x.qty), m(x.amount), m(x.profit))) },
     { title: 'الأقل مبيعًا', head: cols('الصنف', 'الكمية', 'المبيعات', 'الربح'), rows: r.least.slice(0, top).map((x) => cols(x.name, formatQty(x.qty), m(x.amount), m(x.profit))) },

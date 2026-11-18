@@ -12,11 +12,13 @@ import { stockValue } from '../../domain/stock.js';
 import { formatMoney } from '../../domain/currency.js';
 import { app } from '../../core/app.js';
 import { sendFile } from '../invoices/share.js';
+import { staffName } from '../../domain/staff.js';
+import { navigate } from '../../core/router.js';
 
 const KINDS = [['today', 'اليوم'], ['week', '7 أيام'], ['month', 'هذا الشهر'], ['custom', 'مخصص']];
 const FONT = '"Noto Naskh Arabic","Noto Sans Arabic",system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif';
 
-async function loadData(range) {
+export async function loadData(range) {
   const db = app.db;
   const invoices = await db.invoices.where('created_at').between(range.from, range.to, true, false).toArray();
   const ids = new Set(invoices.map((i) => i.id));
@@ -107,7 +109,8 @@ export function renderReports(el) {
     customRow.hidden = kind !== 'custom';
     const rg = range();
     const [r, snap] = await Promise.all([loadData(rg).then(buildReport), snapshot()]);
-    const sections = reportSections(r, snap, { currency: cur, showProfit });
+    const st = app.shop?.settings?.staff;
+    const sections = reportSections(r, snap, { currency: cur, showProfit, staffName: st && st.members?.length ? (id) => staffName(st, id) : null });
     current = { r, sections, label: rg.label };
     const maxDay = Math.max(1, ...r.byDay.map((d) => d.sales));
     const table = (s) => h('div', { class: 'section' }, h('h2', { class: 'section-title' }, s.title),
@@ -124,6 +127,8 @@ export function renderReports(el) {
           showProfit ? h('div', null, h('span', { class: 'hero-mini-label' }, 'الربح'), money(r.profit, undefined, r.profit < 0 ? 'neg' : '')) : null,
           h('div', null, h('span', { class: 'hero-mini-label' }, 'الفواتير'), num(String(r.invoiceCount))),
           h('div', null, h('span', { class: 'hero-mini-label' }, 'متوسط الفاتورة'), money(r.avgInvoice)))),
+      h('button', { class: 'beta-banner daily-banner', type: 'button', onclick: () => navigate('/reports/daily') },
+        icon('chart', 26), h('span', { class: 'row-main' }, h('strong', null, 'تقرير اليوم بالرسوم البيانية'), h('span', null, 'ملف PDF ملوّن: مقارنة بأمس والأسبوع الماضي، الساعات، الأكثر مبيعًا')), icon('chevron', 20)),
       h('div', { class: 'product-actions' },
         button('PDF', { kind: 'outline', icon: 'receipt', onclick: () => exportFile('pdf') }),
         button('Excel', { kind: 'outline', icon: 'clipboard', onclick: () => exportFile('xlsx') })),

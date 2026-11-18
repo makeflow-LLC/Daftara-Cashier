@@ -17,6 +17,21 @@ export function displayPhone(phone) {
   return phone.startsWith('970') || phone.startsWith('972') ? `0${phone.slice(3)}` : `+${phone}`;
 }
 
+// متى نطلب الحساب: صاحب المحل يجرّب بحرية أولًا، ثم نذكّره بلطف بعد أن يرى قيمة التطبيق،
+// ولا نُلزمه إلا حين يصبح لديه عمل يستحق الحماية.
+export const NUDGE_SALES = 3;     // بعد 3 فواتير بيع: نافذة لطيفة مرة واحدة مع «لاحقًا»
+export const REQUIRE_SALES = 20;  // بعد 20 فاتورة…
+export const GRACE_DAYS = 3;      // …أو 3 أيام من إنشاء المحل: الحساب مطلوب
+
+/** 'explore' (يتجول بحرية) | 'nudge' (تذكير لطيف) | 'required' (الحساب مطلوب). */
+export function accountStage({ sales = 0, createdAt = null, now = Date.now() } = {}) {
+  const t = createdAt ? Date.parse(createdAt) : NaN;
+  const days = Number.isFinite(t) ? (now - t) / 86400000 : 0;
+  if (sales >= REQUIRE_SALES || days >= GRACE_DAYS) return 'required';
+  if (sales >= NUDGE_SALES) return 'nudge';
+  return 'explore';
+}
+
 /** رسالة خطأ بالعربية أو null. */
 export function passwordProblem(pw, confirm) {
   if (String(pw || '').length < MIN_PASSWORD) return `كلمة السر ${MIN_PASSWORD} أحرف أو أرقام على الأقل`;

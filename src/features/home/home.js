@@ -8,11 +8,20 @@ import { todaySummary } from '../../core/queries.js';
 import { navigate } from '../../core/router.js';
 import { openFeedback } from '../help/feedback.js';
 import { licenseBanner } from '../subscribe/subscribe.js';
-import { accountBanner } from '../account/account.js';
+import { accountBanner, maybeNudgeAccount } from '../account/account.js';
 import { reminderBanner } from '../customers/remind.js';
+import { userChip } from '../staff/staff.js';
+import { dailyReportBanner } from '../reports/daily.js';
+import { updateBanner } from '../settings/update.js';
+import { daysLeftText } from '../../domain/inventory.js';
+import { supplierDues, dueText } from '../../domain/dues.js';
+import { localDay } from '../../domain/offers.js';
+import { formatMoney } from '../../domain/currency.js';
+import { formatQty } from '../../domain/units.js';
 import { shouldShowInstallHint, dismissInstallHint, isIos } from '../../core/pwa.js';
 
 export function renderHome(el) {
+  assistantMemo = null; // كل فتح للرئيسية بأرقام جديدة؛ إعادة الرسم بعد كل بيع تستعمل المحفوظ
   const kpis = h('div', { class: 'kpis' });
   const alerts = h('div');
   const stats = h('div', { class: 'stats' });
@@ -20,6 +29,8 @@ export function renderHome(el) {
   const dateText = today.toLocaleDateString('ar-PS-u-nu-latn', { weekday: 'long', day: 'numeric', month: 'long' });
 
   const guide = h('div');
+  const dailyBox = h('div', null, dailyReportBanner());
+  const updateBox = updateBanner();
   const hour = today.getHours();
   const greet = hour < 12 ? 'صباح الخير' : hour < 17 ? 'نهارك سعيد' : 'مساء الخير';
 
@@ -27,18 +38,20 @@ export function renderHome(el) {
     h('div', { class: 'home-top' },
       h('div', { class: 'home-head' },
         h('div', { class: 'topbar-title' }, h('div', { class: 'home-greet' }, `${greet} 👋`), h('h1', null, app.shop?.name || 'محلي'), h('div', { class: 'home-date' }, dateText)),
-        syncBadge()),
+        h('div', { class: 'home-badges' }, userChip(), syncBadge())),
       kpis),
     h('div', { class: 'page home-page' },
+      updateBox,
       installBanner(),
       licenseBanner(),
       reminderBanner(),
+      dailyBox,
       accountBanner(),
       stats,
       h('div', { class: 'quick' },
         quick('scan', 'بيع جديد', () => navigate('/sale'), 'brand'),
-        quick('truck', 'شراء بضاعة', () => navigate('/inventory/purchase')),
-        quick('box', 'المخزون', () => navigate('/inventory')),
+        app.can('purchases') ? quick('truck', 'شراء بضاعة', () => navigate('/inventory/purchase')) : null,
+        app.can('purchases') ? quick('box', 'المخزون', () => navigate('/inventory')) : null,
         quick('users', 'الزبائن والديون', () => navigate('/customers')),
       ),
       guide,
@@ -47,6 +60,8 @@ export function renderHome(el) {
         icon('chat', 26), h('span', { class: 'row-main' }, h('strong', null, app.config.release ? 'رأيك يهمنا' : 'نسخة تجريبية — رأيك يهمنا'), h('span', null, 'بلّغ عن مشكلة أو اطلب ميزة بضغطة')), icon('chevron', 20)),
     ),
   );
+
+  maybeNudgeAccount();
 
   // «ابدأ من هنا»: ثلاث خطوات للمحل الجديد، تختفي حين تكتمل أو يخفيها صاحب المحل
   async function paintGuide() {
@@ -89,9 +104,16 @@ export function renderHome(el) {
     );
     paintGuide();
     const a = await app.inventory.alerts({ expiry: app.feature('expiry') });
+    // المساعد: ما يخلص قريبًا حسب سرعة البيع (أوضح من «منخفض»)
+    const soon = app.can('purchases') ? (await assistantCached()).soon.filter((x) => x.p.qty > 0).slice(0, 3) : [];
+    const soonIds = new Set(soon.map((x) => x.p.id));
+    // مواعيد الدفع للموردين: متأخر أو خلال 3 أيام
+    const dues = app.can('purchases') ? supplierDues(await app.inventory.suppliers(), app.shop?.settings?.supplierDues, localDay()) : [];
     const items = [
+      ...dues.slice(0, 3).map((d) => row({ icon: 'truck', title: `ادفع لـ ${d.supplier.name}: ${formatMoney(d.supplier.balance, app.shop?.base_currency || 'ILS')}`, sub: `موعد الدفع ${dueText(d.days)}`, tone: d.state === 'overdue' || d.state === 'today' ? 'danger' : 'warn', onclick: () => navigate(`/suppliers/view?id=${d.supplier.id}`) })),
+      ...soon.map((x) => row({ icon: 'bulb', title: x.p.name, sub: `${daysLeftText(x.daysLeft)} — اطلب ${formatQty(x.qty)}`, tone: 'warn', onclick: () => navigate('/inventory/assistant') })),
       ...a.out.slice(0, 3).map((p) => row({ icon: 'alert', title: p.name, sub: 'نفد من المخزون', tone: 'danger' })),
-      ...a.low.slice(0, 3).map((p) => row({ icon: 'box', title: p.name, sub: 'المخزون منخفض', tone: 'warn' })),
+      ...a.low.filter((p) => !soonIds.has(p.id)).slice(0, 3).map((p) => row({ icon: 'box', title: p.name, sub: 'المخزون منخفض', tone: 'warn' })),
       ...a.expiring.slice(0, 3).map((p) => row({ icon: 'alert', title: p.name, sub: `ينتهي ${p.expiry_date}`, tone: 'warn' })),
     ];
     fill(alerts, items.length
@@ -104,7 +126,15 @@ export function renderHome(el) {
     if (e.tables.some((t) => ['invoices', 'payments', 'cash_sessions', 'movements', 'products', 'customer_entries', 'customers'].includes(t))) paint();
   });
   const offShop = bus.on('shop', paint);
-  return () => { off(); offShop(); };
+  const offDaily = bus.on('dailyReport', () => fill(dailyBox, dailyReportBanner()));
+  return () => { off(); offShop(); offDaily(); if (updateBox.cleanup) updateBox.cleanup(); };
+}
+
+// الرئيسية تُرسم من جديد بعد كل بيع: حساب «يخلص قريبًا» (حركات 30 يومًا) يكفي مرة في الدقيقة وهي مفتوحة
+let assistantMemo = null;
+function assistantCached() {
+  if (!assistantMemo || Date.now() - assistantMemo.at > 60000) assistantMemo = { at: Date.now(), p: app.inventory.assistant() };
+  return assistantMemo.p;
 }
 
 function quick(ic, label, onclick, tone = '') {
