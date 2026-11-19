@@ -156,8 +156,8 @@ tap 'الرئيسية'
 expect 'مبيعات اليوم'
 dump; grep -q '25.00' ui.xml && echo "OK: home shows today's sales" || { echo "::error::home sales not updated"; exit 1; }
 
-# 6) الزبائن: زبون جديد ودين عليه
-tap 'الزبائن'
+# 6) الديون ← الزبائن: زبون جديد ودين عليه
+tap 'الديون'
 expect 'لا زبائن بعد'
 tap 'زبون جديد'
 sleep 2
@@ -174,12 +174,33 @@ dump; grep -q '20.00' ui.xml && echo "OK: debt recorded" || { echo "::error::deb
 adb shell input keyevent 4
 sleep 2
 tap 'الرئيسية'
-expect 'ديون الزبائن'
+expect 'لك عند الزبائن'
+
+# 6ب) ديون التجار: من بطاقة الرئيسية ← أول تاجر ← دين جديد عليه ← يظهر في كشفه
+tap 'عليك للتجار'
+expect 'سجّل ما عليك للتجار'
+tap 'أضف أول تاجر'
+sleep 2
+adb shell input text 'Omar'
+adb shell input keyevent 66
+expect 'دفعت له'
+tap 'دين جديد'
+sleep 2
+adb shell input text '30'
+adb shell input keyevent 66
+sleep 2
+expect 'كشف الحساب'
+dump; grep -q '30.00' ui.xml && echo "OK: trader debt recorded" || { echo "::error::trader debt not shown"; exit 1; }
+expect 'حدّد موعد السداد'
+adb shell input keyevent 4
+sleep 2
+tap 'الرئيسية'
+expect 'عليك للتجار'
 
 # 7) المخزون: الصفحة تفتح وتعرض التنبيهات (Milk بيع منه 1 بلا رصيد ← نفد)
 tap 'المخزون'
 expect 'التنبيهات'
-expect 'اطلب من المورّد'
+expect 'اطلب من التاجر'
 adb shell input keyevent 4
 sleep 2
 
