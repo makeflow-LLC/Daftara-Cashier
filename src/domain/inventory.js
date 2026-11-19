@@ -28,7 +28,7 @@ export function purchaseTotal(lines) {
  */
 export function buildPurchase({ lines, supplierId = null, paid = 'cash', note = null, attachmentPath = null }, env) {
   if (!lines.length) throw new Error('أضف صنفًا واحدًا على الأقل');
-  if (paid === 'credit' && !supplierId) throw new Error('اختر المورّد للشراء على الحساب');
+  if (paid === 'credit' && !supplierId) throw new Error('اختر التاجر للشراء على الحساب');
   for (const l of lines) {
     if (!Number.isSafeInteger(l.qty) || l.qty <= 0) throw new Error(`كمية «${l.name}» غير صحيحة`);
     if (!Number.isSafeInteger(l.unit_cost) || l.unit_cost < 0) throw new Error(`تكلفة «${l.name}» غير صحيحة`);

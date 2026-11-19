@@ -48,7 +48,7 @@ export function renderHome(el) {
         quick('scan', 'بيع جديد', () => navigate('/sale'), 'brand'),
         quick('truck', 'شراء بضاعة', () => navigate('/inventory/purchase')),
         quick('box', 'المخزون', () => navigate('/inventory')),
-        quick('users', 'الزبائن والديون', () => navigate('/customers')),
+        quick('users', 'الديون: لك وعليك', () => navigate('/customers')),
       ),
       // استلام أي مبلغ من أي مشترٍ بالمحفظة (غير مرتبط بزبون). بلا رقم محفظة: الشاشة تقود إلى الإعدادات
       h('button', { class: 'wallet-btn', type: 'button', onclick: () => navigate('/wallet') },
@@ -85,6 +85,7 @@ export function renderHome(el) {
   async function paint() {
     const s = await todaySummary(app.db);
     const debts = await app.customers.totals();
+    const owed = await app.inventory.supplierTotals();
     const drawer = await app.cash.summary();
     const showProfit = app.can('see_profit');
     fill(kpis,
@@ -97,7 +98,9 @@ export function renderHome(el) {
     );
     fill(stats,
       h('button', { class: 'stat stat-tap', type: 'button', onclick: () => navigate('/cash') }, h('div', { class: 'stat-label' }, icon('cash', 18), 'النقد في الدرج'), h('div', { class: 'stat-value' }, money(drawer.expectedCash))),
-      h('button', { class: 'stat stat-tap', type: 'button', onclick: () => navigate('/customers') }, h('div', { class: 'stat-label' }, icon('users', 18), 'ديون الزبائن'), h('div', { class: 'stat-value' }, money(debts.total))),
+      h('button', { class: 'stat stat-tap', type: 'button', onclick: () => navigate('/customers') }, h('div', { class: 'stat-label' }, icon('users', 18), 'لك عند الزبائن'), h('div', { class: 'stat-value' }, money(debts.total))),
+      // ما عليك للتجار: ظاهر دائمًا في الرئيسية بجانب ما لك (كان مدفونًا في «المزيد»)
+      h('button', { class: 'stat stat-tap', type: 'button', onclick: () => navigate('/suppliers') }, h('div', { class: 'stat-label' }, icon('truck', 18), 'عليك للتجار'), h('div', { class: 'stat-value' }, money(owed.total))),
     );
     paintGuide();
     const a = await app.inventory.alerts({ expiry: app.feature('expiry') });
@@ -113,7 +116,7 @@ export function renderHome(el) {
 
   paint();
   const off = bus.on('data', (e) => {
-    if (e.tables.some((t) => ['invoices', 'payments', 'cash_sessions', 'movements', 'products', 'customer_entries', 'customers'].includes(t))) paint();
+    if (e.tables.some((t) => ['invoices', 'payments', 'cash_sessions', 'movements', 'products', 'customer_entries', 'customers', 'supplier_entries', 'suppliers'].includes(t))) paint();
   });
   const offShop = bus.on('shop', paint);
   const offUpdate = bus.on('update', paintUpdate);

@@ -74,8 +74,8 @@ export const MODULES = [
       { path: '/inventory', tab: 'settings', chrome: false, render: renderInventory },
       { path: '/inventory/purchase', write: true, chrome: false, render: renderPurchase },
       { path: '/inventory/count', write: true, chrome: false, render: renderCount },
-      { path: '/suppliers', chrome: false, render: renderSuppliers },
-      { path: '/suppliers/view', chrome: false, render: renderSupplier },
+      { path: '/suppliers', tab: 'customers', render: renderSuppliers },
+      { path: '/suppliers/view', tab: 'customers', chrome: false, render: renderSupplier },
     ],
   },
   {

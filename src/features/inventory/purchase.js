@@ -35,20 +35,20 @@ export async function renderPurchase(el, params) {
   const listEl = h('div', { class: 'cart' });
   const totalEl = h('div', { class: 'paybar-total' });
   const saveBtn = h('button', { class: 'btn btn-primary btn-lg paybtn', type: 'button', onclick: finish }, icon('check', 22), h('span', null, 'حفظ'));
-  const photoBtn = iconButton('camera', 'صورة فاتورة المورّد', takePhoto, 'pb-icon');
+  const photoBtn = iconButton('camera', 'صورة فاتورة التاجر', takePhoto, 'pb-icon');
 
   el.append(h('div', { class: 'sale' },
     header('شراء بضاعة', { back: true }),
     scanBox, camStatus,
     h('div', { class: 'sale-search' }, h('div', { class: 'search-row' }, icon('search', 20), search), results),
     supEl, listEl,
-    h('div', { class: 'paybar' }, totalEl, h('div', { class: 'paybar-actions' }, photoBtn, iconButton('truck', 'المورّد', chooseSupplier, 'pb-icon'), saveBtn))));
+    h('div', { class: 'paybar' }, totalEl, h('div', { class: 'paybar-actions' }, photoBtn, iconButton('truck', 'التاجر', chooseSupplier, 'pb-icon'), saveBtn))));
 
   function changed() { paint(); app.inventory.saveDraft({ lines: draft.lines, supplier: draft.supplier }); }
 
   function paint() {
     fill(supEl, draft.supplier ? h('div', { class: 'cust-chip' }, icon('truck', 16), h('span', null, draft.supplier.name),
-      h('button', { class: 'icon-btn sm', type: 'button', 'aria-label': 'إزالة المورّد', onclick: () => { draft.supplier = null; changed(); } }, icon('x', 16))) : null);
+      h('button', { class: 'icon-btn sm', type: 'button', 'aria-label': 'إزالة التاجر', onclick: () => { draft.supplier = null; changed(); } }, icon('x', 16))) : null);
     fill(listEl, draft.lines.length ? h('div', { class: 'list cart-list' }, ...draft.lines.map((l, i) => h('button', { class: 'row row-tap cart-line', type: 'button', onclick: () => editLine(i) },
       h('span', { class: 'cl-main' }, h('span', { class: 'row-title' }, l.name),
         h('span', { class: 'row-sub' }, num(formatQty(l.qty)), ' × ', num(formatMoney(l.unit_cost, base)))),
@@ -156,7 +156,7 @@ export async function renderPurchase(el, params) {
     openSheet((close) => {
       async function save(paid) {
         if (busy) return;
-        if (paid === 'credit' && !draft.supplier) { const s = await pickSupplier({ title: 'على حساب أي مورّد؟' }); if (!s) return; draft.supplier = { id: s.id, name: s.name }; }
+        if (paid === 'credit' && !draft.supplier) { const s = await pickSupplier({ title: 'على حساب أي تاجر؟' }); if (!s) return; draft.supplier = { id: s.id, name: s.name }; }
         busy = true;
         try {
           let attachmentPath = null;

@@ -1000,3 +1000,25 @@ body{font-weight:500}
 .app-lock p{margin:0;color:var(--color-muted)}
 .app-lock-btn{margin-top:var(--space-4);background:var(--grad-brand);color:#fff;box-shadow:var(--shadow-brand)}
 .app-lock-logo{position:absolute;bottom:28px;width:130px;height:auto;opacity:.9}
+
+/* الديون: مفتاح «لك عند الزبائن / عليك للتجار»، وقسم التجار */
+.debt-tabs{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2);margin-bottom:var(--space-3)}
+.debt-tab{display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:10px var(--space-3);border-radius:var(--radius-lg);background:var(--color-card);border:2px solid var(--frame);text-align:right;color:var(--color-muted);min-height:76px}
+.debt-tab-title{font-size:17px;font-weight:700;color:var(--color-text)}
+.debt-tab-sub{font-size:12.5px;font-weight:600}
+.debt-tab-amt{font-size:15.5px;font-weight:700;color:var(--color-text)}
+.debt-tab:active{background:var(--color-press)}
+.debt-tab.on{box-shadow:var(--shadow-sm)}
+.debt-tab-customers.on{background:var(--brand-100);border-color:var(--brand)}
+.debt-tab-customers.on .debt-tab-title,.debt-tab-customers.on .debt-tab-amt{color:var(--brand-700)}
+.debt-tab-suppliers.on{background:var(--danger-100);border-color:var(--danger)}
+.debt-tab-suppliers.on .debt-tab-title,.debt-tab-suppliers.on .debt-tab-amt{color:var(--danger-700)}
+.debt-card.clear{background:var(--grad-brand);box-shadow:0 10px 24px rgba(11,95,99,.28)}
+.row-end small{font-size:12px;font-weight:600}
+.empty .btn{margin-top:var(--space-3)}
+/* الرئيسية: الدرج في سطر، وتحته «لك عند الزبائن» و«عليك للتجار» جنبًا إلى جنب */
+.home-page .stats .stat:first-child{grid-column:1 / -1;display:flex;align-items:center;justify-content:space-between;gap:var(--space-2)}
+.home-page .stats .stat:first-child .stat-value{margin-top:0}
+.home-page .stats .stat:nth-child(2){background:var(--brand-100);border-color:var(--brand-200)}
+.home-page .stats .stat:nth-child(3){background:var(--pink-100);border-color:#f4a9c6}
+.home-page .stats .stat-value{font-size:20px}

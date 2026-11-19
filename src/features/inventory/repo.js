@@ -1,7 +1,7 @@
-// المخزون على الجهاز: الشراء (يحدّث المخزون ومتوسط التكلفة)، الموردون وحساباتهم، الجرد، التالف، والتنبيهات.
+// المخزون على الجهاز: الشراء (يحدّث المخزون ومتوسط التكلفة)، التجار (الموردون) وديونهم، الجرد، التالف، والتنبيهات.
 // كل تغيير في الكمية حركة تُضاف — لا رقم يُعدَّل.
 import { buildPurchase, stockAlerts, countSummary } from '../../domain/inventory.js';
-import { statement } from '../../domain/ledger.js';
+import { oldestUnpaidAt, ledgerView, effectiveEntries, balanceOf, editableEntry, VOID_PREFIX } from '../../domain/ledger.js';
 import { signedQty } from '../../domain/stock.js';
 import { normalizeArabic, normalizeBarcode } from '../../domain/product.js';
 import { sum } from '../../domain/money.js';
@@ -21,6 +21,36 @@ export function createInventoryRepo({ db, store, getContext, clock }) {
   }
   async function cashMethodId() {
     return (await db.payment_methods.toArray()).find((m) => m.kind === 'cash' && !m.deleted)?.id || null;
+  }
+
+  async function writeSupplierPayment(w, { supplierId, amount, method, note, cashSessionId, cashId, entryAt = null }) {
+    const transfer = !!method && method.kind === 'transfer';
+    const pid = uuid();
+    await w.append('payments', {
+      id: pid, supplier_id: supplierId, direction: 'out', method_id: transfer ? method.id : cashId, method_kind: transfer ? 'transfer' : 'cash',
+      amount, cash_session_id: transfer ? null : cashSessionId, note: 'دفعة لتاجر',
+    });
+    return w.append('supplier_entries', {
+      supplier_id: supplierId, type: 'payment', amount: -amount, payment_id: pid,
+      note: note ? String(note).trim() || null : null, ...(entryAt ? { created_at: entryAt } : {}),
+    });
+  }
+  async function writeSupplierVoid(w, entry, cashSessionId) {
+    if (!editableEntry(entry) && !String(entry.note || '').startsWith(VOID_PREFIX)) throw invalid({ amount: 'هذه الحركة من فاتورة شراء — لا تُعدَّل من هنا' });
+    let paymentId = null;
+    if (entry.payment_id) {
+      // الدفعة خرجت من الدرج: نعيدها إليه (أو العكس عند التراجع)
+      const orig = await db.payments.get(entry.payment_id);
+      if (orig) {
+        paymentId = uuid();
+        await w.append('payments', {
+          id: paymentId, supplier_id: entry.supplier_id, direction: orig.direction === 'out' ? 'in' : 'out',
+          method_id: orig.method_id, method_kind: orig.method_kind, amount: orig.amount,
+          cash_session_id: orig.method_kind === 'cash' ? cashSessionId : null, note: 'تصحيح دفعة لتاجر',
+        });
+      }
+    }
+    return w.append('supplier_entries', { supplier_id: entry.supplier_id, type: entry.type, amount: -entry.amount, payment_id: paymentId, note: `${VOID_PREFIX}${entry.id}` });
   }
 
   const repo = {
@@ -51,44 +81,95 @@ export function createInventoryRepo({ db, store, getContext, clock }) {
     async loadDraft() { return (await db.meta.get('purchase:current'))?.value || null; },
     saveDraft(d) { return d && d.lines.length ? db.meta.put({ key: 'purchase:current', value: d }) : db.meta.delete('purchase:current'); },
 
-    // ---------- الموردون ----------
+    // ---------- التجار (الموردون) وما عليك لهم ----------
+    // الرصيد لا يُحفظ: مجموع قيود التاجر (بضاعة بالدين +، رصيد سابق +، دفعة له −، مرتجع −).
     async suppliers() {
       const [ss, entries] = await Promise.all([db.suppliers.toArray(), db.supplier_entries.toArray()]);
-      const bal = new Map();
-      for (const e of entries) bal.set(e.supplier_id, (bal.get(e.supplier_id) || 0) + e.amount);
-      return ss.filter((s) => !s.deleted).map((s) => ({ ...s, balance: bal.get(s.id) || 0 }))
-        .sort((a, b) => b.balance - a.balance || a.name.localeCompare(b.name, 'ar'));
+      const by = new Map();
+      for (const e of entries) { if (!by.has(e.supplier_id)) by.set(e.supplier_id, []); by.get(e.supplier_id).push(e); }
+      return ss.filter((s) => !s.deleted).map((s) => {
+        const all = by.get(s.id) || [];
+        const balance = balanceOf(all);
+        return { ...s, balance, oldestUnpaidAt: balance > 0 ? oldestUnpaidAt(effectiveEntries(all)) : null };
+      }).sort((a, b) => b.balance - a.balance || a.name.localeCompare(b.name, 'ar'));
     },
     searchSuppliers(list, query) {
       const q = normalizeArabic(query);
-      return q ? list.filter((s) => normalizeArabic(s.name).includes(q)) : list;
+      if (!q) return list;
+      const digits = normalizeBarcode(query).replace(/\D/g, '').replace(/^0+/, '');
+      return list.filter((s) => normalizeArabic(s.name).includes(q) || (digits && s.phone && s.phone.replace(/\D/g, '').includes(digits)));
     },
+    /** total: مجموع ما عليك للتجار، count: عددهم، credit: ما لك عندهم (دفعت أكثر أو مرتجع)، suppliers: عدد التجار كلهم. */
     async supplierTotals() {
-      const owing = (await repo.suppliers()).filter((s) => s.balance > 0);
-      return { total: sum(owing, (s) => s.balance), count: owing.length };
+      const all = await repo.suppliers();
+      const owing = all.filter((s) => s.balance > 0);
+      return { total: sum(owing, (s) => s.balance), count: owing.length, credit: sum(all.filter((s) => s.balance < 0), (s) => -s.balance), suppliers: all.length };
     },
+    /** التاجر مع كشف حسابه (الأحدث أولًا، الملغى بعلامة) ورصيده وتاريخ أقدم دين لم تسدّده. */
     async supplier(id) {
       const s = await db.suppliers.get(id);
       if (!s || s.deleted) return null;
-      const rows = statement(await db.supplier_entries.where('supplier_id').equals(id).toArray());
-      return { ...s, balance: rows.length ? rows[rows.length - 1].balance : 0, entries: rows.reverse() };
+      const entries = await db.supplier_entries.where('supplier_id').equals(id).toArray();
+      const effective = effectiveEntries(entries);
+      return { ...s, balance: balanceOf(entries), entries: ledgerView(entries), raw: effective, oldestUnpaidAt: oldestUnpaidAt(effective) };
     },
-    async saveSupplier({ id, name, phone = null, note = null }) {
+    /**
+     * تاجر جديد أو تعديله. opening (للجديد فقط): ما عليك له الآن من دفترك القديم — يُسجَّل «رصيد سابق».
+     */
+    async saveSupplier({ id, name, phone = null, note = null, opening = 0 }) {
       const n = String(name || '').trim();
-      if (!n) throw invalid({ name: 'اكتب اسم المورّد' });
+      if (!n) throw invalid({ name: 'اكتب اسم التاجر' });
+      if (!Number.isSafeInteger(opening) || opening < 0) throw invalid({ opening: 'الرصيد السابق غير صحيح' });
       const data = { name: n, phone: phone ? normalizeBarcode(phone) : null, note: note ? String(note).trim() : null };
-      return id ? store.patch('suppliers', id, data) : store.put('suppliers', data);
+      if (id) return store.patch('suppliers', id, data);
+      return store.write(async (w) => {
+        const row = await w.put('suppliers', data);
+        if (opening > 0) await w.append('supplier_entries', { supplier_id: row.id, type: 'opening', amount: opening });
+        return row;
+      });
     },
     removeSupplier(id) { return store.remove('suppliers', id); },
     restoreSupplier(id) { return store.patch('suppliers', id, { deleted: false }); },
-    /** دفعة للمورّد: تنقص ما عليك له، وتخرج من الدرج. */
-    async paySupplier(supplierId, amount) {
+
+    /** دين جديد عليك للتاجر بلا فاتورة أصناف («أخذت بضاعة بـ 800»). لا يغيّر المخزون. */
+    async addSupplierDebt(supplierId, amount, note = null) {
+      if (!Number.isSafeInteger(amount) || amount <= 0) throw invalid({ amount: 'اكتب مبلغ الدين' });
+      return store.append('supplier_entries', { supplier_id: supplierId, type: 'adjustment', amount, note: note ? String(note).trim() || null : null });
+    },
+
+    /**
+     * دفعة للتاجر: تنقص ما عليك له. نقدًا (الافتراضي) تخرج من الدرج؛ تحويل أو محفظة لا يمسّان الدرج.
+     * method: طريقة الدفع { id, kind } أو null = نقدًا.
+     */
+    async paySupplier(supplierId, amount, { method = null, note = null } = {}) {
       if (!Number.isSafeInteger(amount) || amount <= 0) throw invalid({ amount: 'اكتب مبلغ الدفعة' });
       const [cashSessionId, cashId] = await Promise.all([openSessionId(), cashMethodId()]);
+      return store.write((w) => writeSupplierPayment(w, { supplierId, amount, method, note, cashSessionId, cashId }));
+    },
+
+    /**
+     * حذف قيد يدوي (دين أو دفعة أو رصيد سابق): لا يُمحى شيء، بل يُضاف قيد عكسي، والدفعة تُصحَّح في الدرج أيضًا.
+     * يرجع القيد العكسي (لـ «تراجع»: voidSupplierEntry عليه يعيد الأصلي).
+     */
+    async voidSupplierEntry(entry) {
+      const cashSessionId = await openSessionId();
+      return store.write((w) => writeSupplierVoid(w, entry, cashSessionId));
+    },
+
+    /** تعديل مبلغ قيد يدوي أو ملاحظته = إلغاؤه + قيد جديد مكانه في نفس تاريخه بالكشف، في معاملة واحدة. */
+    async editSupplierEntry(entry, amount, note = null) {
+      if (!Number.isSafeInteger(amount) || amount <= 0) throw invalid({ amount: 'اكتب المبلغ' });
+      const [cashSessionId, cashId] = await Promise.all([openSessionId(), cashMethodId()]);
+      const cleanNote = note === null ? entry.note : (String(note).trim() || null);
       return store.write(async (w) => {
-        const pid = uuid();
-        await w.append('payments', { id: pid, supplier_id: supplierId, direction: 'out', method_id: cashId, method_kind: 'cash', amount, cash_session_id: cashSessionId, note: 'دفعة لمورّد' });
-        return w.append('supplier_entries', { supplier_id: supplierId, type: 'payment', amount: -amount, payment_id: pid });
+        await writeSupplierVoid(w, entry, cashSessionId);
+        if (entry.type === 'payment') {
+          const orig = entry.payment_id ? await db.payments.get(entry.payment_id) : null;
+          const method = orig && orig.method_kind === 'transfer' ? { id: orig.method_id, kind: 'transfer' } : null;
+          return writeSupplierPayment(w, { supplierId: entry.supplier_id, amount, method, note: cleanNote, cashSessionId, cashId, entryAt: entry.created_at });
+        }
+        const sign = entry.amount < 0 ? -1 : 1;
+        return w.append('supplier_entries', { supplier_id: entry.supplier_id, type: entry.type, amount: sign * amount, note: cleanNote, created_at: entry.created_at });
       });
     },
 

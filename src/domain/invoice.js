@@ -34,7 +34,7 @@ export function receiptModel({ invoice, lines, payments = [], methodNames = new 
   return {
     shopName: shop.name || '', shopPhone: shop.phone || '', shopAddress: shop.address || '',
     title: INVOICE_TITLES[invoice.type] || 'فاتورة', number: invoice.number, date: dateTimeText(invoice.created_at),
-    party: customer ? `الزبون: ${customer.name}` : supplier ? `المورّد: ${supplier.name}` : '',
+    party: customer ? `الزبون: ${customer.name}` : supplier ? `التاجر: ${supplier.name}` : '',
     rows: lines.map((l) => ({
       name: l.name,
       calc: `${formatQty(l.qty)} × ${formatMoney(l.unit_price, cur, { symbol: false })}${l.discount ? ` − ${formatMoney(l.discount, cur, { symbol: false })}` : ''}`,

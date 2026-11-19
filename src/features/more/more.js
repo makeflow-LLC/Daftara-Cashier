@@ -25,7 +25,7 @@ export function renderMore(el) {
       tile('receipt', 'الفواتير', 'blue', go('/invoices')),
       tile('cash', 'الصندوق', 'amber', go('/cash')),
       tile('box', 'المخزون', 'violet', go('/inventory')),
-      tile('truck', 'الموردون', 'teal', go('/suppliers')),
+      tile('truck', 'ديون التجار', 'teal', go('/suppliers')),
       tile('tag', 'أدوات', 'pink', go('/tools'))),
     h('h2', { class: 'section-title' }, 'التطبيق'),
     h('div', { class: 'hub' },
