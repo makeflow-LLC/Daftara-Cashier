@@ -197,3 +197,61 @@ test('carton pricing: the trader types the carton price, the app divides', async
   assert.equal(packs[0].factor, 20000);
   assert.equal(packs[0].id, 'u1');
 });
+
+test('pack entry: carton barcode goes to the pack, single-piece barcode to the product', async () => {
+  const { packEntry } = await import('../src/domain/product.js');
+  const { repo } = setup();
+  // كرتونة نسكافيه 24 قطعة بـ 80 ₪: مُسح باركود الكرتونة ثم باركود قطعة واحدة
+  const r = packEntry({ name: 'كرتونة', count: 24000, sell: 8000, cost: 6500, qty: 2000, packBarcode: '16291003000014', pieceBarcode: '6291003000017', makeId: uuid });
+  assert.equal(r.barcode, '6291003000017');
+  assert.equal(r.sell, 333);
+  assert.equal(r.qty, 48000);
+  assert.equal(r.packs[0].barcode, '16291003000014');
+  await repo.save({ name: 'نسكافيه', barcode: r.barcode, sell_price: r.sell, cost_price: r.cost }, { qty: r.qty, packs: r.packs });
+  const carton = await repo.findByCode('16291003000014');
+  const piece = await repo.findByCode('6291003000017');
+  assert.equal(carton.pack.name, 'كرتونة');
+  assert.equal(carton.pack.sell_price, 8000);
+  assert.equal(piece.pack, null);
+  assert.equal(piece.product.id, carton.product.id, 'the piece is the same product, not a new one');
+  // بلا باركود قطعة: الممسوح يبقى باركود الكرتونة لا باركود القطعة
+  const only = packEntry({ name: 'كرتونة', count: 24000, sell: 8000, packBarcode: '16291003000014', makeId: uuid });
+  assert.equal(only.barcode, null);
+  assert.equal(only.packs[0].barcode, '16291003000014');
+  // سعر خاص للقطعة المنفردة
+  assert.equal(packEntry({ name: 'كروز', count: 10000, sell: 20000, pieceSell: 2200, makeId: uuid }).sell, 2200);
+  assert.ok(packEntry({ name: 'كرتونة', count: 24000, sell: 8000, packBarcode: '123456', pieceBarcode: '123456', makeId: uuid }).error);
+  assert.ok(packEntry({ name: 'كرتونة', count: 1000, sell: 8000, makeId: uuid }).error);
+});
+
+test('save: one barcode cannot belong to both the piece and its pack', async () => {
+  const { repo } = setup();
+  await assert.rejects(
+    repo.save({ name: 'شاي', barcode: '12345678', sell_price: 100, cost_price: 0 }, { packs: [{ name: 'كرتونة', factor: 24000, barcode: '12345678' }] }),
+    (e) => !!e.errors.packs,
+  );
+});
+
+test('linkPiece: a scanned single piece joins the product saved under its carton barcode', async () => {
+  const { repo } = setup();
+  // كما أُدخل قبل هذا الإصلاح: باركود الكرتونة حُفظ باركودًا للصنف، والعبوة بلا باركود
+  const { product } = await repo.save({ name: 'نسكافيه', barcode: '16291003000014', sell_price: 333, cost_price: 271 },
+    { qty: 24000, packs: [{ name: 'كرتونة', factor: 24000, barcode: null, sell_price: 8000 }] });
+  const { plan } = await repo.linkPiece(product.id, '6291003000017');
+  assert.equal(plan.kind, 'move');
+  const piece = await repo.findByCode('6291003000017');
+  const carton = await repo.findByCode('16291003000014');
+  assert.equal(piece.product.id, product.id);
+  assert.equal(piece.pack, null);
+  assert.equal(carton.product.id, product.id);
+  assert.equal(carton.pack.sell_price, 8000, 'scanning the carton now sells a carton');
+  assert.equal((await repo.get(product.id)).qty, 24000, 'stock untouched');
+  assert.equal((await repo.list()).length, 1);
+  // صنف بلا باركود: يصير باركوده
+  const b = await repo.save({ name: 'خبز', sell_price: 100, cost_price: 0 });
+  assert.equal((await repo.linkPiece(b.product.id, '96385074')).plan.kind, 'set');
+  assert.equal((await repo.findByCode('96385074')).product.id, b.product.id);
+  // باركود مسجّل لصنف آخر، أو صنف له باركود قطعة ولا عبوة فارغة: يُرفض
+  await assert.rejects(repo.linkPiece(b.product.id, '6291003000017'), (e) => /نسكافيه/.test(e.errors.barcode));
+  await assert.rejects(repo.linkPiece(product.id, '4006381333931'), (e) => !!e.errors.barcode);
+});
