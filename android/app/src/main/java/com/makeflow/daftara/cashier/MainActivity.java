@@ -12,6 +12,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AppInfoPlugin.class);
         registerPlugin(InvoiceSharePlugin.class);
         registerPlugin(BiometricPlugin.class);
+        registerPlugin(ThermalPrinterPlugin.class);
         for (Class<? extends Plugin> p : Flavor.plugins()) registerPlugin(p);
         super.onCreate(savedInstanceState);
         // نسخة معدّلة (أُعيد توقيعها بغير مفتاح MakeFlow): لا تعمل

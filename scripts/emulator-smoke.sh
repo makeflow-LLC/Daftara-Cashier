@@ -97,9 +97,7 @@ hide_kb
 tap 'التالي'
 expect 'ما نوع محلك'
 tap 'بقالة'
-# الحساب إلزامي؛ المحاكي بلا إنترنت فيُسمح بالمتابعة هذه الجلسة
-expect 'أنشئ حسابك'
-tap 'تابع بلا إنترنت الآن'
+# جرّب قبل أن تسجّل: المحل الجديد يدخل الرئيسية مباشرة بلا طلب حساب
 
 # 2) الرئيسية
 expect 'مبيعات اليوم'
@@ -191,7 +189,7 @@ adb shell input keyevent 66
 sleep 2
 expect 'كشف الحساب'
 dump; grep -q '30.00' ui.xml && echo "OK: trader debt recorded" || { echo "::error::trader debt not shown"; exit 1; }
-expect 'حدّد موعد السداد'
+expect 'حدّد موعد الدفع'
 adb shell input keyevent 4
 sleep 2
 tap 'الرئيسية'
@@ -228,9 +226,7 @@ adb shell am force-stop $PKG
 adb shell am start -W -n $PKG/.MainActivity | tee start2.txt
 echo "WARM_START_MS=$(grep -o 'TotalTime: [0-9]*' start2.txt | grep -o '[0-9]*')"
 sleep 4
-# الفتح القادم يطلب الحساب من جديد (ما زلنا بلا إنترنت)
-expect 'أنشئ حسابك'
-tap 'تابع بلا إنترنت الآن'
+# الفتح القادم: ما زال في فترة التجربة الحرة، فيفتح على المحل مباشرة
 expect 'Shop1'
 
 # 11) الترخيص: لافتة التجربة على الرئيسية تفتح صفحة الاشتراك (رقم الجهاز وكود التفعيل)

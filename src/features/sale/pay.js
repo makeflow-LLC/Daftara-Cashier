@@ -78,7 +78,8 @@ export function openPay({ total, customer, onConfirm, onClose = null }) {
       );
     }
 
-    app.sales.paymentMethods().then((m) => { methods = m; if (!split) paintMain(); });
+    // البيع بالآجل لمن يملك صلاحيته فقط
+    app.sales.paymentMethods().then((m) => { methods = m.filter((x) => x.kind !== 'credit' || app.can('credit')); if (!split) paintMain(); });
     paintMain();
     return body;
   }, { title: 'الدفع', onClose });

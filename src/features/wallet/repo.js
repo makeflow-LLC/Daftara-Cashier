@@ -11,9 +11,10 @@ export function createWalletRepo({ db, store, customers }) {
       const w = WALLETS[walletId];
       if (!w) throw new Error('محفظة غير معروفة');
       const all = (await db.payment_methods.toArray()).filter((m) => !m.deleted && m.kind === 'transfer');
-      const same = all.find((m) => m.name.trim() === w.name);
+      // الاسم كما في المحافظ الجاهزة (domain/features.js: «محفظة بال باي»، «جوال باي») أو المختصر
+      const same = all.find((m) => w.methods.includes(m.name.trim()));
       if (same) return same;
-      return store.put('payment_methods', { name: w.name, kind: 'transfer', fee_bp: 0, active: true, sort: 50 });
+      return store.put('payment_methods', { name: w.methods[0], kind: 'transfer', fee_bp: 0, active: true, sort: 50 });
     },
 
     /**

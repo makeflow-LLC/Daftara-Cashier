@@ -9,14 +9,17 @@ import { feedback } from '../../ui/feedback.js';
 import { startInlineScanner } from '../../ui/scanner.js';
 import { purchaseLine, purchaseTotal } from '../../domain/inventory.js';
 import { searchProducts, normalizeBarcode } from '../../domain/product.js';
-import { formatQty, parseQty, lineAmount, QTY_SCALE } from '../../domain/units.js';
+import { formatQty, parseQty, lineAmount, QTY_SCALE, packQtyText, unit as unitOf } from '../../domain/units.js';
 import { parseMoney, formatMoney, CURRENCIES } from '../../domain/currency.js';
 import { formatDecimal } from '../../domain/money.js';
 import { app } from '../../core/app.js';
 import { compressImage, pickImage } from '../../core/media.js';
 import { uuid } from '../../core/ids.js';
 import { productThumb } from '../products/thumb.js';
-import { pickSupplier } from './suppliers.js';
+import { pickSupplier, setSupplierDue } from './suppliers.js';
+import { unknownBarcode } from '../products/link.js';
+import { addDays } from '../../domain/dues.js';
+import { localDay } from '../../domain/offers.js';
 import { showReceipt } from '../sale/receipt.js';
 
 export async function renderPurchase(el, params) {
@@ -74,7 +77,8 @@ export async function renderPurchase(el, params) {
         close(); changed();
       },
     },
-      h('div', { class: 'grid-2' }, field(`الكمية (${l.unit_id ? l.unit : 'بالوحدة'})`, q), field('تكلفة الواحدة', c)),
+      h('div', { class: 'grid-2' }, field(l.unit_id ? `كم ${l.unit}؟` : 'الكمية', q), field(l.unit_id ? `تكلفة ${l.unit.startsWith('ال') ? l.unit : `ال${l.unit}`}` : 'تكلفة الواحدة', c)),
+      l.unit_id ? h('p', { class: 'muted small' }, `${l.unit} = ${formatQty(l.factor)} ${unitOf('piece').short} — المخزون يزيد بالقطع تلقائيًا`) : null,
       button('تم', { type: 'submit', block: true, size: 'lg', icon: 'check' }),
       button('أزل من الفاتورة', { kind: 'text', onclick: () => { draft.lines = draft.lines.filter((_, j) => j !== i); close(); changed(); } }),
     ), { title: l.name, onClose: () => { if (scanner) scanner.resume(); } });
@@ -94,6 +98,15 @@ export async function renderPurchase(el, params) {
     const code = normalizeBarcode(raw);
     const hit = await app.products.findByCode(code);
     if (hit) return addProduct(hit.product, hit.pack);
+    // باركود غير مسجّل: غالبًا كرتونة لصنف مسجّل بالحبة (أو العكس) — نسأل قبل إنشاء صنف مكرر
+    if (products.length) {
+      unknownBarcode(code, { context: 'purchase', onNew: () => newProduct(code), onDone: async () => { products = await app.products.list(); onCode(code); } });
+      return;
+    }
+    newProduct(code);
+  }
+
+  function newProduct(code) {
     // صنف جديد وصل مع البضاعة: اسم وسعر بيع، ثم يدخل الفاتورة
     const name = input({ maxlength: 120, placeholder: 'اسم الصنف' });
     const sell = input({ dir: 'ltr', inputmode: 'decimal', placeholder: '0.00' });
@@ -121,8 +134,15 @@ export async function renderPurchase(el, params) {
     if (!q) { results.hidden = true; return; }
     const hits = searchProducts(products, q, 8);
     results.hidden = false;
-    fill(results, hits.length ? hits.map((p) => h('button', { class: 'row row-tap', type: 'button', onclick: () => { search.value = ''; results.hidden = true; addProduct(p); } },
-      productThumb(p, 36), h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, p.name)), h('span', { class: 'muted small' }, 'مخزون ', num(formatQty(p.qty)))))
+    const pick = (p, pack = null) => { search.value = ''; results.hidden = true; addProduct(p, pack); };
+    // صنف بكرتونة: البضاعة تصل كراتين — «كرتونة» أولًا، و«قطعة» إن اشترى قطعًا
+    fill(results, hits.length ? hits.map((p) => (p.pack
+      ? h('div', { class: 'row pick-row' }, productThumb(p, 36),
+        h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, p.name), h('span', { class: 'row-sub' }, 'عندك ', packQtyText(p.qty, p.pack, p.unit))),
+        h('button', { class: 'pick-btn', type: 'button', onclick: () => pick(p) }, h('small', null, 'شراء بـ'), unitOf(p.unit).name),
+        h('button', { class: 'pick-btn pick-pack', type: 'button', onclick: () => pick(p, p.pack) }, h('small', null, 'شراء بـ'), p.pack.name))
+      : h('button', { class: 'row row-tap', type: 'button', onclick: () => pick(p) },
+        productThumb(p, 36), h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, p.name)), h('span', { class: 'muted small' }, 'مخزون ', num(formatQty(p.qty))))))
       : h('div', { class: 'row muted' }, 'لا نتائج — امسح الباركود لإضافته كصنف جديد'));
   }
   search.addEventListener('input', paintResults);
@@ -153,6 +173,11 @@ export async function renderPurchase(el, params) {
     const total = purchaseTotal(draft.lines);
     if (scanner) scanner.pause();
     let busy = false;
+    let dueDays = null; // «على الحساب»: متى تدفع (اختياري)
+    const dueChips = h('div', { class: 'chips due-chips' });
+    const paintDue = () => fill(dueChips, h('span', { class: 'muted small' }, 'موعد الدفع:'),
+      ...[[null, 'بلا'], [7, 'أسبوع'], [14, 'أسبوعين'], [30, 'شهر']].map(([n, l]) => h('button', { class: `chip ${dueDays === n ? 'on' : ''}`, type: 'button', onclick: () => { dueDays = n; paintDue(); } }, l)));
+    paintDue();
     openSheet((close) => {
       async function save(paid) {
         if (busy) return;
@@ -166,6 +191,7 @@ export async function renderPurchase(el, params) {
             await app.db.files.put({ id, kind: 'purchase', path: attachmentPath, blob: photo.blob, thumb: photo.thumb, state: 'pending' });
           }
           const r = await app.inventory.savePurchase({ lines: draft.lines, supplierId: draft.supplier ? draft.supplier.id : null, paid, attachmentPath });
+          if (paid === 'credit' && draft.supplier && dueDays) await setSupplierDue(draft.supplier.id, addDays(localDay(), dueDays));
           draft = { lines: [], supplier: null }; photo = null;
           feedback.ok(); close(); paint();
           showReceipt(r.invoice.id, { doneLabel: 'تم', doneIcon: 'check', onClose: () => history.back() });
@@ -176,7 +202,8 @@ export async function renderPurchase(el, params) {
         draft.supplier ? h('div', { class: 'pay-cust' }, icon('truck', 18), h('span', null, draft.supplier.name)) : null,
         h('div', { class: 'pay-methods' },
           h('button', { class: 'pay-method pay-cash', type: 'button', onclick: () => save('cash') }, icon('cash', 26), h('span', null, 'دفعت نقدًا')),
-          h('button', { class: 'pay-method pay-credit', type: 'button', onclick: () => save('credit') }, icon('truck', 26), h('span', null, 'على الحساب'))));
+          h('button', { class: 'pay-method pay-credit', type: 'button', onclick: () => save('credit') }, icon('truck', 26), h('span', null, 'على الحساب'))),
+        dueChips);
     }, { title: 'كيف دفعت؟', onClose: () => { if (scanner) scanner.resume(); } });
   }
 

@@ -4,7 +4,7 @@ import { icon } from '../../ui/icons.js';
 import { header, section, row, switchRow, field, input, button, card } from '../../ui/components.js';
 import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback, configureFeedback } from '../../ui/feedback.js';
-import { FEATURES, SHOP_TYPES } from '../../domain/features.js';
+import { FEATURES, SHOP_TYPES, missingWallets } from '../../domain/features.js';
 import { CURRENCIES, EXTRA_CURRENCIES, parseRate } from '../../domain/currency.js';
 import { shopWallets } from '../../domain/wallet.js';
 import { formatDecimal, normalizeDigits, parseDecimal } from '../../domain/money.js';
@@ -13,7 +13,7 @@ import { bus } from '../../core/bus.js';
 import { navigate } from '../../core/router.js';
 import { pickImage } from '../../core/media.js';
 import { appLock } from '../shell/lock.js';
-import { openLink } from '../customers/customers.js';
+import { checkRow } from './update.js';
 
 const go = (p) => () => navigate(p);
 
@@ -24,18 +24,20 @@ export function renderSettings(el) {
     h('div', { class: 'page' },
       section('المحل', h('div', { class: 'list' },
         row({ icon: 'store', title: 'بيانات المحل والشعار', sub: app.shop?.name, onclick: go('/settings/shop') }),
+        row({ icon: 'users', title: 'الموظفون والصلاحيات', sub: app.staff ? `مفعّل — ${(app.staff.members || []).filter((m) => m.active !== false).length} موظف` : 'رمز لكل موظف، والكاشير لا يرى الأرباح', onclick: go('/settings/staff') }),
         row({ icon: 'sliders', title: 'الميزات', sub: `${SHOP_TYPES[app.shop?.shop_type]?.name || ''} — شغّل وأطفئ ما تحتاجه`, onclick: go('/settings/features') }),
         row({ icon: 'tag', title: 'التصنيفات', sub: 'ألبان، معلبات، منظفات…', onclick: go('/settings/categories') }),
         f.multiCurrency ? row({ icon: 'coins', title: 'العملات وأسعار الصرف', onclick: go('/settings/currencies') }) : null,
         row({ icon: 'wallet', title: 'طرق الدفع', sub: 'نقدًا، تحويل، محافظ، آجل', onclick: go('/settings/payments') }),
         row({ icon: 'wallet', title: 'الاستلام بالمحفظة (QR)', sub: shopWallets(app.shop?.settings).map((w) => w.name).join('، ') || 'جوال باي، بال باي — اكتب رقم محفظتك', onclick: go('/settings/wallets') }),
+        row({ icon: 'printer', title: 'طابعة الفواتير', sub: 'طابعة حرارية بلوتوث أو USB — طباعة تلقائية بعد البيع', onclick: go('/settings/printer') }),
         row({ icon: 'scan', title: 'ميزان الباركود', sub: app.shop?.settings?.scale?.enabled ? 'مفعّل — ملصق الميزان يُقرأ بوزنه' : 'مطفأ — امسح ملصق الميزان بوزنه أو سعره', onclick: go('/settings/scale') }),
         row({ icon: 'chat', title: 'رسائل SMS للزبائن', sub: app.shop?.settings?.sms?.enabled ? 'مفعّلة' : 'مطفأة — رسالة تلقائية بعد الدين والدفعة', onclick: go('/settings/sms') }),
       )),
       section('التطبيق', h('div', { class: 'list' },
         row({ icon: 'lock', title: 'القفل والأصوات وشاشة البيع', sub: 'قفل البصمة، صوت المسح، الاهتزاز، إظهار الربح', onclick: go('/settings/appearance') }),
         row({ icon: 'cloud', title: 'المزامنة', sub: 'حالة رفع بياناتك', onclick: go('/settings/sync') }),
-        row({ icon: 'info', title: 'عن التطبيق والتحديثات', sub: app.updater.available ? `تحديث جديد ${app.updater.available}` : null, end: num(app.info.version), onclick: go('/settings/about') }),
+        row({ icon: 'info', title: 'عن التطبيق والتحديثات', end: num(app.info.version), onclick: go('/settings/about') }),
       )),
     ),
   );
@@ -158,9 +160,22 @@ export function renderCurrencies(el) {
 
 export function renderPayments(el) {
   const list = h('div', { class: 'list' });
+  const wallets = h('div');
   const kinds = { cash: 'نقدًا', transfer: 'تحويل / محفظة', credit: 'آجل (دين على الزبون)' };
+  async function addWallet(name, sort) {
+    await app.store.put('payment_methods', { name, kind: 'transfer', fee_bp: 0, active: true, sort });
+    feedback.ok();
+    toast(`أُضيفت ${name}`, { kind: 'ok' });
+    paint();
+  }
   async function paint() {
     const methods = (await app.db.payment_methods.orderBy('sort').toArray()).filter((m) => !m.deleted);
+    const missing = missingWallets(methods);
+    const nextSort = methods.reduce((mx, m) => Math.max(mx, Number(m.sort) || 0), 0) + 1;
+    fill(wallets, missing.length ? section('محافظ يمكن إضافتها',
+      h('div', { class: 'chips' }, ...missing.map((w, i) =>
+        h('button', { class: 'chip', type: 'button', onclick: () => addWallet(w, nextSort + i) }, icon('plus', 16), ' ', w))),
+    ) : null);
     fill(list, ...methods.map((m) => row({
       icon: m.kind === 'cash' ? 'cash' : m.kind === 'credit' ? 'user' : 'wallet',
       title: m.name,
@@ -172,7 +187,7 @@ export function renderPayments(el) {
   function edit(m) {
     const isNew = !m;
     m = m || { name: '', kind: 'transfer', fee_bp: 0, active: true, sort: 99 };
-    const name = input({ value: m.name, maxlength: 40, placeholder: 'مثال: بنك فلسطين، جوال باي' });
+    const name = input({ value: m.name, maxlength: 40, placeholder: 'مثال: بنك فلسطين، بال باي، رفلكت' });
     let kind = m.kind;
     let active = m.active;
     const kindChips = h('div', { class: 'chips' });
@@ -202,6 +217,7 @@ export function renderPayments(el) {
     header('طرق الدفع', { back: true }),
     h('div', { class: 'page' },
       list,
+      wallets,
       button('أضف طريقة دفع', { kind: 'outline', icon: 'plus', block: true, onclick: () => edit(null) }),
     ),
   );
@@ -276,37 +292,6 @@ export function renderAppearance(el) {
 }
 
 export function renderAbout(el) {
-  // التحديثات: الفحص التلقائي يعمل في الخلفية مرة في اليوم؛ هنا يفحص الزبون فورًا
-  const up = app.updater;
-  const updates = h('div');
-  let checking = false;
-  let note = '';
-  function paintUpdates() {
-    const v = up.available;
-    const t = up.target;
-    const last = up.checkedAt ? `آخر فحص: ${new Date(up.checkedAt).toLocaleString('en-GB', { hour12: false, dateStyle: 'short', timeStyle: 'short' })}` : '';
-    fill(updates, card(
-      h('div', { class: `update-card ${v ? 'has-update' : ''}` }, icon('refresh', 28),
-        h('div', null,
-          h('strong', null, v ? ['تحديث جديد: ', num(v)] : 'التحديثات'),
-          h('p', { class: 'muted small' }, v ? 'يُثبَّت فوق النسخة الحالية ولا يمسح بياناتك.' : (note || (up.flavor === 'play' ? 'التحديث من Google Play.' : up.flavor === 'web' ? 'نسخة الويب تتحدّث وحدها عند فتحها والإنترنت يعمل.' : 'التطبيق يفحص وحده مرة في اليوم.'))),
-          last && up.flavor !== 'web' && up.flavor !== 'play' ? h('p', { class: 'muted small' }, num(last)) : null)),
-      v && t ? button(`${t.label} ${v}`, { icon: 'refresh', block: true, size: 'lg', onclick: () => openLink(t.url) }) : null,
-      button(checking ? 'جارٍ الفحص…' : 'تحقق من التحديثات', { kind: v ? 'text' : 'outline', icon: 'refresh', block: true, onclick: checkNow }),
-    ));
-  }
-  async function checkNow() {
-    if (checking) return;
-    checking = true; note = ''; paintUpdates();
-    const r = await up.check({ force: true });
-    checking = false;
-    if (r.status === 'store') { openLink(up.target.url); note = 'فُتحت صفحة التطبيق في Google Play: إن ظهر زر «تحديث» فاضغطه.'; }
-    else if (r.status === 'available') { feedback.ok(); toast(`يوجد تحديث جديد ${r.version}`, { kind: 'ok' }); }
-    else if (r.status === 'latest') { feedback.ok(); note = `عندك أحدث نسخة (${app.info.version}).`; toast('عندك أحدث نسخة ✓', { kind: 'ok' }); }
-    else if (r.status === 'downloading') { note = 'نسخة جديدة تنزل الآن — تُطبَّق عند العودة للرئيسية.'; toast('نسخة جديدة تنزل الآن', { kind: 'ok' }); }
-    else { feedback.error(); note = 'تعذّر الفحص — تأكد من الإنترنت وحاول مرة أخرى.'; toast('تعذّر الفحص — تأكد من الإنترنت', { kind: 'error' }); }
-    paintUpdates();
-  }
   el.append(
     header('عن التطبيق', { back: true }),
     h('div', { class: 'page' },
@@ -314,8 +299,8 @@ export function renderAbout(el) {
         row({ title: 'دفترة كاشير', end: num(app.info.version) }),
         row({ title: 'النسخة', end: app.info.flavor === 'play' ? 'Google Play' : app.info.flavor === 'direct' ? 'تثبيت مباشر' : app.info.flavor === 'desktop' ? 'نسخة الحاسوب' : 'تجريبية' }),
         row({ title: 'رقم البناء', end: num(String(app.info.build)) }),
+        checkRow(),
       )),
-      updates,
       card(h('div', { class: 'list' },
         row({ icon: 'lock', title: 'سياسة الخصوصية', onclick: () => window.open('https://makeflow.tech/apps/cashier/privacy.html', '_blank') }),
         row({ icon: 'clipboard', title: 'شروط الاستخدام', onclick: () => window.open('https://makeflow.tech/apps/cashier/terms.html', '_blank') }),
@@ -323,8 +308,6 @@ export function renderAbout(el) {
       makeflowMark(),
     ),
   );
-  paintUpdates();
-  return bus.on('update', () => paintUpdates());
 }
 
 /** شعار الشركة (في «عن التطبيق» و«المزيد»). */

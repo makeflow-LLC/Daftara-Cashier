@@ -15,8 +15,11 @@ import { navigate } from '../../core/router.js';
 import { openLink } from '../customers/customers.js';
 import { debtTabs } from '../customers/tabs.js';
 import { showReceipt } from '../sale/receipt.js';
-import { dueStatus } from '../../domain/dues.js';
-import { duePicker, dueSheet, dueStrip, dueTag, dueBanner } from './due.js';
+import { dueStatus, supplierDues } from '../../domain/dues.js';
+import { localDay } from '../../domain/offers.js';
+import { duePicker, dueSheet, dueStrip, dueBadge, setSupplierDue } from './due.js';
+
+export { dueSheet, dueBadge, setSupplierDue };
 
 const cur = () => app.shop?.base_currency || 'ILS';
 const minorOf = () => CURRENCIES[cur()].minor;
@@ -78,13 +81,12 @@ export function renderSuppliers(el) {
   let query = '';
   const search = input({ type: 'search', placeholder: 'ابحث باسم التاجر أو رقمه', autocomplete: 'off', oninput: (e) => { query = e.target.value; paint(); } });
   const tabs = debtTabs('suppliers');
-  const dues = dueBanner({ inList: true });
   const totalEl = h('div');
   const tools = h('div');
   const body = h('div');
   const add = () => editSupplier(null, (s) => navigate(`/suppliers/view?id=${s.id}`));
 
-  el.append(header('التجار', { actions: [syncBadge()] }), h('div', { class: 'page' }, tabs.el, totalEl, dues.el, tools, body));
+  el.append(header('التجار', { actions: [syncBadge()] }), h('div', { class: 'page' }, tabs.el, totalEl, tools, body));
 
   function paint() {
     if (!all.length) {
@@ -97,10 +99,12 @@ export function renderSuppliers(el) {
     const owing = all.filter((s) => s.balance > 0);
     const total = owing.reduce((a, s) => a + s.balance, 0);
     const credit = -all.filter((s) => s.balance < 0).reduce((a, s) => a + s.balance, 0);
+    const urgent = supplierDues(all, app.dues.map(), localDay());
     fill(totalEl, h('div', { class: `debt-card ${total > 0 ? '' : 'clear'}` },
       h('div', { class: 'hero-label' }, 'عليك للتجار'),
       h('div', { class: 'hero-value' }, money(total)),
       h('div', { class: 'hero-mini-label' }, total > 0 ? `${owing.length} تاجر له عندك من ${all.length}` : 'لا شيء عليك لأي تاجر'),
+      urgent.length ? h('div', { class: 'hero-mini-label due-line' }, icon('alert', 14), ' مستحق خلال 3 أيام أو متأخر: ', num(formatMoney(urgent.reduce((a, d) => a + d.supplier.balance, 0), cur()))) : null,
       credit > 0 ? h('div', { class: 'hero-mini-label' }, 'ولك عند التجار ', num(formatMoney(credit, cur()))) : null));
     if (!tools.firstChild) {
       fill(tools,
@@ -109,12 +113,14 @@ export function renderSuppliers(el) {
           button('تاجر جديد', { icon: 'plus', onclick: add }),
           button('شراء بفاتورة', { kind: 'outline', icon: 'truck', onclick: () => navigate('/inventory/purchase') })));
     }
-    const items = app.inventory.searchSuppliers(all, query);
+    // الأقرب موعدًا أولًا، ثم الأكبر رصيدًا
+    const dueOf = (s) => (s.balance > 0 && app.dues.get(s.id) ? app.dues.get(s.id).date : '9999');
+    const items = app.inventory.searchSuppliers(all, query).slice().sort((a, b) => (dueOf(a) < dueOf(b) ? -1 : dueOf(a) > dueOf(b) ? 1 : 0));
     fill(body, items.length ? h('div', { class: 'list' }, ...items.slice(0, 200).map((s) => {
       const days = daysSince(s.oldestUnpaidAt);
-      const due = s.balance > 0 ? app.dues.get(s.id) : null;
+      const badge = s.balance > 0 ? dueBadge(s.id) : null;
       // الموعد أهم من عمر الدين: إن حُدّد يظهر مكانه
-      const sub = [s.phone ? num(s.phone) : null, due ? dueTag(dueStatus(due)) : s.balance > 0 && days >= 1 ? `أقدم دين ${ageText(days)}` : null].filter(Boolean);
+      const sub = [s.phone ? num(s.phone) : null, badge || (s.balance > 0 && days >= 1 ? `أقدم دين ${ageText(days)}` : null)].filter(Boolean);
       return h('button', { class: 'row row-tap', type: 'button', onclick: () => navigate(`/suppliers/view?id=${s.id}`) },
         h('span', { class: `avatar ${s.balance > 0 ? 'owed' : ''}` }, s.name.trim().charAt(0)),
         h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, s.name),
@@ -129,7 +135,8 @@ export function renderSuppliers(el) {
   load();
   const offData = bus.on('data', (e) => { if (e.tables.includes('suppliers') || e.tables.includes('supplier_entries')) load(); });
   const offDues = bus.on('dues', paint);
-  return () => { offData(); offDues(); dues.off(); };
+  const offShop = bus.on('shop', paint); // موعد غُيّر من جهاز آخر
+  return () => { offData(); offDues(); offShop(); };
 }
 
 // ============ صفحة التاجر ============
@@ -140,7 +147,7 @@ export async function renderSupplier(el, params) {
   el.append(
     h('header', { class: 'topbar' }, h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'رجوع', onclick: () => history.back() }, icon('back')),
       h('div', { class: 'topbar-title' }, title),
-      h('div', { class: 'topbar-actions' }, iconButton('edit', 'تعديل التاجر', () => editSupplier(s, load, async () => {
+      h('div', { class: 'topbar-actions' }, iconButton('edit', 'تعديل التاجر', () => editSupplier(s, load, !app.can('delete') ? null : async () => {
         await app.inventory.removeSupplier(s.id); history.back();
         toast(`حُذف «${s.name}»`, { undo: () => app.inventory.restoreSupplier(s.id) });
       })))),
@@ -179,7 +186,7 @@ export async function renderSupplier(el, params) {
               h('span', { class: 'row-sub' }, num(dateText(e.created_at)))),
             h('span', { class: 'row-end' }, num(formatMoney(Math.abs(e.amount), cur(), { symbol: false }))));
         }
-        const tap = e.invoice_id ? (e.type === 'purchase' ? () => showReceipt(e.invoice_id, { doneLabel: 'إغلاق', doneIcon: 'x' }) : null) : editableEntry(e) ? () => entrySheet(e) : null;
+        const tap = e.invoice_id ? (e.type === 'purchase' ? () => showReceipt(e.invoice_id, { doneLabel: 'إغلاق', doneIcon: 'x' }) : null) : editableEntry(e) && app.can('delete') ? () => entrySheet(e) : null;
         return h(tap ? 'button' : 'div', { class: `row ${tap ? 'row-tap' : ''}`, type: tap ? 'button' : null, onclick: tap },
           h('span', { class: `row-ic ${e.amount > 0 ? 'ic-debt' : ''}` }, icon(e.amount > 0 ? (e.type === 'purchase' ? 'truck' : 'plus') : 'check', 20)),
           h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, label, e.note ? h('span', { class: 'muted' }, ` · ${e.note}`) : null),
@@ -198,7 +205,7 @@ export async function renderSupplier(el, params) {
   function debtSheet() {
     const amt = input({ dir: 'ltr', inputmode: 'decimal', class: 'input input-xl', placeholder: '0' });
     const note = input({ maxlength: 80, placeholder: 'مثال: فاتورة 1250، زيت وسكر (اختياري)' });
-    const picker = duePicker(app.dues.get(s.id)); // الموعد الحالي يبقى إن لم يُغيَّر
+    const picker = duePicker(app.dues.get(s.id)?.date); // الموعد الحالي يبقى إن لم يُغيَّر
     let busy = false;
     openSheet((close) => h('form', {
       onsubmit: async (e) => {
@@ -209,7 +216,7 @@ export async function renderSupplier(el, params) {
         busy = true;
         try {
           await app.inventory.addSupplierDebt(s.id, v, note.value);
-          await app.dues.set(s.id, picker.value());
+          await app.dues.set(s.id, picker.value(), app.dues.get(s.id)?.note);
           feedback.ok(); close(); await load();
           toast(`سُجّل ${formatMoney(v, cur())} — صار عليك له ${formatMoney(Math.max(0, s.balance), cur())}`, { kind: 'ok', ms: 3500 });
         } catch (err) { busy = false; feedback.error(); toast(err.errors?.amount || 'تعذّر الحفظ', { kind: 'error' }); }
@@ -262,7 +269,7 @@ export async function renderSupplier(el, params) {
     const due = app.dues.get(s.id);
     if (!due) return;
     if (s.balance <= 0) { await app.dues.set(s.id, null); paint(); return; }
-    if (dueStatus(due).days <= 0) dueSheet(s, { title: `بقي عليك ${formatMoney(s.balance, cur())} — متى تدفعه؟`, onSaved: paint });
+    if (dueStatus(due.date, localDay()).days <= 0) dueSheet(s, paint, { title: `بقي عليك ${formatMoney(s.balance, cur())} — متى تدفعه؟` });
   }
 
   // تعديل أو حذف دين/دفعة/رصيد سابق: يُضاف قيد تصحيح (والدرج يُصحَّح للدفعات النقدية)، والأصلية تظهر «ملغاة»

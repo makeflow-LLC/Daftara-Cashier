@@ -1,100 +1,82 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { dateKey, isDateKey, addDays, daysUntil, dueStatus, dueText, daysText, dueList, dueAlerts, pruneDues, ALERT_DAYS } from '../src/domain/dues.js';
-import { createDues } from '../src/core/dues.js';
+import { addDays, daysBetween, dueStatus, dueText, supplierDues } from '../src/domain/dues.js';
 
-const NOW = new Date(2026, 10, 19, 15, 30).getTime(); // 19/11/2026 بعد الظهر (محلي)
-
-test('dates: local day keys, validation, calendar-day differences', () => {
-  assert.equal(dateKey(NOW), '2026-11-19');
-  assert.ok(isDateKey('2026-11-30'));
-  for (const bad of ['2026-11-31', '2026-13-01', '26-11-19', '', null, '2026/11/19']) assert.ok(!isDateKey(bad), String(bad));
-  assert.equal(addDays(7, NOW), '2026-11-26');
-  assert.equal(addDays(30, NOW), '2026-12-19');
-  assert.equal(daysUntil('2026-11-19', NOW), 0);
-  assert.equal(daysUntil('2026-11-20', NOW), 1, 'tomorrow is one day away even late in the afternoon');
-  assert.equal(daysUntil('2026-11-17', new Date(2026, 10, 19, 0, 5).getTime()), -2);
-  assert.equal(daysUntil('2027-01-01', NOW), 43);
+test('dates and wording', () => {
+  assert.equal(addDays('2026-11-16', 14), '2026-11-30');
+  assert.equal(addDays('2026-12-25', 10), '2027-01-04');
+  assert.equal(addDays('2026-03-28', 2), '2026-03-30', 'no DST drift');
+  assert.equal(daysBetween('2026-11-16', '2026-11-13'), -3);
+  assert.deepEqual(dueStatus('2026-11-16', '2026-11-16'), { days: 0, state: 'today' });
+  assert.equal(dueStatus('2026-11-19', '2026-11-16').state, 'soon');
+  assert.equal(dueStatus('2026-11-20', '2026-11-16').state, 'later');
+  assert.equal(dueStatus('2026-11-10', '2026-11-16').state, 'overdue');
+  assert.equal(dueText(-6), 'متأخر 6 أيام');
+  assert.equal(dueText(-2), 'متأخر يومين');
+  assert.equal(dueText(1), 'غدًا');
+  assert.equal(dueText(5), 'بعد 5 أيام');
 });
 
-test('status and wording', () => {
-  assert.deepEqual(dueStatus('2026-11-19', NOW), { days: 0, state: 'today', alert: true });
-  assert.equal(dueStatus('2026-11-20', NOW).state, 'soon');
-  assert.equal(dueStatus(addDays(ALERT_DAYS, NOW), NOW).state, 'soon');
-  assert.deepEqual(dueStatus(addDays(ALERT_DAYS + 1, NOW), NOW), { days: ALERT_DAYS + 1, state: 'later', alert: false });
-  assert.equal(dueStatus('2026-11-10', NOW).state, 'overdue');
-  assert.equal(dueText(dueStatus('2026-11-19', NOW)), 'اليوم');
-  assert.equal(dueText(dueStatus('2026-11-20', NOW)), 'غدًا');
-  assert.equal(dueText(dueStatus('2026-11-21', NOW)), 'بعد يومين');
-  assert.equal(dueText(dueStatus('2026-11-22', NOW)), 'بعد 3 أيام');
-  assert.equal(dueText(dueStatus('2026-11-18', NOW)), 'متأخر يوم');
-  assert.equal(dueText(dueStatus('2026-11-17', NOW)), 'متأخر يومين');
-  assert.equal(dueText(dueStatus('2026-11-04', NOW)), 'متأخر 15 يومًا');
-  assert.equal(daysText(10), '10 أيام');
-  assert.equal(daysText(11), '11 يومًا');
+test('supplier dues: only who you still owe, overdue first', () => {
+  const sups = [{ id: 'a', name: 'أبو خالد', balance: 50000 }, { id: 'b', name: 'شركة الألبان', balance: 12000 },
+    { id: 'c', name: 'مسدد', balance: 0 }, { id: 'd', name: 'بعيد', balance: 100 }, { id: 'e', name: 'بلا موعد', balance: 900 }];
+  const dues = { a: { date: '2026-11-18' }, b: { date: '2026-11-10', note: 'شيك' }, c: { date: '2026-11-15' }, d: { date: '2026-12-30' } };
+  const r = supplierDues(sups, dues, '2026-11-16');
+  assert.deepEqual(r.map((x) => [x.supplier.id, x.days, x.state]), [['b', -6, 'overdue'], ['a', 2, 'soon']]);
+  assert.equal(r[0].note, 'شيك');
+  assert.equal(supplierDues(sups, dues, '2026-11-16', { all: true }).length, 3);
+  assert.deepEqual(supplierDues(sups, null, '2026-11-16'), []);
 });
 
-const suppliers = [
-  { id: 'a', name: 'أبو خالد', balance: 160000 },
-  { id: 'b', name: 'شركة الألبان', balance: 45050 },
-  { id: 'c', name: 'مخبز السلام', balance: -6000 },
-  { id: 'd', name: 'مصنع العصير', balance: 9000 },
-  { id: 'e', name: 'مسدَّد', balance: 0 },
-];
-
-test('due list and alerts: only traders you still owe, nearest first', () => {
-  const map = { a: '2026-11-21', b: '2026-11-17', c: '2026-11-19', d: '2026-12-25', e: '2026-11-19', gone: '2026-11-19', x: 'bad' };
-  assert.deepEqual(dueList(suppliers, map, NOW).map((s) => [s.id, s.status.state]), [['b', 'overdue'], ['a', 'soon'], ['d', 'later']]);
-  const a = dueAlerts(suppliers, map, NOW);
-  assert.deepEqual(a.items.map((s) => s.id), ['b', 'a']);
-  assert.equal(a.total, 205050);
-  assert.equal(a.overdue, 1);
-  assert.equal(dueAlerts(suppliers, { d: '2026-12-25' }, NOW), null, 'a far date does not alert yet');
-  assert.equal(dueAlerts(suppliers, {}, NOW), null);
-  assert.equal(dueAlerts(suppliers, null, NOW), null);
-  assert.deepEqual(pruneDues(map, suppliers), { a: '2026-11-21', b: '2026-11-17', d: '2026-12-25' }, 'settled, deleted and invalid entries are dropped');
+// ---------- إضافات 1.3.0: التحقق من التاريخ، التنظيف، سطر التذكير، وخدمة المواعيد ----------
+test('isDay, pruneDues and the reminder line', async () => {
+  const { isDay, pruneDues, dueSummary, supplierDues } = await import('../src/domain/dues.js');
+  assert.ok(isDay('2026-11-30'));
+  for (const bad of ['2026-11-31', '2026-13-01', '26-11-19', '', null, '2026/11/19']) assert.ok(!isDay(bad), String(bad));
+  const list = [{ id: 'a', name: 'أبو خالد', balance: 160000 }, { id: 'b', name: 'الألبان', balance: 45050 }, { id: 'c', name: 'مسدَّد', balance: 0 }];
+  const map = { a: { date: '2026-11-19', note: 'شيك' }, b: { date: '2026-11-17', note: null }, c: { date: '2026-11-19' }, gone: { date: '2026-11-19' }, x: { date: 'bad' } };
+  assert.deepEqual(Object.keys(pruneDues(map, list)), ['a', 'b'], 'settled, deleted and invalid entries are dropped');
+  assert.deepEqual(Object.keys(pruneDues(map, list, 'c')), ['a', 'b', 'c'], 'the one being set is kept');
+  const due = supplierDues(list, map, '2026-11-19');
+  const s = dueSummary(due);
+  assert.equal(s.title, 'دفعتان للتجار حان موعدهما');
+  assert.equal(s.total, 205050);
+  assert.equal(s.overdue, 1);
+  assert.equal(s.supplierId, null);
+  const one = dueSummary(supplierDues(list, { a: map.a }, '2026-11-19'));
+  assert.match(one.title, /اليوم موعد الدفع لـ أبو خالد/);
+  assert.equal(one.supplierId, 'a');
+  assert.equal(dueSummary([]), null);
 });
 
-function fakeApp(list, settings = {}) {
+test('dues service: released storage shape, set/clear with note, one reminder a day', async () => {
+  const { createDues } = await import('../src/core/dues.js');
+  const list = [{ id: 'a', name: 'أبو خالد', balance: 160000 }, { id: 'b', name: 'الألبان', balance: 45050 }];
+  // محل حدّد موعدًا في إصدار سابق: يبقى مقروءًا كما هو
   const app = {
-    shop: { base_currency: 'ILS', settings },
+    shop: { base_currency: 'ILS', settings: { supplierDues: { b: { date: '2026-11-17', note: 'شيك' } } } },
     inventory: { suppliers: async () => list },
     async updateShopSettings(patch) { app.shop.settings = { ...app.shop.settings, ...patch }; },
   };
-  return app;
-}
-function fakeStorage() {
-  const m = new Map();
-  return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, v) };
-}
-
-test('dues service: set, clear, one reminder a day, summary text', async () => {
-  const app = fakeApp(suppliers);
-  const toasts = [], emitted = [];
-  const d = createDues(app, { toast: (m) => toasts.push(m), emit: (a) => emitted.push(a), storage: fakeStorage() });
-  await d.check(NOW);
-  assert.equal(toasts.length, 0, 'nothing due → silent');
+  const mem = new Map();
+  const toasts = [];
+  let day = '2026-11-19';
+  const d = createDues(app, { toast: (m) => toasts.push(m), storage: { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) }, today: () => day });
+  assert.deepEqual(d.get('b'), { date: '2026-11-17', note: 'شيك' });
   await assert.rejects(d.set('a', '2026-02-30'), /التاريخ/);
-  await d.set('a', dateKey(NOW));
-  assert.equal(d.get('a'), '2026-11-19');
-  assert.deepEqual(app.shop.settings.supplierDue, { a: '2026-11-19' });
-  await d.refresh(NOW);
-  assert.match(d.summary().title, /اليوم موعد سداد أبو خالد/);
-  assert.match(d.summary().sub, /1,600\.00/);
-  assert.equal(d.summary().supplierId, 'a');
-  await d.check(NOW);
-  await d.check(NOW);
+  await d.set('a', '2026-11-19', ' دفعة أولى ');
+  assert.deepEqual(app.shop.settings.supplierDues, { b: { date: '2026-11-17', note: 'شيك' }, a: { date: '2026-11-19', note: 'دفعة أولى' } });
+  await d.check();
+  await d.check();
   assert.equal(toasts.length, 1, 'reminded once per day, not on every return to the app');
-  await d.check(NOW + 86400000);
+  assert.match(toasts[0], /دفعتان للتجار/);
+  day = '2026-11-20';
+  await d.check();
   assert.equal(toasts.length, 2, 'and again the next day while still unpaid');
-  assert.match(toasts[1], /متأخر يوم/);
-  await d.set('b', '2026-11-17');
-  await d.refresh(NOW);
-  assert.match(d.summary().title, /دفعتان للتجار حان موعدهما/);
-  assert.equal(d.summary().supplierId, null);
   await d.set('a', null);
   await d.set('b', null);
-  assert.deepEqual(app.shop.settings.supplierDue, {});
-  assert.equal((await d.refresh(NOW)), null);
-  assert.ok(emitted.length >= 3, 'screens are told when alerts change');
+  assert.deepEqual(app.shop.settings.supplierDues, {});
+  day = '2026-11-21';
+  await d.check();
+  assert.equal(toasts.length, 2, 'nothing due → silent');
 });

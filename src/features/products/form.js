@@ -8,8 +8,9 @@ import { feedback } from '../../ui/feedback.js';
 import { scanOnce } from '../../ui/scanner.js';
 import { parseMoney, formatMoney, CURRENCIES } from '../../domain/currency.js';
 import { formatDecimal } from '../../domain/money.js';
-import { parseQty, formatQty, UNITS, unit as unitOf, QTY_SCALE } from '../../domain/units.js';
-import { marginBp, normalizeBarcode, isInternalBarcode, packToPiece, packEntry } from '../../domain/product.js';
+import { parseQty, formatQty, UNITS, unit as unitOf, QTY_SCALE, mainPack, splitByPack, lineAmount } from '../../domain/units.js';
+import { linkSheet, mergeFrom } from './link.js';
+import { marginBp, normalizeBarcode, isInternalBarcode, packToPiece, upsertPack, packEntry } from '../../domain/product.js';
 import { DEFAULT_LOW_STOCK_THRESHOLD } from '../../domain/features.js';
 import { uuid } from '../../core/ids.js';
 import { app } from '../../core/app.js';
@@ -59,6 +60,7 @@ export async function renderProductForm(el, params) {
     { id: 'other', name: 'أخرى' },
   ];
   let mode = 'piece';
+  let initialPackCost = null;
   const modeChips = h('div', { class: 'chips price-mode' });
   const countIn = input({ dir: 'ltr', inputmode: 'numeric', placeholder: 'مثال: 24' });
   const otherName = input({ maxlength: 30, placeholder: 'مثال: شوال، صندوق، علبة' });
@@ -86,6 +88,10 @@ export async function renderProductForm(el, params) {
   const sellLabel = h('span', { class: 'field-label' });
   const costLabel = h('span', { class: 'field-label' });
   const qtyLabel = h('span', { class: 'field-label' });
+  // بالكرتونة: «كم كرتونة؟» و«وكم قطعة زيادة؟» — 46 قطعة = 1 كرتونة و22 قطعة، لا «1.917 كرتونة»
+  const loose = input({ dir: 'ltr', inputmode: 'decimal', placeholder: '0' });
+  const looseLabel = h('span', { class: 'field-label' });
+  const looseField = h('div', { hidden: true }, h('label', { class: 'field' }, looseLabel, loose));
   const packName = () => (mode === 'other' ? otherName.value.trim() : mode);
   const packCount = () => { const c = parseQty(countIn.value || ''); return c && c > QTY_SCALE ? c : null; };
   function paintMode() {
@@ -93,17 +99,19 @@ export async function renderProductForm(el, params) {
       class: `chip ${mode === m.id ? 'on' : ''}`, type: 'button',
       onclick: () => {
         const was = mode;
+        // عند التعديل: نحوّل الأرقام المكتوبة بين الكرتونة والقطعة (80 للكرتونة لا تصير 80 للقطعة)
+        if (editing && m.id !== mode) convertFields(mode, m.id);
         mode = m.id;
         // الأرقام المكتوبة تبقى كما هي: نفهمها الآن سعر العبوة (هكذا كتبها التاجر أصلًا)
         const existing = (packs || []).find((x) => x.name === packName());
         // والباركود كذلك: الممسوح يُفهم باركود العبوة، وباركود القطعة المنفردة يُمسح في خانته
-        if (was === 'piece' && m.id !== 'piece') {
+        if (!editing && was === 'piece' && m.id !== 'piece') {
           const known = existing?.barcode || packCodeStash;
           if (known && known !== normalizeBarcode(barcode.value)) {
             if (!pieceCode.value.trim()) pieceCode.value = barcode.value;
             barcode.value = known;
           }
-        } else if (was !== 'piece' && m.id === 'piece') {
+        } else if (!editing && was !== 'piece' && m.id === 'piece') {
           packCodeStash = '';
           if (pieceCode.value.trim()) { packCodeStash = normalizeBarcode(barcode.value); barcode.value = pieceCode.value; pieceCode.value = ''; }
         }
@@ -119,8 +127,9 @@ export async function renderProductForm(el, params) {
     packBox.hidden = !pk;
     packBox.querySelector('.pack-other').hidden = mode !== 'other';
     const one = u.name === 'قطعة' ? 'القطعة' : `ال${u.name}`;
-    pieceBox.hidden = !pk || !packCount();
-    barcodeLabel.textContent = pk ? `باركود ${the}` : 'الباركود';
+    // خانة باركود القطعة المنفردة للصنف الجديد فقط؛ عند التعديل يبقى الباركود كما سُجّل
+    pieceBox.hidden = !!editing || !pk || !packCount();
+    barcodeLabel.textContent = pk && !editing ? `باركود ${the}` : 'الباركود';
     pieceTitle.textContent = `باركود ${one} المنفردة`;
     pieceSellLabel.textContent = `سعر بيع ${one} المنفردة (اختياري)`;
     const same = pk && normalizeBarcode(pieceCode.value) && normalizeBarcode(pieceCode.value) === normalizeBarcode(barcode.value);
@@ -129,8 +138,32 @@ export async function renderProductForm(el, params) {
     countLabel.textContent = `كم ${u.name} في ${the}؟`;
     sellLabel.textContent = pk ? `سعر بيع ${the}` : `سعر البيع${unitId !== 'piece' ? ` لكل ${u.name}` : ''}`;
     costLabel.textContent = pk ? `تكلفة ${the}` : 'سعر التكلفة';
-    qtyLabel.textContent = pk ? `كم ${nm} عندك الآن؟` : (editing ? 'الكمية الموجودة الآن' : 'الكمية الموجودة (اختياري)');
+    qtyLabel.textContent = pk ? `كم ${nm} كاملة عندك؟` : (editing ? 'الكمية الموجودة الآن' : 'الكمية الموجودة (اختياري)');
+    looseField.hidden = !pk;
+    if (looseField.parentElement) looseField.parentElement.classList.toggle('grid-2', pk);
+    looseLabel.textContent = `و${u.id === 'piece' ? 'كم قطعة' : `كم ${u.name}`} زيادة؟`;
     paintMargin();
+  }
+  function convertFields(from, to) {
+    const n = from !== 'piece' ? packCount() : null;
+    const s = parseMoney(sell.value || '', currency), c = parseMoney(cost.value || '', currency);
+    if (from !== 'piece' && to === 'piece' && n) {
+      const r = packToPiece({ count: n, sell: s, cost: c || 0, qty: parseQty(qty.value || '0') || 0 });
+      if (s !== null) sell.value = moneyText(r.sell, currency);
+      if (c) cost.value = moneyText(r.cost, currency);
+      qty.value = formatQty(r.qty + (parseQty(loose.value || '0') || 0));
+      loose.value = '';
+    } else if (from === 'piece' && to !== 'piece') {
+      const existing = (packs || []).find((x) => x.name === (to === 'other' ? otherName.value.trim() : to));
+      const f = existing ? existing.factor : null;
+      if (!f) return; // عبوة جديدة: التاجر يكتب سعرها بنفسه
+      if (s !== null) sell.value = moneyText(Number.isSafeInteger(existing.sell_price) ? existing.sell_price : lineAmount(s, f), currency);
+      if (c) cost.value = moneyText(lineAmount(c, f), currency);
+      const sp = splitByPack(parseQty(qty.value || '0') || 0, f);
+      qty.value = String(sp.packs);
+      loose.value = sp.rest ? formatQty(sp.rest) : '';
+    }
+    initialPackCost = null;
   }
   countIn.addEventListener('input', () => paintMode());
   pieceCode.addEventListener('input', () => paintMode());
@@ -150,8 +183,9 @@ export async function renderProductForm(el, params) {
     const c = parseMoney(cost.value || '0', currency);
     if (mode !== 'piece') {
       const n = packCount();
-      const r = n && s !== null && c !== null ? packToPiece({ count: n, sell: s, cost: c, qty: parseQty(qty.value || '0') || 0 }) : null;
-      const own = pieceSell.value.trim() ? parseMoney(pieceSell.value, currency) : null;
+      const r0 = n && s !== null && c !== null ? packToPiece({ count: n, sell: s, cost: c, qty: parseQty(qty.value || '0') || 0 }) : null;
+      const r = r0 ? { ...r0, qty: r0.qty + (parseQty(loose.value || '0') || 0) } : null;
+      const own = !editing && pieceSell.value.trim() ? parseMoney(pieceSell.value, currency) : null;
       if (r && own !== null) r.sell = own;
       const u = unitOf(unitId);
       pieceHint.textContent = r ? `يعني ${u.name === 'قطعة' ? 'القطعة' : `ال${u.name}`}: بيع ${formatMoney(r.sell, currency)}${app.can('see_cost') && c ? ` — تكلفة ${formatMoney(r.cost, currency)}` : ''}${r.qty ? ` — المخزون ${formatQty(r.qty)} ${u.short}` : ''}` : 'اكتب كم قطعة فيها، والتطبيق يحسب سعر القطعة وحده';
@@ -164,6 +198,7 @@ export async function renderProductForm(el, params) {
   sell.addEventListener('input', paintMargin);
   cost.addEventListener('input', paintMargin);
   qty.addEventListener('input', paintMargin);
+  loose.addEventListener('input', paintMargin);
 
   // اسم مقترح من الكتالوج المشترك لباركود جديد
   async function suggestName(code) {
@@ -303,15 +338,28 @@ export async function renderProductForm(el, params) {
     let codeP = normalizeBarcode(barcode.value) || null;
     if (mode !== 'piece' && !Object.keys(local).length) {
       const n = packCount();
-      const own = pieceSell.value.trim() ? parseMoney(pieceSell.value, currency) : null;
+      const own = !editing && pieceSell.value.trim() ? parseMoney(pieceSell.value, currency) : null;
       if (!packName()) local.sell_price = 'اكتب اسم العبوة';
       else if (!n) local.sell_price = `اكتب كم قطعة في ${packName()} (أكثر من 1)`;
-      else if (pieceSell.value.trim() && own === null) local.sell_price = 'سعر القطعة المنفردة غير صحيح';
+      else if (!editing && pieceSell.value.trim() && own === null) local.sell_price = 'سعر القطعة المنفردة غير صحيح';
       else {
-        // العبوة تُحفظ بسعرها وباركودها: مسح الكرتونة = كرتونة بـ 80 بالضبط، ومسح القطعة = قطعة من نفس الصنف
-        const r = packEntry({ packs, name: packName(), count: n, sell: sellV, cost: costV, qty: qtyV, packBarcode: barcode.value, pieceBarcode: pieceCode.value, pieceSell: own, makeId: uuid });
-        if (r.error) local.barcode = r.error;
-        else { sellP = r.sell; costP = r.cost; qtyP = r.qty; packsOut = r.packs; codeP = r.barcode; }
+        const looseV = parseQty(loose.value || '0');
+        if (looseV === null || looseV < 0) local.qty = 'عدد القطع الزائدة غير صحيح';
+        if (editing) {
+          // التعديل: الباركود يبقى كما سُجّل (باركود القطعة يُضاف من «امسح باركود الحبة» أدناه)
+          const r = packToPiece({ count: n, sell: sellV, cost: costV, qty: qtyV });
+          sellP = r.sell; costP = r.cost; qtyP = r.qty + (looseV || 0);
+          // التكلفة كما هي إن لم يغيّرها (لا فرق أغورة من التحويل ذهابًا وإيابًا)
+          if (cost.value === initialPackCost) costP = editing.cost_price;
+          // العبوة تُحفظ بسعرها: بيع كرتونة في شاشة البيع = 80 بالضبط، لا 24 × 3.33
+          packsOut = upsertPack(packs, { name: packName(), count: n, sell: sellV, makeId: uuid });
+        } else {
+          // صنف جديد بعبوته: الممسوح باركود الكرتونة فيُحفظ لها (مسحها = كرتونة بـ 80 بالضبط)، وباركود القطعة
+          // المنفردة للصنف نفسه — فلا تُحسب القطعة صنفًا جديدًا عند بيعها
+          const r = packEntry({ packs, name: packName(), count: n, sell: sellV, cost: costV, qty: qtyV, packBarcode: barcode.value, pieceBarcode: pieceCode.value, pieceSell: own, makeId: uuid });
+          if (r.error) local.barcode = r.error;
+          else { sellP = r.sell; costP = r.cost; qtyP = r.qty + (looseV || 0); packsOut = r.packs; codeP = r.barcode; }
+        }
       }
     }
     if (Object.keys(local).length) { showErrors(local); feedback.error(); toast(Object.values(local)[0], { kind: 'error' }); return; }
@@ -358,6 +406,12 @@ export async function renderProductForm(el, params) {
     f.expiry ? field('تاريخ انتهاء الصلاحية', expiry, 'ننبهك قبل الانتهاء بـ 30 يومًا') : null,
     f.quickItems ? h('div', { class: 'list' }, switchRow({ title: 'زر في شاشة البيع', sub: 'للأصناف بلا باركود: خبز، أكياس، فكّة…', checked: isQuick, onchange: (v) => { isQuick = v; } })) : null,
     field('ملاحظة', note));
+  // الحبة والكرتونة صنف واحد: ربط باركود الحبة، أو دمج صنف مكرر (أُدخلت الكرتونة والحبة صنفين)
+  const linkBox = editing && unitId === 'piece' ? h('div', { class: 'list section link-box' },
+    h('button', { class: 'row row-tap', type: 'button', onclick: async () => { const code = await scanOnce('امسح باركود الحبة التي داخل الكرتونة'); if (code) linkSheet({ carton: editing, pieceBarcode: code, onDone: () => history.back() }); } },
+      h('span', { class: 'row-ic' }, icon('scan', 20)), h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, 'هذا كرتونة؟ اربط باركود الحبة التي بداخلها'), h('span', { class: 'row-sub' }, 'فيُباع بالحبة وبالكرتونة من صنف واحد')), icon('chevron', 20)),
+    h('button', { class: 'row row-tap', type: 'button', onclick: () => mergeFrom(editing, () => history.back()) },
+      h('span', { class: 'row-ic' }, icon('copy', 20)), h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, 'مكرر؟ ادمج الحبة والكرتونة'), h('span', { class: 'row-sub' }, 'أُدخلت الكرتونة صنفًا والحبة صنفًا آخر')), icon('chevron', 20))) : null;
   const advToggle = h('button', { class: 'adv-toggle', type: 'button', onclick: () => { adv.hidden = !adv.hidden; advToggle.classList.toggle('open', !adv.hidden); } },
     icon('sliders', 20), h('span', null, 'خيارات إضافية'), h('small', null, [f.units ? 'الوحدة والعبوات' : null, 'التصنيف', f.expiry ? 'الصلاحية' : null, 'التنبيه'].filter(Boolean).join('، ')), icon('chevron', 18));
   if (hasAdvanced) advToggle.classList.add('open');
@@ -382,13 +436,30 @@ export async function renderProductForm(el, params) {
         app.can('see_cost') ? h('div', null, h('label', { class: 'field' }, costLabel, cost), errorEl('cost_price')) : null,
       ),
       margin,
-      h('div', null, h('label', { class: 'field' }, qtyLabel, qty), errorEl('qty')),
+      h('div', { class: 'qty-pair' }, h('div', null, h('label', { class: 'field' }, qtyLabel, qty), errorEl('qty')), looseField),
       pieceHint,
+      linkBox,
       advToggle,
       adv,
       h('div', { class: 'sticky-save' }, button(editing ? 'حفظ التعديل' : 'حفظ الصنف', { type: 'submit', block: true, size: 'lg', icon: 'check' })),
     ),
   );
+  // صنف سعّره التاجر بالكرتونة: يُفتح كما أدخله (سعر الكرتونة، وكم كرتونة وكم قطعة)، لا بسعر القطعة 3.33 وكمية 22
+  if (editing) {
+    const pk0 = mainPack(p.units);
+    if (pk0 && Number.isSafeInteger(pk0.sell_price) && unitId === 'piece') {
+      const known = PACK_MODES.find((m) => m.id === pk0.name);
+      mode = known ? known.id : 'other';
+      if (!known) otherName.value = pk0.name;
+      countIn.value = formatQty(pk0.factor);
+      sell.value = moneyText(pk0.sell_price, currency);
+      cost.value = p.cost_price ? moneyText(lineAmount(p.cost_price, pk0.factor), currency) : '';
+      initialPackCost = cost.value;
+      const sp = splitByPack(Math.max(0, p.qty || 0), pk0.factor);
+      qty.value = String(sp.packs);
+      loose.value = sp.rest ? formatQty(sp.rest) : '';
+    }
+  }
   paintUnits();
   paintCats();
   paintPacks();

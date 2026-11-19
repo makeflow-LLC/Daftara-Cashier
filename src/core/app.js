@@ -8,6 +8,7 @@ import { config } from './config.js';
 import { makeClock } from '../domain/merge.js';
 import { resolveFeatures, defaultPaymentMethods } from '../domain/features.js';
 import { TRIAL_DAYS } from '../domain/license.js';
+import { allowed, userById } from '../domain/staff.js';
 import { createLicense } from './license.js';
 import { createAccount } from './account.js';
 import { createSms } from './sms.js';
@@ -23,7 +24,6 @@ import { createCustomerRepo } from '../features/customers/repo.js';
 import { createInventoryRepo } from '../features/inventory/repo.js';
 import { createCashRepo } from '../features/cash/repo.js';
 import { createWalletRepo } from '../features/wallet/repo.js';
-import { createUpdater } from './update.js';
 import { createDues } from './dues.js';
 
 const clock = makeClock();
@@ -52,11 +52,34 @@ export const app = {
     set(key, value) { return app.db.meta.put({ key, value }); },
   },
 
-  /** صلاحيات (المرحلة 2: الكاشير لا يرى الربح ولا التكلفة). الآن صاحب المحل فقط. */
+  /** من يستعمل هذا الجهاز الآن: null = صاحب المحل (أو المحل بلا موظفين)، أو { owner } أو عضو. */
+  user: null,
+
+  /** إعداد الموظفين (settings.staff) أو null. */
+  get staff() {
+    const s = app.shop?.settings?.staff;
+    return s && s.enabled ? s : null;
+  },
+
+  /** الموظفون مفعّلون ولا أحد دخل على هذا الجهاز: تظهر شاشة القفل. */
+  get locked() {
+    return !!(app.staff && !app.user);
+  },
+
+  /** صلاحيات: صاحب المحل كل شيء، والموظف ما أعطاه صاحب المحل فقط (domain/staff.js). */
   can(action) {
-    const role = app.ctx.role;
-    if (role === 'owner' || role === 'manager') return true;
-    return !['see_profit', 'see_cost', 'settings', 'delete'].includes(action);
+    if (!app.staff) return true;
+    if (!app.user) return false;
+    return allowed(app.user, action);
+  },
+
+  /** يدخل شخص (id = 'owner' أو معرّف موظف) أو يقفل الجهاز (null). كل ما يُحفظ بعدها يحمل اسمه. */
+  async setUser(id) {
+    app.user = id ? userById(app.shop?.settings?.staff, id) : null;
+    app.ctx.userId = app.user && !app.user.owner ? app.user.id : null;
+    app.ctx.role = !app.user || app.user.owner ? 'owner' : 'staff';
+    await app.meta.set('staff:current', app.user ? app.user.id : null);
+    bus.emit('user', app.user);
   },
 
   feature(name) {
@@ -109,17 +132,14 @@ export const app = {
       billing: globalThis.Capacitor?.Plugins?.CashierBilling || null,
     });
     await app.license.init();
-    app.updater = createUpdater({ meta: app.meta, getInfo: () => ({ ...app.info, release: !!app.config.release }), emit: (v) => bus.emit('update', v) });
-    await app.updater.load();
     app.startSync();
     app.account = createAccount(app);
     await app.account.init();
     app.sms = createSms(app, { toast: (...a) => bus.emit('toast', a) });
     app.reminders = createReminders(app, { toast: (...a) => bus.emit('toast', a), emit: () => bus.emit('reminders', app.reminders.due) });
-    app.dues = createDues(app, { toast: (...a) => bus.emit('toast', a), emit: (a) => bus.emit('dues', a) });
+    app.dues = createDues(app, { toast: (...a) => bus.emit('toast', a), emit: () => bus.emit('dues') });
     bus.on('data', async (e) => {
       if (e.tables.includes('shops')) await app.loadShop();
-      if (e.tables.some((t) => t === 'shops' || t === 'suppliers' || t === 'supplier_entries')) app.dues.refresh().catch(() => {});
       if (e.prefixChanged) app.ctx.prefix = e.prefixChanged;
     });
     return app;
@@ -128,6 +148,11 @@ export const app = {
   async loadShop() {
     app.shop = await app.db.shops.get(app.ctx.shopId);
     app.features = resolveFeatures(app.shop?.shop_type, app.shop?.settings?.features);
+    // الموظف الحالي: من الجهاز، ويُعاد من إعداد المحل (صلاحياته تتغير من جهاز صاحب المحل)
+    const id = await app.meta.get('staff:current');
+    app.user = app.staff ? userById(app.staff, id) : null;
+    app.ctx.userId = app.user && !app.user.owner ? app.user.id : null;
+    app.ctx.role = !app.user || app.user.owner ? 'owner' : 'staff';
     bus.emit('shop', app.shop);
   },
 

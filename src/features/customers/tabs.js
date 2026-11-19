@@ -6,6 +6,8 @@ import { app } from '../../core/app.js';
 import { navigate } from '../../core/router.js';
 
 export function debtTabs(active) {
+  // موظف بلا صلاحية الشراء لا يرى ما على المحل للتجار: القائمة تبقى زبائن فقط بلا مفتاح
+  if (!app.can('purchases')) return { el: null, refresh: async () => {} };
   const amounts = { customers: h('span', { class: 'debt-tab-amt' }), suppliers: h('span', { class: 'debt-tab-amt' }) };
   const tab = (id, title, sub, path) => h('button', {
     class: `debt-tab debt-tab-${id} ${active === id ? 'on' : ''}`, type: 'button', 'aria-pressed': active === id ? 'true' : 'false',

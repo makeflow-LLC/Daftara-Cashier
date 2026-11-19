@@ -1,6 +1,6 @@
 // المخزون على الجهاز: الشراء (يحدّث المخزون ومتوسط التكلفة)، التجار (الموردون) وديونهم، الجرد، التالف، والتنبيهات.
 // كل تغيير في الكمية حركة تُضاف — لا رقم يُعدَّل.
-import { buildPurchase, stockAlerts, countSummary } from '../../domain/inventory.js';
+import { buildPurchase, stockAlerts, countSummary, reorderPlan, deadStock, VELOCITY_DAYS } from '../../domain/inventory.js';
 import { oldestUnpaidAt, ledgerView, effectiveEntries, balanceOf, editableEntry, VOID_PREFIX } from '../../domain/ledger.js';
 import { signedQty } from '../../domain/stock.js';
 import { normalizeArabic, normalizeBarcode } from '../../domain/product.js';
@@ -178,6 +178,22 @@ export function createInventoryRepo({ db, store, getContext, clock }) {
       const [products, stock] = await Promise.all([db.products.toArray(), db.stock.toArray()]);
       const st = new Map(stock.map((s) => [s.product_id, s]));
       return products.filter((p) => !p.deleted).map((p) => ({ ...p, qty: st.get(p.id)?.qty ?? 0, avg_cost: st.get(p.id)?.avgCost ?? p.cost_price, last_sale_at: st.get(p.id)?.last_sale_at ?? null }));
+    },
+    /** المباع من كل صنف منذ تاريخ (بالوحدة الأساسية وبالألف، بعد طرح المرتجع): Map(product_id → qty) */
+    async soldSince(fromIso) {
+      const ms = await db.movements.where('created_at').aboveOrEqual(fromIso).toArray();
+      const out = new Map();
+      for (const m of ms) {
+        if (m.type !== 'sale' && m.type !== 'sale_return') continue;
+        out.set(m.product_id, (out.get(m.product_id) || 0) - m.qty);
+      }
+      return out;
+    },
+    /** المساعد: ما يخلص قريبًا (بسرعة البيع) والراكد (بقيمته). */
+    async assistant({ now = Date.now() } = {}) {
+      const products = await repo.productsWithStock();
+      const sold = await repo.soldSince(new Date(now - VELOCITY_DAYS * 86400000).toISOString());
+      return { soon: reorderPlan(products, sold, { now }), dead: deadStock(products, { now }) };
     },
     async alerts({ expiry = true } = {}) {
       return stockAlerts(await repo.productsWithStock(), { expiry });

@@ -83,13 +83,22 @@ test('after five wrong passwords the account waits', async () => {
   await assert.rejects(b.account.login('0599000111', 'secret1'), /انتظر/);
 });
 
-test('the account is mandatory: required until created, with a one-session pass when offline', async () => {
+test('explore first, then a gentle nudge, then the account is required (one-session pass when offline)', async () => {
   const server = createFakeServer();
   const shopId = uuid();
   const a = await device(server, shopId);
   a.config = { syncEnabled: true };
-  await a.account.init();
   await a.store.put('shops', { id: shopId, name: 'محل' });
+  await a.account.init();
+  assert.equal(a.account.stage, 'explore');
+  assert.equal(a.account.required, false, 'a new shop browses freely');
+  assert.equal(a.account.missing, true);
+  for (let i = 0; i < 3; i++) await a.store.put('invoices', { type: 'sale', number: `A-${i}` });
+  await a.store.put('invoices', { type: 'purchase', number: 'P-1' });
+  assert.equal(await a.account.check(), 'nudge');
+  assert.equal(a.account.required, false, 'a nudge never blocks');
+  for (let i = 3; i < 20; i++) await a.store.put('invoices', { type: 'sale', number: `A-${i}` });
+  assert.equal(await a.account.check(), 'required');
   assert.equal(a.account.required, true);
   server.offline = true;
   await assert.rejects(a.account.protect('0599000222', 'secret1', 'secret1'), (e) => e.kind === 'offline');
@@ -107,6 +116,12 @@ test('the account is mandatory: required until created, with a one-session pass 
   await a.account.init();
   assert.equal(a.account.required, false, 'stays satisfied after restart');
   // نسخة بلا خادم: لا حساب ولا إلزام
+  // محل عمره 3 أيام بلا فواتير: الحساب مطلوب أيضًا
+  const old = await device(server, uuid());
+  old.config = { syncEnabled: true };
+  await old.store.put('shops', { id: old.ctx.shopId, name: 'قديم', created_at: new Date(Date.now() - 3 * 86400000 - 1000).toISOString() });
+  await old.account.init();
+  assert.equal(old.account.required, true);
   const b = await device(server, uuid());
   b.config = { syncEnabled: false };
   await b.account.init();

@@ -27,8 +27,11 @@ export function createStore({ db, clock, getContext, emit = () => {}, guard = ()
         const now = clock();
         const id = row.id || uuid();
         const existing = row.id ? await db.table(table).get(row.id) : null;
+        // من سجّل الفاتورة: الموظف الحالي على الجهاز (null = صاحب المحل)
+        const by = 'created_by' in t.columns && !existing && row.created_by === undefined ? { created_by: ctx.userId ?? null } : {};
         const full = blank(table, {
           ...(existing || {}),
+          ...by,
           ...row,
           id,
           shop_id: table === 'shops' ? id : ctx.shopId,
