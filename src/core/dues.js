@@ -1,68 +1,50 @@
-// مواعيد السداد للتجار: تُحفظ في إعدادات المحل (تتزامن بين أجهزته، وبلا تغيير في قاعدة الخادم).
-// التنبيه داخل التطبيق: لافتة في الرئيسية وفي قسم التجار، ورسالة قصيرة مرة في اليوم عند فتح التطبيق.
-import { dueAlerts, dueList, dueStatus, dueText, isDateKey, pruneDues, dateKey } from '../domain/dues.js';
+// مواعيد الدفع للتجار: تُحفظ في إعدادات المحل settings.supplierDues = { [id]: { date, note } } (كما في الإصدارات
+// المنشورة، فتبقى مواعيد المحلات كما هي) وتتزامن بين أجهزة المحل. المنطق في domain/dues.js.
+// هنا: القراءة والحفظ، وتذكير برسالة قصيرة مرة في اليوم عند فتح التطبيق (والرئيسية تعرضها في التنبيهات).
+import { supplierDues, dueSummary, pruneDues, isDay } from '../domain/dues.js';
+import { localDay } from '../domain/offers.js';
 import { formatMoney } from '../domain/currency.js';
 
 const TOLD_KEY = 'cashier-dues-told';
 
-export function createDues(app, { toast = () => {}, emit = () => {}, storage = globalThis.localStorage } = {}) {
+export function createDues(app, { toast = () => {}, emit = () => {}, storage = globalThis.localStorage, today = () => localDay() } = {}) {
   const d = {
-    alerts: null, // { items, total, overdue } — ما يستحق التنبيه الآن
-    map: () => app.shop?.settings?.supplierDue || {},
-    get: (id) => { const v = d.map()[id]; return isDateKey(v) ? v : null; },
+    map: () => app.shop?.settings?.supplierDues || {},
+    /** { date, note } أو null */
+    get: (id) => { const v = d.map()[id]; return v && isDay(v.date) ? v : null; },
 
-    /** يحدد موعد سداد التاجر، أو يلغيه (date = null). */
-    async set(id, date) {
-      if (date !== null && !isDateKey(date)) throw new Error('التاريخ غير صحيح');
-      if ((d.get(id) || null) === date) return;
-      const next = pruneDues({ ...d.map(), [id]: date }, await app.inventory.suppliers());
-      if (date) next[id] = date; // يُحفظ حتى لو لم يُسجَّل الدين بعد (يُتجاهل ما دام الرصيد صفرًا)
-      await app.updateShopSettings({ supplierDue: next });
-      await d.refresh();
+    /** يحدد موعد الدفع للتاجر (مع ملاحظة اختيارية)، أو يلغيه (date = null). */
+    async set(id, date, note = null) {
+      if (date !== null && !isDay(date)) throw new Error('التاريخ غير صحيح');
+      const cur = d.get(id);
+      const clean = note ? String(note).trim() || null : null;
+      if ((cur ? cur.date : null) === date && (cur ? cur.note || null : null) === clean) return;
+      const next = pruneDues(d.map(), await app.inventory.suppliers(), id);
+      if (date) next[id] = { date, note: clean }; else delete next[id];
+      await app.updateShopSettings({ supplierDues: next });
+      emit();
     },
 
-    async list(now = Date.now()) {
-      return dueList(await app.inventory.suppliers(), d.map(), now);
+    /** ما حان أو اقترب (خلال 3 أيام) ممن عليك لهم: قائمة supplierDues. */
+    async due(day = today()) {
+      if (!app.shop || (app.can && !app.can('purchases'))) return [];
+      return supplierDues(await app.inventory.suppliers(), d.map(), day);
     },
 
-    /** يعيد حساب التنبيهات (بعد دفعة، دين، تغيير موعد، مزامنة). */
-    async refresh(now = Date.now()) {
-      if (!app.shop) return null;
-      const next = dueAlerts(await app.inventory.suppliers(), d.map(), now);
-      const changed = JSON.stringify(next && next.items.map((s) => [s.id, s.due, s.balance])) !== JSON.stringify(d.alerts && d.alerts.items.map((s) => [s.id, s.due, s.balance]));
-      d.alerts = next;
-      if (changed) emit(next);
-      return next;
-    },
-
-    /** نص التنبيه في سطر: «اليوم موعد سداد أبو خالد — 1,600 ₪» أو «3 دفعات للتجار مستحقة — المجموع …». */
-    summary(a = d.alerts, currency = app.shop?.base_currency || 'ILS') {
-      if (!a) return null;
-      if (a.items.length === 1) {
-        const s = a.items[0];
-        const when = s.status.state === 'today' ? 'اليوم موعد سداد' : s.status.state === 'overdue' ? `${dueText(s.status)}: سداد` : `${dueText(s.status)} موعد سداد`;
-        return { title: `${when} ${s.name}`, sub: `عليك له ${formatMoney(s.balance, currency)}`, supplierId: s.id };
-      }
-      const n = a.items.length;
-      const many = n === 2 ? 'دفعتان للتجار حان موعدهما' : `${n} ${n <= 10 ? 'دفعات' : 'دفعة'} للتجار حان موعدها`;
-      return { title: many, sub: `المجموع ${formatMoney(a.total, currency)}${a.overdue ? ` — ${a.overdue} متأخرة` : ''}`, supplierId: null };
-    },
-
-    /** عند الفتح والعودة: يحدّث التنبيهات، ويذكّر برسالة مرة واحدة في اليوم. */
-    async check(now = Date.now()) {
-      const a = await d.refresh(now);
-      if (!a) return;
-      const today = dateKey(now);
+    /** عند الفتح والعودة: يذكّر برسالة مرة واحدة في اليوم ما دام هناك موعد حان أو اقترب. */
+    async check(day = today()) {
+      const s = dueSummary(await d.due(day));
+      if (!s) return null;
       let told = null;
       try { told = storage.getItem(TOLD_KEY); } catch { /* */ }
-      if (told === today) return;
-      try { storage.setItem(TOLD_KEY, today); } catch { /* */ }
-      const s = d.summary(a);
-      toast(`${s.title} — ${s.sub}`, { kind: a.overdue ? 'error' : 'info', ms: 6000 });
+      if (told === day) return s;
+      try { storage.setItem(TOLD_KEY, day); } catch { /* */ }
+      const cur = app.shop?.base_currency || 'ILS';
+      toast(`${s.title} — ${s.supplierId ? 'عليك له' : 'المجموع'} ${formatMoney(s.total, cur)}${!s.supplierId && s.overdue ? ` — ${s.overdue} متأخرة` : ''}`, { kind: s.overdue ? 'error' : 'info', ms: 6000 });
+      return s;
     },
 
     start() {
-      d.refresh().catch(() => {}); // اللافتات فورًا؛ والرسالة بعد أن يفتح التطبيق ويهدأ
       setTimeout(() => d.check().catch(() => {}), 2500);
       document.addEventListener('visibilitychange', () => { if (!document.hidden) d.check().catch(() => {}); });
       setInterval(() => d.check().catch(() => {}), 30 * 60 * 1000); // يوم جديد والتطبيق مفتوح
@@ -70,5 +52,3 @@ export function createDues(app, { toast = () => {}, emit = () => {}, storage = g
   };
   return d;
 }
-
-export { dueStatus, dueText };

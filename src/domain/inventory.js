@@ -1,7 +1,7 @@
 // منطق المخزون النقي: فاتورة الشراء، التنبيهات (نفد، منخفض، ينتهي قريبًا، راكد)، الجرد، ورسالة طلب البضاعة.
 import { sum, divRound, assertInt } from './money.js';
 import { lineAmount, packToBase, formatQty, unit as unitOf, QTY_SCALE } from './units.js';
-import { signedQty, stockLevel } from './stock.js';
+import { signedQty, stockLevel, stockValue } from './stock.js';
 import { formatInvoiceNumber } from './numbering.js';
 import { DEFAULT_LOW_STOCK_THRESHOLD, EXPIRY_WARNING_DAYS, DEAD_STOCK_DAYS } from './features.js';
 
@@ -109,4 +109,49 @@ export function countSummary(counted) {
     return { ...c, diff, value: divRound(diff * (c.unit_cost || 0), QTY_SCALE) };
   });
   return { rows, changed: rows.filter((r) => r.diff !== 0), diffValue: sum(rows, (r) => r.value) };
+}
+
+// ---------- المساعد: متى يخلص كل صنف وكم تطلب ----------
+export const VELOCITY_DAYS = 30; // نحسب سرعة البيع من آخر 30 يومًا
+export const COVER_DAYS = 14;    // الطلبية تكفي أسبوعين
+export const SOON_DAYS = 7;      // ننبّه إن كان يخلص خلال أسبوع
+
+/**
+ * sold: Map(product_id → الكمية المباعة بالوحدة الأساسية وبالألف في آخر windowDays، بعد طرح المرتجع).
+ * يرجع [{ p, perDay (بالألف يوميًا), daysLeft, qty (المقترح بقطع كاملة) }] للأصناف التي تخلص خلال soonDays، الأقرب أولًا.
+ * الصنف الجديد (أحدث من windowDays) تُحسب سرعته من عمره (7 أيام على الأقل) فلا تتضخم.
+ */
+export function reorderPlan(products, sold, { now = Date.now(), windowDays = VELOCITY_DAYS, coverDays = COVER_DAYS, soonDays = SOON_DAYS } = {}) {
+  const out = [];
+  for (const p of products) {
+    if (p.deleted || p.parent_id) continue;
+    const s = sold.get(p.id) || 0;
+    if (s <= 0) continue;
+    const age = p.created_at ? (now - Date.parse(p.created_at)) / DAY : windowDays;
+    const days = Math.min(windowDays, Math.max(7, age));
+    const perDay = s / days;
+    const have = Math.max(0, p.qty || 0);
+    const daysLeft = Math.floor(have / perDay);
+    if (daysLeft > soonDays) continue;
+    const want = Math.max(QTY_SCALE, Math.ceil((perDay * coverDays - have) / QTY_SCALE) * QTY_SCALE);
+    out.push({ p, perDay: Math.round(perDay), daysLeft, qty: want });
+  }
+  return out.sort((a, b) => a.daysLeft - b.daysLeft || b.perDay - a.perDay);
+}
+
+/** البضاعة الراكدة مرتبة بقيمتها (المال المحبوس فيها): [{ p, value, days }] */
+export function deadStock(products, { now = Date.now(), days = DEAD_STOCK_DAYS } = {}) {
+  const before = new Date(now - days * DAY).toISOString();
+  return products
+    .filter((p) => !p.deleted && !p.parent_id && p.qty > 0 && p.created_at < before && (!p.last_sale_at || p.last_sale_at < before))
+    .map((p) => ({ p, value: stockValue(p.qty, p.avg_cost ?? p.cost_price ?? 0), days: Math.floor((now - Date.parse(p.last_sale_at || p.created_at)) / DAY) }))
+    .sort((a, b) => b.value - a.value);
+}
+
+/** نص قصير: «يخلص خلال 3 أيام» / «نفد» / «يخلص اليوم». */
+export function daysLeftText(d) {
+  if (d <= 0) return 'نفد أو يخلص اليوم';
+  if (d === 1) return 'يخلص غدًا';
+  if (d === 2) return 'يخلص خلال يومين';
+  return `يخلص خلال ${d} أيام`;
 }

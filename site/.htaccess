@@ -8,6 +8,11 @@ Options -Indexes
   Header set Cache-Control "no-cache"
   Header set X-Content-Type-Options "nosniff"
   Header set Referrer-Policy "no-referrer"
+  # version.json يقرؤه التطبيق من كل النسخ (أندرويد، الحاسوب، الويب): مسموح من أي أصل، وبلا تخزين
+  <FilesMatch "^version\.json$">
+    Header set Access-Control-Allow-Origin "*"
+    Header set Cache-Control "no-store"
+  </FilesMatch>
 </IfModule>
 
 <IfModule mod_rewrite.c>

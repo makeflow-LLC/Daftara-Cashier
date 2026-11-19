@@ -196,4 +196,33 @@ select set_config('request.jwt.claim.sub', '', false);
 select pg_temp.expect_error($q$select * from cashier_products$q$, 'anon reads products');
 select pg_temp.expect_error($q$select public.cashier_catalog_lookup(array['7290000000017'])$q$, 'anon catalog');
 reset role;
+-- ===== كتالوج المحل العام (رابط واتساب)
+reset role;
+set role anon;
+select set_config('request.jwt.claim.sub', '', false);
+select pg_temp.check(public.cashier_shop_catalog(:S1) is null, 'catalog off by default: nothing public');
+select pg_temp.check(public.cashier_shop_catalog('99999999-0000-0000-0000-000000000000') is null, 'unknown shop: nothing');
+reset role;
+update cashier_shops set settings = settings || '{"catalog": {"enabled": true, "message": "أهلًا"}}'::jsonb where id = :S1;
+insert into cashier_products (id, shop_id, name, sell_price, cost_price) values
+  ('00000000-0000-0000-0000-0000000000c1', :S1, 'زيت', 1800, 1500),
+  ('00000000-0000-0000-0000-0000000000c2', :S1, 'بلا سعر', 0, 0)
+on conflict (id) do nothing;
+insert into cashier_products (id, shop_id, name, sell_price, deleted) values ('00000000-0000-0000-0000-0000000000c3', :S1, 'محذوف', 900, true) on conflict (id) do nothing;
+insert into cashier_inventory_movements (id, shop_id, product_id, type, qty) values ('00000000-0000-0000-0000-0000000000d1', :S1, '00000000-0000-0000-0000-0000000000c1', 'opening', 5000)
+on conflict (id) do nothing;
+set role anon;
+select pg_temp.check(public.cashier_shop_catalog(:S1)->>'name' = 'بقالة أبو أحمد', 'catalog on: shop name public');
+select pg_temp.check(public.cashier_shop_catalog(:S1)->>'message' = 'أهلًا', 'welcome message');
+select pg_temp.check((select bool_and(p ? 'price' and not (p ? 'cost_price') and not (p ? 'qty')) from jsonb_array_elements(public.cashier_shop_catalog(:S1)->'products') p), 'prices yes, cost and quantity never');
+select pg_temp.check(not exists (select 1 from jsonb_array_elements(public.cashier_shop_catalog(:S1)->'products') p where p->>'name' in ('بلا سعر', 'محذوف')), 'no deleted or unpriced items');
+select pg_temp.check((select (p->>'available')::boolean from jsonb_array_elements(public.cashier_shop_catalog(:S1)->'products') p where p->>'name' = 'زيت'), 'in stock flag');
+select pg_temp.check(public.cashier_shop_catalog(:S2) is null, 'other shop (catalog off) stays private');
+reset role;
+update cashier_shops set settings = settings || '{"catalog": {"enabled": true, "hideOutOfStock": true}}'::jsonb where id = :S1;
+set role anon;
+select pg_temp.check(not exists (select 1 from jsonb_array_elements(public.cashier_shop_catalog(:S1)->'products') p where not (p->>'available')::boolean), 'hide out of stock');
+select pg_temp.check(exists (select 1 from jsonb_array_elements(public.cashier_shop_catalog(:S1)->'products') p where p->>'name' = 'زيت'), 'in-stock item still shown');
+reset role;
+
 \echo ALL SCHEMA TESTS PASSED

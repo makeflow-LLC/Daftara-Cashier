@@ -172,16 +172,3 @@ export function packEntry({ packs = [], name, count, sell, cost = 0, qty = 0, pa
     packs: upsertPack(packs, { name, count, sell, barcode: packCode, makeId }),
   };
 }
-
-/**
- * باركود قطعة منفردة مُسح ولم يُعرف، والبائع يقول إنه قطعة من صنف مسجّل: ماذا نفعل؟
- *  - الصنف بلا باركود ← يصير باركوده.
- *  - للصنف باركود وله عبوة بلا باركود ← الباركود المسجّل كان باركود العبوة (أُدخل الصنف بمسح الكرتونة):
- *    ينتقل للعبوة، والممسوح الآن يصير باركود القطعة.
- *  - غير ذلك ← null (للصنف باركود قطعة آخر: يُعدَّل من بطاقته).
- */
-export function pieceLinkPlan(product) {
-  if (!product.barcode) return { kind: 'set', pack: null };
-  const free = (product.units || []).filter((u) => !u.deleted && !u.barcode).sort((a, b) => b.factor - a.factor);
-  return free[0] ? { kind: 'move', pack: free[0] } : null;
-}

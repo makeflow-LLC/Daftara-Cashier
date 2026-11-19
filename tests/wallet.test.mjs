@@ -114,5 +114,18 @@ test('receive: with a customer the payment lowers their debt', async () => {
   assert.equal(await customers.balance(c.id), 3000);
   const s = await cash.summary();
   assert.equal(s.expectedCash, 0, 'wallet money never enters the drawer');
-  assert.deepEqual(s.methods.map((m) => [m.name, m.total]), [['بال باي', 2000]]);
+  assert.deepEqual(s.methods.map((m) => [m.name, m.total]), [['محفظة بال باي', 2000]]);
+});
+
+test('receive: reuses the shop\'s ready-made wallet method instead of adding a duplicate', async () => {
+  const { KNOWN_WALLETS } = await import('../src/domain/features.js');
+  const { db, store, wallet } = setup();
+  for (const name of KNOWN_WALLETS) await store.put('payment_methods', { name, kind: 'transfer', fee_bp: 0, active: true, sort: 5 });
+  const before = await db.payment_methods.count();
+  const a = await wallet.receive({ walletId: 'palpay', amount: 500 });
+  const b = await wallet.receive({ walletId: 'jawwal', amount: 700 });
+  assert.equal(await db.payment_methods.count(), before, 'no new payment method');
+  const names = new Map((await db.payment_methods.toArray()).map((m) => [m.id, m.name]));
+  assert.equal(names.get(a.method_id), 'محفظة بال باي');
+  assert.equal(names.get(b.method_id), 'جوال باي');
 });

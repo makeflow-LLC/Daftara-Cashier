@@ -4,8 +4,9 @@ import { normalizeDigits, parseDecimal, formatDecimal } from './money.js';
 
 // صيغ الأكواد (فلسطين). الترتيب هنا هو ترتيب العرض.
 export const WALLETS = Object.freeze({
-  jawwal: Object.freeze({ id: 'jawwal', name: 'جوال باي', prefix: '*268*1*' }),
-  palpay: Object.freeze({ id: 'palpay', name: 'بال باي', prefix: '*370*1*1*' }),
+  // methods: أسماء طريقة الدفع التي يُسجَّل تحتها الاستلام (الأول = اسم المحفظة الجاهزة في domain/features.js)
+  jawwal: Object.freeze({ id: 'jawwal', name: 'جوال باي', prefix: '*268*1*', methods: Object.freeze(['جوال باي']) }),
+  palpay: Object.freeze({ id: 'palpay', name: 'بال باي', prefix: '*370*1*1*', methods: Object.freeze(['محفظة بال باي', 'بال باي']) }),
 });
 
 /**

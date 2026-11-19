@@ -1,7 +1,7 @@
 // الحساب: يربط المحل برقم هاتف وكلمة سر على الخادم، ويدخل به من جهاز جديد فتنزل البيانات كاملة.
 // الجهاز يبقى «مجهولًا» عند الخادم؛ الدخول يجعله عضوًا في المحل (cashier_account_login).
 import { HttpError } from '../sync/supabase.js';
-import { accountPhone, passwordProblem, loginProblem, extractResetCode } from '../domain/account.js';
+import { accountPhone, passwordProblem, loginProblem, extractResetCode, accountStage } from '../domain/account.js';
 
 /** kind: 'input' (خطأ في ما كتبه المستخدم) | 'offline' | 'server' (خلل لا يحلّه المستخدم الآن) */
 export class AccountError extends Error {
@@ -37,13 +37,32 @@ export function createAccount(app) {
 
   let cached = null;   // رقم الحساب المحفوظ على الجهاز (يُقرأ فورًا في حارس التنقل)
   let skipped = false; // «تابع بلا إنترنت» لهذه الجلسة فقط: عند الفتح القادم يُطلب الحساب من جديد
+  let stage = 'explore'; // مرحلة المحل: يتجول بحرية ← تذكير لطيف ← الحساب مطلوب
   const remember = async (phone) => { cached = phone; await app.meta.set('account:phone', phone); };
+
+  /** يحسب المرحلة من عدد فواتير البيع وعمر المحل (يُستدعى عند الفتح ومع كل تنقّل). */
+  async function check() {
+    if (!app.ctx.shopId || cached) return stage;
+    try {
+      const [sales, shop] = await Promise.all([
+        app.db.invoices.where('type').equals('sale').count(),
+        app.db.shops.get(app.ctx.shopId),
+      ]);
+      stage = accountStage({ sales, createdAt: shop?.created_at || null });
+    } catch (e) { console.error(e); }
+    return stage;
+  }
 
   return {
     /** يُستدعى عند بدء التطبيق. */
-    async init() { cached = await app.meta.get('account:phone'); },
-    /** الحساب إلزامي: محل بلا حساب (والنسخة متصلة بالخادم) لا يُستعمل حتى يُنشأ حسابه. */
-    get required() { return !!(app.config.syncEnabled && app.ctx.shopId && !cached && !skipped); },
+    async init() { cached = await app.meta.get('account:phone'); await check(); },
+    check,
+    /** 'explore' | 'nudge' | 'required' — آخر ما حسبه check(). */
+    get stage() { return stage; },
+    /** هل يحتاج المحل حسابًا؟ (النسخة متصلة بالخادم، ولا حساب على الجهاز) */
+    get missing() { return !!(app.config.syncEnabled && app.ctx.shopId && !cached); },
+    /** الحساب مطلوب الآن: بعد فترة التجربة الحرة لا تُفتح الشاشات حتى يُنشأ (إلا «لاحقًا» بلا إنترنت). */
+    get required() { return this.missing && !skipped && stage === 'required'; },
     /** بلا إنترنت الآن: يُسمح بالعمل هذه الجلسة، ويُطلب الحساب عند الفتح القادم. */
     skipForNow() { skipped = true; },
     /** الرقم المحفوظ على هذا الجهاز (أو null). */

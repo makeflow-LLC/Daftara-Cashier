@@ -48,9 +48,19 @@ export function defaultPaymentMethods() {
   return [
     { key: 'cash', name: 'نقدًا', kind: 'cash', fee_bp: 0 },
     { key: 'bank', name: 'تحويل بنكي', kind: 'transfer', fee_bp: 0 },
-    { key: 'wallet', name: 'محفظة إلكترونية', kind: 'transfer', fee_bp: 0 },
+    ...KNOWN_WALLETS.map((name, i) => ({ key: `wallet${i + 1}`, name, kind: 'transfer', fee_bp: 0 })),
     { key: 'credit', name: 'آجل (دين)', kind: 'credit', fee_bp: 0 },
   ];
+}
+
+/** محافظ إلكترونية معروفة تُضاف بضغطة من شاشة طرق الدفع. */
+export const KNOWN_WALLETS = Object.freeze(['محفظة بال باي', 'جوال باي', 'مالتشات', 'رفلكت']);
+
+/** المحافظ المعروفة التي لم تُضف بعد (المقارنة بالاسم بعد حذف المسافات الزائدة). */
+export function missingWallets(methods) {
+  const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+  const have = new Set(methods.filter((m) => !m.deleted).map((m) => norm(m.name)));
+  return KNOWN_WALLETS.filter((w) => !have.has(norm(w)));
 }
 
 export const DEFAULT_LOW_STOCK_THRESHOLD = 5;

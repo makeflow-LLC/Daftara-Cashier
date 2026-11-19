@@ -288,6 +288,8 @@ jobs:
         run: |
           cp -r site _site
           cp tools/license-generator.html _site/admin/index.html
+          # رقم آخر إصدار و«ما الجديد»: التطبيق يقرؤه فيعرض زر «حدّث الآن»
+          if [ -n "${{ needs.meta.outputs.version }}" ]; then node scripts/build-version-json.mjs "${{ needs.meta.outputs.version }}" _site/version.json; fi
           ls -la _site _site/admin
       # نسخة الويب (آيفون وأي متصفح): makeflow.tech/apps/cashier/app/ — نفس التطبيق، تعمل بلا إنترنت بعد أول فتح
       - name: Web app
