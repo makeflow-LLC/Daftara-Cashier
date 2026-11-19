@@ -1,11 +1,11 @@
 // الإضافة السريعة بالمسح: الكاميرا تبقى مفتوحة. باركود جديد ← ورقة صغيرة (الاسم والسعر وصورة اختيارية)
 // ← حفظ ← عودة فورية للمسح. باركود مسجّل ← تنبيه قصير ونكمل. الاسم يُقترح من الكتالوج المشترك إن وُجد.
-import { packToPiece, upsertPack } from '../../domain/product.js';
+import { packEntry, normalizeBarcode } from '../../domain/product.js';
 import { uuid } from '../../core/ids.js';
 import { parseQty } from '../../domain/units.js';
 import { h, num, fill } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
-import { field, input, button } from '../../ui/components.js';
+import { field, input, button, iconButton } from '../../ui/components.js';
 import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
 import { openScanner } from '../../ui/scanner.js';
@@ -59,6 +59,29 @@ export function renderRapidAdd(el) {
       const count = input({ dir: 'ltr', inputmode: 'numeric', placeholder: 'كم قطعة؟' });
       const priceLabel = h('span', { class: 'field-label' }, 'سعر بيع القطعة');
       const countBox = h('label', { class: 'field', hidden: true }, h('span', { class: 'field-label' }, 'كم قطعة فيها؟'), count);
+      // الممسوح باركود الكرتونة: القطعة المنفردة لها باركود آخر يُمسح الآن، فتُعرف عند بيعها مفردة
+      const pieceCode = input({ dir: 'ltr', inputmode: 'numeric', placeholder: 'امسح قطعة واحدة' });
+      const pieceSell = input({ dir: 'ltr', inputmode: 'decimal', placeholder: 'يُحسب وحده' });
+      const pieceBox = h('div', { class: 'pack-box', hidden: true },
+        h('div', { class: 'pack-piece' },
+          h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'باركود القطعة المنفردة'),
+            h('div', { class: 'input-row' }, pieceCode, iconButton('scan', 'امسح باركود القطعة المنفردة', scanPiece)),
+            h('div', { class: 'field-hint' }, 'امسح قطعة واحدة من داخلها، فلا تُحسب صنفًا جديدًا عند بيعها')),
+          h('label', { class: 'field' }, h('span', { class: 'field-label' }, 'سعر بيع القطعة المنفردة (اختياري)'), pieceSell)));
+      const paintPiece = () => { pieceBox.hidden = mode === 'piece' || !(parseQty(count.value || '') > 1000); };
+      count.addEventListener('input', paintPiece);
+      async function scanPiece() {
+        if (!scanner) return;
+        const wrap = sheet.el.parentElement; // الورقة تختفي لحظة المسح فتظهر الكاميرا
+        wrap.style.display = 'none';
+        const c = await scanner.capture('امسح باركود القطعة المنفردة');
+        wrap.style.display = '';
+        if (!c) return;
+        if (c === normalizeBarcode(code)) { feedback.error(); hint.textContent = 'هذا باركود العبوة نفسه — امسح قطعة واحدة من داخلها'; return; }
+        pieceCode.value = c;
+        hint.textContent = '';
+        price.focus();
+      }
       const modes = h('div', { class: 'chips price-mode' });
       const paintModes = () => {
         fill(modes, ...[['piece', 'قطعة'], ['كرتونة', 'كرتونة'], ['دستة', 'دستة']].map(([id, label]) => h('button', {
@@ -66,6 +89,7 @@ export function renderRapidAdd(el) {
           onclick: () => { mode = id; if (id === 'دستة' && !count.value) count.value = '12'; paintModes(); (id === 'piece' ? price : (count.value ? price : count)).focus(); },
         }, label)));
         countBox.hidden = mode === 'piece';
+        paintPiece();
         priceLabel.textContent = mode === 'piece' ? 'سعر بيع القطعة' : `سعر بيع ال${mode}`;
       };
       paintModes();
@@ -96,14 +120,18 @@ export function renderRapidAdd(el) {
           if (sell === null || sell < 0) { feedback.error(); price.focus(); hint.textContent = 'اكتب سعر البيع'; return; }
           saving = true;
           try {
-            let sellP = sell, packs = null;
+            let sellP = sell, packs = null, codeP = code;
             if (mode !== 'piece') {
               const n = parseQty(count.value || '');
               if (!(n > 1000)) { saving = false; feedback.error(); count.focus(); hint.textContent = `اكتب كم قطعة في ال${mode}`; return; }
-              sellP = packToPiece({ count: n, sell }).sell;
-              packs = upsertPack([], { name: mode, count: n, sell, makeId: uuid });
+              const own = pieceSell.value.trim() ? parseMoney(pieceSell.value, app.shop?.base_currency || 'ILS') : null;
+              if (pieceSell.value.trim() && own === null) { saving = false; feedback.error(); pieceSell.focus(); hint.textContent = 'سعر القطعة المنفردة غير صحيح'; return; }
+              // الممسوح باركود العبوة؛ وباركود القطعة (إن مُسح) للصنف نفسه
+              const r = packEntry({ name: mode, count: n, sell, packBarcode: code, pieceBarcode: pieceCode.value, pieceSell: own, makeId: uuid });
+              if (r.error) { saving = false; feedback.error(); hint.textContent = r.error; return; }
+              sellP = r.sell; packs = r.packs; codeP = r.barcode;
             }
-            const { product } = await app.products.save({ name: name.value, barcode: code, sell_price: sellP, cost_price: 0 }, { packs });
+            const { product } = await app.products.save({ name: name.value, barcode: codeP, sell_price: sellP, cost_price: 0 }, { packs });
             if (photo) await app.media.addProductImage(product.id, photo);
             added++;
             countEl.textContent = String(added);
@@ -122,6 +150,7 @@ export function renderRapidAdd(el) {
         h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'السعر الذي ستكتبه لـ'), modes),
         countBox,
         h('label', { class: 'field' }, priceLabel, price),
+        pieceBox,
         hint,
         photoBtn,
         button('حفظ وامسح التالي', { type: 'submit', block: true, size: 'lg', icon: 'check' }),

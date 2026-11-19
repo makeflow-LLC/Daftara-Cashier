@@ -17,7 +17,7 @@ test('receipt model has no cost or profit and uses western digits', () => {
   assert.ok(!/[٠-٩]/.test(text));
   assert.match(dateTimeText('2026-11-13T07:12:00.000Z'), /^\d{2}\/\d{2}\/2026 \d{2}:\d{2}$/);
   const p = receiptModel({ invoice: { ...inv, type: 'purchase', discount: 0, paid: 0, customer_id: null }, lines, supplier: { name: 'أبو سامي' } });
-  assert.equal(p.party, 'المورّد: أبو سامي');
+  assert.equal(p.party, 'التاجر: أبو سامي');
   assert.equal(p.foot, '');
   assert.deepEqual(p.totals.map((t) => t.label), ['الإجمالي', 'على الحساب']);
 });

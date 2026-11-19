@@ -127,6 +127,28 @@ export function statementText({ shopName, customerName, entries, currency = 'ILS
   return lines.join('\n');
 }
 
+// ---------- دفتر التاجر (ما على المحل لتجار الجملة والموردين): نفس القيود بإشارة معكوسة المعنى ----------
+// amount موجب = يزيد ما عليك للتاجر (بضاعة بالدين، رصيد سابق)، سالب = ينقصه (دفعة له، مرتجع).
+export const SUPPLIER_ENTRY_LABELS = Object.freeze({
+  opening: 'رصيد سابق', purchase: 'فاتورة شراء', payment: 'دفعة له', return: 'مرتجع', adjustment: 'بضاعة بالدين',
+});
+
+/** كشف حسابك عند التاجر نصًا (آخر limit قيدًا) لترسله له على واتساب وتطابقا الحساب. */
+export function supplierStatementText({ shopName, supplierName, entries, currency = 'ILS', limit = 15, formatDate = (iso) => iso.slice(0, 10) }) {
+  const rows = statement(entries);
+  const shown = rows.slice(-limit);
+  const lines = [`مرحبًا ${supplierName}،`, `كشف حساب ${shopName} عندك حسب دفاتري:`];
+  if (rows.length > shown.length) lines.push(`رصيد سابق: ${formatMoney(rows[rows.length - shown.length - 1].balance, currency)}`);
+  for (const e of shown) {
+    const sign = e.amount >= 0 ? '+' : '−';
+    lines.push(`${formatDate(e.created_at)}  ${SUPPLIER_ENTRY_LABELS[e.type] || ''}${e.note ? ` (${e.note})` : ''}  ${sign}${formatMoney(Math.abs(e.amount), currency, { symbol: false })}`);
+  }
+  const bal = rows.length ? rows[rows.length - 1].balance : 0;
+  lines.push(bal >= 0 ? `الباقي لك عندي: ${formatMoney(bal, currency)}` : `لي عندك: ${formatMoney(-bal, currency)}`);
+  lines.push('إن كان عندك رقم مختلف أخبرني لنطابق الحساب.');
+  return lines.join('\n');
+}
+
 /**
  * يقرأ ملف نسخة «دفترة» (daftara-backup-*.json): الزبائن وأرصدتهم (ديون − دفعات).
  * مبالغ دفترة بالشيكل كأرقام عشرية؛ نحوّلها إلى أغورات صحيحة. يرمي خطأ بالعربية إن لم يكن الملف ملف دفترة.

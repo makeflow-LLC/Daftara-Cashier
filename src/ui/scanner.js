@@ -89,6 +89,9 @@ export function openScanner({ title = 'امسح الباركود', onCode, conti
   });
   const torchBtn = h('button', { class: 'icon-btn scan-torch', type: 'button', 'aria-label': 'الفلاش', onclick: toggleTorch, hidden: true }, icon('flash'));
   const frame = h('div', { class: 'scan-frame' }, h('span', { class: 'scan-laser' }));
+  // التقاط باركود واحد إضافي والماسح متوقف على ورقة مفتوحة (باركود القطعة المنفردة بعد مسح كرتونتها)
+  let captureFn = null;
+  const cancelCapture = h('button', { class: 'btn btn-outline btn-block', type: 'button', hidden: true, onclick: () => captureFn && captureFn(null) }, 'إلغاء — رجوع للصنف');
   const ui = h('div', { class: 'scanner', role: 'dialog', 'aria-label': title },
     h('div', { class: 'scan-top' },
       h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'إغلاق', onclick: () => ctl.close() }, icon('x')),
@@ -100,6 +103,7 @@ export function openScanner({ title = 'امسح الباركود', onCode, conti
     h('div', { class: 'scan-bottom' },
       h('form', { class: 'scan-manual', onsubmit: (e) => { e.preventDefault(); const v = manual.value; manual.value = ''; handle(v, true); } },
         manual, h('button', { class: 'btn btn-primary', type: 'submit' }, icon('check', 20), h('span', null, 'تم'))),
+      cancelCapture,
       panel,
     ),
   );
@@ -110,7 +114,16 @@ export function openScanner({ title = 'امسح الباركود', onCode, conti
   }
 
   async function handle(raw, typed = false) {
-    if (closed || paused) return;
+    if (closed) return;
+    if (captureFn) {
+      const c = normalizeBarcode(raw);
+      if (!c) return;
+      feedback.ok();
+      flash();
+      captureFn(c);
+      return;
+    }
+    if (paused) return;
     const code = normalizeBarcode(raw);
     if (!code) return;
     const now = Date.now();
@@ -183,7 +196,7 @@ export function openScanner({ title = 'امسح الباركود', onCode, conti
       if (!det) { say('تعذّرت قراءة الباركود بهذا المتصفح. اكتبه هنا.', 'warn'); return; }
       let busy = false;
       detectTimer = setInterval(async () => {
-        if (busy || paused || video.readyState < 2) return;
+        if (busy || (paused && !captureFn) || video.readyState < 2) return;
         busy = true;
         try { const r = await det.detect(video); if (r[0]) handle(r[0]); } catch { /* إطار غير جاهز */ } finally { busy = false; }
       }, 200);
@@ -217,8 +230,26 @@ export function openScanner({ title = 'امسح الباركود', onCode, conti
       paused = false;
     },
     say,
+    /** يلتقط الباركود التالي فقط (حتى والماسح متوقف) ويرجعه، أو null إن أُلغي. */
+    capture(text) {
+      if (closed) return Promise.resolve(null);
+      if (captureFn) captureFn(null);
+      return new Promise((resolve) => {
+        say(text, 'ok');
+        cancelCapture.hidden = false;
+        if (panel) panel.hidden = true;
+        captureFn = (code) => {
+          captureFn = null;
+          cancelCapture.hidden = true;
+          if (panel) panel.hidden = false;
+          say('');
+          resolve(code);
+        };
+      });
+    },
     close() {
       if (closed) return;
+      if (captureFn) captureFn(null);
       closed = true;
       active = null;
       document.documentElement.classList.remove('scanning');

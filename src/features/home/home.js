@@ -10,6 +10,7 @@ import { openFeedback } from '../help/feedback.js';
 import { licenseBanner } from '../subscribe/subscribe.js';
 import { accountBanner } from '../account/account.js';
 import { reminderBanner } from '../customers/remind.js';
+import { dueBanner } from '../inventory/due.js';
 import { shouldShowInstallHint, dismissInstallHint, isIos } from '../../core/pwa.js';
 
 export function renderHome(el) {
@@ -20,6 +21,15 @@ export function renderHome(el) {
   const dateText = today.toLocaleDateString('ar-PS-u-nu-latn', { weekday: 'long', day: 'numeric', month: 'long' });
 
   const guide = h('div');
+  const dues = dueBanner(); // موعد سداد لتاجر اقترب أو فات
+  // تحديث جديد (وجده الفحص التلقائي): لافتة تقود إلى «عن التطبيق» حيث زر التنزيل
+  const updateBox = h('div');
+  const paintUpdate = () => {
+    const v = app.updater.available;
+    fill(updateBox, v ? h('button', { class: 'lic-banner lic-info', type: 'button', onclick: () => navigate('/settings/about') },
+      icon('refresh', 26), h('span', { class: 'row-main' }, h('strong', null, 'تحديث جديد ', num(v)), h('span', null, 'يُثبَّت فوق النسخة الحالية ولا يمسح بياناتك')), h('span', { class: 'lic-cta' }, 'حدّث')) : null);
+  };
+  paintUpdate();
   const hour = today.getHours();
   const greet = hour < 12 ? 'صباح الخير' : hour < 17 ? 'نهارك سعيد' : 'مساء الخير';
 
@@ -31,16 +41,21 @@ export function renderHome(el) {
       kpis),
     h('div', { class: 'page home-page' },
       installBanner(),
+      updateBox,
       licenseBanner(),
       reminderBanner(),
+      dues.el,
       accountBanner(),
       stats,
       h('div', { class: 'quick' },
         quick('scan', 'بيع جديد', () => navigate('/sale'), 'brand'),
         quick('truck', 'شراء بضاعة', () => navigate('/inventory/purchase')),
         quick('box', 'المخزون', () => navigate('/inventory')),
-        quick('users', 'الزبائن والديون', () => navigate('/customers')),
+        quick('users', 'الديون: لك وعليك', () => navigate('/customers')),
       ),
+      // استلام أي مبلغ من أي مشترٍ بالمحفظة (غير مرتبط بزبون). بلا رقم محفظة: الشاشة تقود إلى الإعدادات
+      h('button', { class: 'wallet-btn', type: 'button', onclick: () => navigate('/wallet') },
+        icon('wallet', 26), h('span', { class: 'row-main' }, h('strong', null, 'استلام بالمحفظة (QR)'), h('span', null, 'جوال باي وبال باي: الزبون يمسح الرمز ويحوّل')), icon('chevron', 20)),
       guide,
       section('تنبيهات', alerts),
       h('button', { class: 'beta-banner', type: 'button', onclick: () => openFeedback('note') },
@@ -73,6 +88,7 @@ export function renderHome(el) {
   async function paint() {
     const s = await todaySummary(app.db);
     const debts = await app.customers.totals();
+    const owed = await app.inventory.supplierTotals();
     const drawer = await app.cash.summary();
     const showProfit = app.can('see_profit');
     fill(kpis,
@@ -85,7 +101,9 @@ export function renderHome(el) {
     );
     fill(stats,
       h('button', { class: 'stat stat-tap', type: 'button', onclick: () => navigate('/cash') }, h('div', { class: 'stat-label' }, icon('cash', 18), 'النقد في الدرج'), h('div', { class: 'stat-value' }, money(drawer.expectedCash))),
-      h('button', { class: 'stat stat-tap', type: 'button', onclick: () => navigate('/customers') }, h('div', { class: 'stat-label' }, icon('users', 18), 'ديون الزبائن'), h('div', { class: 'stat-value' }, money(debts.total))),
+      h('button', { class: 'stat stat-tap', type: 'button', onclick: () => navigate('/customers') }, h('div', { class: 'stat-label' }, icon('users', 18), 'لك عند الزبائن'), h('div', { class: 'stat-value' }, money(debts.total))),
+      // ما عليك للتجار: ظاهر دائمًا في الرئيسية بجانب ما لك (كان مدفونًا في «المزيد»)
+      h('button', { class: 'stat stat-tap', type: 'button', onclick: () => navigate('/suppliers') }, h('div', { class: 'stat-label' }, icon('truck', 18), 'عليك للتجار'), h('div', { class: 'stat-value' }, money(owed.total))),
     );
     paintGuide();
     const a = await app.inventory.alerts({ expiry: app.feature('expiry') });
@@ -101,10 +119,11 @@ export function renderHome(el) {
 
   paint();
   const off = bus.on('data', (e) => {
-    if (e.tables.some((t) => ['invoices', 'payments', 'cash_sessions', 'movements', 'products', 'customer_entries', 'customers'].includes(t))) paint();
+    if (e.tables.some((t) => ['invoices', 'payments', 'cash_sessions', 'movements', 'products', 'customer_entries', 'customers', 'supplier_entries', 'suppliers'].includes(t))) paint();
   });
   const offShop = bus.on('shop', paint);
-  return () => { off(); offShop(); };
+  const offUpdate = bus.on('update', paintUpdate);
+  return () => { off(); offShop(); offUpdate(); dues.off(); };
 }
 
 function quick(ic, label, onclick, tone = '') {

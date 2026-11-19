@@ -8,7 +8,7 @@ const TABS = [
   { id: 'home', path: '/', icon: 'home', label: 'الرئيسية' },
   { id: 'products', path: '/products', icon: 'box', label: 'الأصناف' },
   null, // مكان الزر العائم
-  { id: 'customers', path: '/customers', icon: 'users', label: 'الزبائن' },
+  { id: 'customers', path: '/customers', icon: 'users', label: 'الديون' },
   { id: 'settings', path: '/more', icon: 'more', label: 'المزيد' },
 ];
 

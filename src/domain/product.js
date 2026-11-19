@@ -141,11 +141,47 @@ export function packToPiece({ count, sell, cost = 0, qty = 0 }) {
   };
 }
 
-/** يضيف العبوة إلى قائمة عبوات الصنف أو يحدّثها إن وُجدت بنفس الاسم (لتُباع بسعرها). */
-export function upsertPack(packs, { name, count, sell, makeId }) {
+/** يضيف العبوة إلى قائمة عبوات الصنف أو يحدّثها إن وُجدت بنفس الاسم (لتُباع بسعرها). barcode: undefined = لا تغيير. */
+export function upsertPack(packs, { name, count, sell, barcode, makeId }) {
   const list = (packs || []).map((p) => ({ ...p }));
   const i = list.findIndex((p) => p.name.trim() === name.trim());
-  if (i >= 0) list[i] = { ...list[i], factor: count, sell_price: sell };
-  else list.push({ id: makeId(), name: name.trim(), factor: count, barcode: null, sell_price: sell });
+  const code = barcode === undefined ? undefined : (normalizeBarcode(barcode) || null);
+  if (i >= 0) list[i] = { ...list[i], factor: count, sell_price: sell, ...(code === undefined ? {} : { barcode: code }) };
+  else list.push({ id: makeId(), name: name.trim(), factor: count, barcode: code ?? null, sell_price: sell });
   return list;
+}
+
+/**
+ * صنف يُدخَل بعبوته (كرتونة فيها 24 قطعة، كروز فيه 10 علب): للعبوة باركودها وللقطعة المنفردة باركود آخر.
+ * الممسوح أولًا هو باركود العبوة فيُحفظ للعبوة، وباركود القطعة يُحفظ للصنف نفسه — فيُعرف الاثنان عند البيع:
+ * مسح الكرتونة يبيع كرتونة بسعرها، ومسح القطعة يبيع قطعة من نفس الصنف والمخزون.
+ * pieceSell (اختياري): سعر القطعة المنفردة إن اختلف عن سعر العبوة ÷ العدد.
+ * يرجع { sell, cost, qty, barcode, packs } بالقطعة، أو { error } بالعربية.
+ */
+export function packEntry({ packs = [], name, count, sell, cost = 0, qty = 0, packBarcode = null, pieceBarcode = null, pieceSell = null, makeId }) {
+  const per = packToPiece({ count, sell, cost, qty });
+  if (!per) return { error: 'اكتب كم قطعة في العبوة (أكثر من 1)' };
+  const packCode = normalizeBarcode(packBarcode) || null;
+  const pieceCode = normalizeBarcode(pieceBarcode) || null;
+  if (packCode && pieceCode && packCode === pieceCode) return { error: 'باركود القطعة المنفردة هو نفسه باركود العبوة — امسح قطعة واحدة من داخلها' };
+  return {
+    sell: Number.isSafeInteger(pieceSell) && pieceSell >= 0 ? pieceSell : per.sell,
+    cost: per.cost,
+    qty: per.qty,
+    barcode: pieceCode,
+    packs: upsertPack(packs, { name, count, sell, barcode: packCode, makeId }),
+  };
+}
+
+/**
+ * باركود قطعة منفردة مُسح ولم يُعرف، والبائع يقول إنه قطعة من صنف مسجّل: ماذا نفعل؟
+ *  - الصنف بلا باركود ← يصير باركوده.
+ *  - للصنف باركود وله عبوة بلا باركود ← الباركود المسجّل كان باركود العبوة (أُدخل الصنف بمسح الكرتونة):
+ *    ينتقل للعبوة، والممسوح الآن يصير باركود القطعة.
+ *  - غير ذلك ← null (للصنف باركود قطعة آخر: يُعدَّل من بطاقته).
+ */
+export function pieceLinkPlan(product) {
+  if (!product.barcode) return { kind: 'set', pack: null };
+  const free = (product.units || []).filter((u) => !u.deleted && !u.barcode).sort((a, b) => b.factor - a.factor);
+  return free[0] ? { kind: 'move', pack: free[0] } : null;
 }

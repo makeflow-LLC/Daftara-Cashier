@@ -30,7 +30,7 @@ export function renderCash(el) {
         h('div', { class: 'hero-value' }, money(s.expectedCash)),
         h('div', { class: 'hero-mini-label' }, s.virtual ? ['محسوب منذ ', num(dateTimeText(s.since))] : ['منذ فتح الصندوق ', num(dateTimeText(s.since))])),
       h('div', { class: 'card' },
-        kv('نقد أول اليوم', money(s.opening)), kv('دخل نقدًا (بيع ودفعات زبائن)', money(s.cashIn)), kv('خرج نقدًا (مشتريات، موردون، مرتجع)', money(s.cashOut)),
+        kv('نقد أول اليوم', money(s.opening)), kv('دخل نقدًا (بيع ودفعات زبائن)', money(s.cashIn)), kv('خرج نقدًا (مشتريات، دفعات للتجار، مرتجع)', money(s.cashOut)),
         ...s.methods.map((m) => kv(m.name, money(m.total))),
         s.credit ? kv('بيع آجل', money(s.credit)) : null),
       button('أغلق الصندوق', { block: true, size: 'lg', icon: 'check', onclick: () => closeSheet(s) }),

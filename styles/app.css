@@ -866,6 +866,11 @@ body{font-weight:500}
 .pack-box .field{margin:0}
 .pack-box .field:only-child,.pack-box .pack-other[hidden]+.field{grid-column:1 / -1}
 .piece-hint{margin:-4px 0 var(--space-3);padding:10px 12px;border-radius:var(--radius-md);background:var(--brand-100);color:var(--brand-700);font-weight:700;font-size:14.5px}
+.pack-piece{grid-column:1 / -1;display:grid;gap:var(--space-3);padding-top:var(--space-3);border-top:2px dashed #f3cf8f}
+.pack-piece[hidden]{display:none}
+.pack-piece .field-hint.bad{font-weight:700}
+.sheet .pack-box{margin-top:var(--space-3)}
+.sheet .pack-piece{padding-top:0;border-top:0}
 .piece-hint:empty{display:none}
 
 /* حسابي */
@@ -962,3 +967,73 @@ body{font-weight:500}
 }
 .scan-box{isolation:isolate}
 .install-banner{margin:0 0 var(--space-4);background:var(--blue-100);border-color:#a9c9f3;color:var(--blue-700)}
+
+/* الاستلام بالمحفظة برمز QR. الرمز دائمًا أسود على أبيض (حتى لو صارت الواجهة داكنة) ليقرأه أي جوال */
+.wallet-btn{display:flex;align-items:center;gap:var(--space-3);width:100%;margin-top:var(--space-3);padding:var(--space-3) var(--space-4);border-radius:var(--radius-lg);background:var(--color-card);border:1.5px solid var(--frame);box-shadow:var(--shadow-sm);color:var(--brand-700);text-align:right}
+.wallet-btn .row-main{display:flex;flex-direction:column;flex:1;min-width:0}
+.wallet-btn strong{font-size:16px}
+.wallet-btn .row-main span{font-size:13px;color:var(--color-muted)}
+.wallet-btn:active{background:var(--brand-100)}
+.wallet-tabs{justify-content:center;margin-bottom:var(--space-3)}
+.wallet-tabs .chip{min-height:46px;padding:0 22px;font-size:16px}
+.wallet-card{display:flex;flex-direction:column;align-items:center;gap:var(--space-2);padding:var(--space-4);border-radius:var(--radius-lg);background:#fff;color:#111;border:1.5px solid var(--frame);color-scheme:light}
+.wallet-qr{width:78vw;height:78vw;max-width:340px;max-height:340px;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-2)}
+.wallet-qr svg{width:100%;height:100%;display:block}
+.wallet-qr.empty{border:2px dashed #cfd6d2;border-radius:var(--radius-lg);color:#77807b;font-weight:600;text-align:center;padding:var(--space-4)}
+.wallet-target{font-size:14.5px;color:#555}
+.wallet-manual{display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;padding-top:var(--space-2);border-top:1.5px dashed #dde3df}
+.wallet-manual[hidden]{display:none}
+.wallet-manual .muted{color:#666}
+.wallet-code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:21px;font-weight:700;letter-spacing:.5px;color:#111;user-select:all;word-break:break-all;text-align:center}
+.wallet-steps{display:flex;flex-direction:column;gap:6px;margin:var(--space-4) 0 var(--space-2);padding-right:1.4em;font-weight:600;font-size:15.5px}
+
+/* شعار MakeFlow، التحديثات، وقفل البصمة */
+.made-by-logo{display:flex;flex-direction:column;align-items:center;gap:6px}
+.made-by-logo img{width:150px;height:auto;display:block}
+.update-card{display:flex;align-items:flex-start;gap:var(--space-3);padding:var(--space-3);color:var(--brand-700)}
+.update-card strong{color:var(--color-text);font-size:16.5px}
+.update-card p{margin:2px 0 0}
+.update-card.has-update strong{color:var(--brand-700)}
+.app-lock{position:fixed;top:0;right:0;bottom:0;left:0;z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-3);padding:var(--space-5);background:var(--color-bg,#eef0ef);text-align:center}
+.app-lock-ic{width:96px;height:96px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--brand-100);color:var(--brand-700)}
+.app-lock-name{font-size:24px;font-weight:700}
+.app-lock p{margin:0;color:var(--color-muted)}
+.app-lock-btn{margin-top:var(--space-4);background:var(--grad-brand);color:#fff;box-shadow:var(--shadow-brand)}
+.app-lock-logo{position:absolute;bottom:28px;width:130px;height:auto;opacity:.9}
+
+/* الديون: مفتاح «لك عند الزبائن / عليك للتجار»، وقسم التجار */
+.debt-tabs{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2);margin-bottom:var(--space-3)}
+.debt-tab{display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:10px var(--space-3);border-radius:var(--radius-lg);background:var(--color-card);border:2px solid var(--frame);text-align:right;color:var(--color-muted);min-height:76px}
+.debt-tab-title{font-size:17px;font-weight:700;color:var(--color-text)}
+.debt-tab-sub{font-size:12.5px;font-weight:600}
+.debt-tab-amt{font-size:15.5px;font-weight:700;color:var(--color-text)}
+.debt-tab:active{background:var(--color-press)}
+.debt-tab.on{box-shadow:var(--shadow-sm)}
+.debt-tab-customers.on{background:var(--brand-100);border-color:var(--brand)}
+.debt-tab-customers.on .debt-tab-title,.debt-tab-customers.on .debt-tab-amt{color:var(--brand-700)}
+.debt-tab-suppliers.on{background:var(--danger-100);border-color:var(--danger)}
+.debt-tab-suppliers.on .debt-tab-title,.debt-tab-suppliers.on .debt-tab-amt{color:var(--danger-700)}
+.debt-card.clear{background:var(--grad-brand);box-shadow:0 10px 24px rgba(11,95,99,.28)}
+.row-end small{font-size:12px;font-weight:600}
+.empty .btn{margin-top:var(--space-3)}
+/* الرئيسية: الدرج في سطر، وتحته «لك عند الزبائن» و«عليك للتجار» جنبًا إلى جنب */
+.home-page .stats .stat:first-child{grid-column:1 / -1;display:flex;align-items:center;justify-content:space-between;gap:var(--space-2)}
+.home-page .stats .stat:first-child .stat-value{margin-top:0}
+.home-page .stats .stat:nth-child(2){background:var(--brand-100);border-color:var(--brand-200)}
+.home-page .stats .stat:nth-child(3){background:var(--pink-100);border-color:#f4a9c6}
+.home-page .stats .stat-value{font-size:20px}
+
+/* موعد السداد للتجار */
+.due-strip{display:flex;align-items:center;gap:var(--space-3);width:100%;margin-bottom:var(--space-3);padding:10px var(--space-3);border-radius:var(--radius-lg);border:2px solid;text-align:right;background:var(--blue-100);border-color:#b9d4f7;color:var(--blue-700)}
+.due-strip .row-main{display:flex;flex-direction:column;flex:1;min-width:0}
+.due-strip strong{font-size:15.5px}
+.due-strip .row-main span{font-size:13px}
+.due-strip.due-none{border-style:dashed}
+.due-strip.due-soon,.due-strip.due-today{background:var(--amber-100);border-color:#f3cf8f;color:var(--amber-700)}
+.due-strip.due-overdue{background:var(--pink-100);border-color:#f5a9c8;color:var(--pink-700)}
+.due-change{flex:none;padding:6px 12px;border-radius:var(--radius-pill);background:#fff;font-weight:700;font-size:13px}
+.due-tag{display:inline-block;padding:1px 8px;border-radius:var(--radius-pill);font-size:12.5px;font-weight:700;background:var(--blue-100);color:var(--blue-700)}
+.due-tag.due-soon,.due-tag.due-today{background:var(--amber-100);color:var(--amber-700)}
+.due-tag.due-overdue{background:var(--pink-100);color:var(--pink-700)}
+.due-chips{flex-wrap:wrap}
+.due-picked{margin:6px 0}

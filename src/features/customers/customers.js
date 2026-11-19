@@ -13,6 +13,7 @@ import { app } from '../../core/app.js';
 import { bus } from '../../core/bus.js';
 import { navigate } from '../../core/router.js';
 import { showReceipt } from '../sale/receipt.js';
+import { debtTabs } from './tabs.js';
 
 const cur = () => app.shop?.base_currency || 'ILS';
 const dateText = (iso) => new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
@@ -31,10 +32,12 @@ export function renderCustomers(el) {
   const search = input({ type: 'search', placeholder: 'ابحث بالاسم أو رقم الجوال', autocomplete: 'off', oninput: (e) => { query = e.target.value; paint(); } });
   const totalEl = h('div');
   const body = h('div');
+  const tabs = debtTabs('customers');
 
   el.append(
     header('الزبائن', { actions: [syncBadge()] }),
     h('div', { class: 'page' },
+      tabs.el,
       totalEl,
       h('div', { class: 'search-row' }, icon('search', 20), search),
       h('div', { class: 'product-actions' },
@@ -66,7 +69,7 @@ export function renderCustomers(el) {
       : emptyState('search', 'لا نتائج', `لا زبون يطابق «${query}»`));
   }
 
-  async function load() { all = await app.customers.list(); paint(); }
+  async function load() { all = await app.customers.list(); paint(); tabs.refresh(); }
   load();
   return bus.on('data', (e) => { if (e.tables.includes('customers') || e.tables.includes('customer_entries')) load(); });
 }
@@ -219,6 +222,12 @@ export async function renderCustomer(el, params) {
       isPay && c.balance > 0 ? h('div', { class: 'chips pay-quick' }, h('button', { class: 'chip', type: 'button', onclick: () => { amt.value = formatDecimal(c.balance, minor, { trim: true, group: false }); } }, 'كامل المبلغ ', num(formatMoney(c.balance, cur())))) : null,
       isPay ? (methods.length > 1 ? h('div', { class: 'field' }, chips) : null) : field('ملاحظة', note),
       button(isPay ? 'حفظ الدفعة' : 'حفظ الدين', { type: 'submit', block: true, size: 'lg', icon: 'check' }),
+      // الزبون يدفع من محفظته: رمز QR بالمبلغ المكتوب، والدفعة تُسجَّل على حسابه بعد التأكد من وصولها
+      isPay ? button('ادفع بالمحفظة (QR)', { kind: 'outline', block: true, icon: 'wallet', onclick: () => {
+        const v = parseMoney(amt.value || '', cur());
+        close();
+        navigate(`/wallet?customer=${c.id}${v > 0 ? `&amount=${formatDecimal(v, minor, { trim: true, group: false })}` : ''}`);
+      } }) : null,
     ), { title: isPay ? `دفعة من ${c.name}` : `دين على ${c.name}` });
     setTimeout(() => amt.focus(), 150);
   }

@@ -26,7 +26,7 @@ test('purchase paid in cash: drawer out, supplier balance stays zero', () => {
   assert.equal(r.supplierEntries.reduce((a, e) => a + e.amount, 0), 0);
   const noSup = buildPurchase({ lines: [purchaseLine(milk)], paid: 'cash' }, env());
   assert.equal(noSup.supplierEntries.length, 0);
-  assert.throws(() => buildPurchase({ lines: [purchaseLine(milk)], paid: 'credit' }, env()), /اختر المورّد/);
+  assert.throws(() => buildPurchase({ lines: [purchaseLine(milk)], paid: 'credit' }, env()), /اختر التاجر/);
   assert.throws(() => buildPurchase({ lines: [] }, env()), /أضف صنفًا/);
 });
 

@@ -6,6 +6,7 @@ import { SHOP_TYPES } from '../../domain/features.js';
 import { app } from '../../core/app.js';
 import { navigate } from '../../core/router.js';
 import { openFeedback } from '../help/feedback.js';
+import { makeflowMark } from '../settings/settings.js';
 
 export function renderMore(el) {
   const tile = (ic, label, tone, onclick) => h('button', { class: `hub-tile hub-${tone}`, type: 'button', onclick }, h('span', { class: 'hub-ic' }, icon(ic, 28)), h('span', { class: 'hub-label' }, label));
@@ -24,7 +25,7 @@ export function renderMore(el) {
       tile('receipt', 'الفواتير', 'blue', go('/invoices')),
       tile('cash', 'الصندوق', 'amber', go('/cash')),
       tile('box', 'المخزون', 'violet', go('/inventory')),
-      tile('truck', 'الموردون', 'teal', go('/suppliers')),
+      tile('truck', 'ديون التجار', 'teal', go('/suppliers')),
       tile('tag', 'أدوات', 'pink', go('/tools'))),
     h('h2', { class: 'section-title' }, 'التطبيق'),
     h('div', { class: 'hub' },
@@ -33,6 +34,7 @@ export function renderMore(el) {
       tile('sliders', 'الإعدادات', 'gray', go('/settings')),
       tile('help', 'المساعدة', 'blue', go('/help')),
       tile('chat', 'أرسل ملاحظة', 'green', () => openFeedback('note'))),
-    h('p', { class: 'made-by' }, 'دفترة كاشير ', h('span', { class: 'num' }, app.info.version), app.config.release ? ' · أحد منتجات ' : ' — نسخة تجريبية · أحد منتجات ', h('b', null, 'MakeFlow')),
+    h('p', { class: 'made-by' }, 'دفترة كاشير ', h('span', { class: 'num' }, app.info.version), app.config.release ? '' : ' — نسخة تجريبية'),
+    makeflowMark(),
   ));
 }

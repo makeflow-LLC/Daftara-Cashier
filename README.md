@@ -103,6 +103,8 @@ Nothing else needs to change.
   hides profit/cost for non-owners), `reportSheets`.
 - `src/features/reports/` — one page with period chips, daily bars, tables, and PDF / Excel export
   (`vendor/xlsx.js` is Daftara's library-free xlsx writer, loaded only on export).
+- `vendor/qrcode.js` — [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) 2.0.4 (MIT), copied from
+  `node_modules/qrcode-generator/dist/qrcode.js`; loaded only on the wallet QR screen (`src/features/wallet/`), works offline.
 
 ## Tools (milestone 8)
 

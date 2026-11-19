@@ -6,11 +6,14 @@ import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback, configureFeedback } from '../../ui/feedback.js';
 import { FEATURES, SHOP_TYPES } from '../../domain/features.js';
 import { CURRENCIES, EXTRA_CURRENCIES, parseRate } from '../../domain/currency.js';
+import { shopWallets } from '../../domain/wallet.js';
 import { formatDecimal, normalizeDigits, parseDecimal } from '../../domain/money.js';
 import { app } from '../../core/app.js';
 import { bus } from '../../core/bus.js';
 import { navigate } from '../../core/router.js';
 import { pickImage } from '../../core/media.js';
+import { appLock } from '../shell/lock.js';
+import { openLink } from '../customers/customers.js';
 
 const go = (p) => () => navigate(p);
 
@@ -25,13 +28,14 @@ export function renderSettings(el) {
         row({ icon: 'tag', title: 'التصنيفات', sub: 'ألبان، معلبات، منظفات…', onclick: go('/settings/categories') }),
         f.multiCurrency ? row({ icon: 'coins', title: 'العملات وأسعار الصرف', onclick: go('/settings/currencies') }) : null,
         row({ icon: 'wallet', title: 'طرق الدفع', sub: 'نقدًا، تحويل، محافظ، آجل', onclick: go('/settings/payments') }),
+        row({ icon: 'wallet', title: 'الاستلام بالمحفظة (QR)', sub: shopWallets(app.shop?.settings).map((w) => w.name).join('، ') || 'جوال باي، بال باي — اكتب رقم محفظتك', onclick: go('/settings/wallets') }),
         row({ icon: 'scan', title: 'ميزان الباركود', sub: app.shop?.settings?.scale?.enabled ? 'مفعّل — ملصق الميزان يُقرأ بوزنه' : 'مطفأ — امسح ملصق الميزان بوزنه أو سعره', onclick: go('/settings/scale') }),
         row({ icon: 'chat', title: 'رسائل SMS للزبائن', sub: app.shop?.settings?.sms?.enabled ? 'مفعّلة' : 'مطفأة — رسالة تلقائية بعد الدين والدفعة', onclick: go('/settings/sms') }),
       )),
       section('التطبيق', h('div', { class: 'list' },
-        row({ icon: 'scan', title: 'الأصوات وشاشة البيع', sub: 'صوت المسح، الاهتزاز، إظهار الربح', onclick: go('/settings/appearance') }),
+        row({ icon: 'lock', title: 'القفل والأصوات وشاشة البيع', sub: 'قفل البصمة، صوت المسح، الاهتزاز، إظهار الربح', onclick: go('/settings/appearance') }),
         row({ icon: 'cloud', title: 'المزامنة', sub: 'حالة رفع بياناتك', onclick: go('/settings/sync') }),
-        row({ icon: 'info', title: 'عن التطبيق', end: num(app.info.version), onclick: go('/settings/about') }),
+        row({ icon: 'info', title: 'عن التطبيق والتحديثات', sub: app.updater.available ? `تحديث جديد ${app.updater.available}` : null, end: num(app.info.version), onclick: go('/settings/about') }),
       )),
     ),
   );
@@ -238,9 +242,28 @@ export function renderSync(el) {
 
 export function renderAppearance(el) {
   const prefs = readPrefs();
+  // قفل التطبيق بالبصمة: يظهر فقط حيث يدعمه الجهاز (أندرويد وله قفل شاشة)
+  const lockBox = h('div');
+  function paintLock(s) {
+    if (!appLock.enabled && !s.available && !globalThis.Capacitor?.Plugins?.Biometric) { fill(lockBox); return; }
+    const sw = switchRow({
+      title: 'قفل التطبيق بالبصمة',
+      sub: s.available ? (s.biometric ? 'يُطلب عند فتح التطبيق وبعد دقيقة من الخروج منه. البديل: رمز قفل الجوال.' : 'لا بصمة مسجّلة في الجوال: سيُطلب رمز قفل الجوال. سجّل بصمتك من إعدادات الجوال.') : 'فعّل قفل الشاشة (بصمة أو رمز) من إعدادات الجوال أولًا.',
+      checked: appLock.enabled,
+      onchange: async (v) => {
+        const ok = await appLock.setEnabled(v);
+        if (ok) { feedback.ok(); toast(v ? 'شُغّل قفل البصمة' : 'أُطفئ قفل البصمة', { kind: 'ok' }); }
+        else { feedback.error(); toast(s.available ? 'لم يتم التحقق — لم يتغير شيء' : 'لا قفل شاشة في هذا الجوال', { kind: 'error' }); }
+        paintLock(await appLock.support());
+      },
+    });
+    fill(lockBox, section('الحماية', h('div', { class: 'list' }, sw)));
+  }
+  appLock.support().then(paintLock);
   el.append(
-    header('الأصوات وشاشة البيع', { back: true }),
+    header('القفل والأصوات وشاشة البيع', { back: true }),
     h('div', { class: 'page' },
+      lockBox,
       section('شاشة البيع', h('div', { class: 'list' },
         switchRow({ title: 'إظهار الربح أثناء البيع', sub: 'مطفأ: لا يرى الزبون ربحك. الربح يظهر دائمًا في الرئيسية والتقارير.', checked: prefs.saleProfit === true, onchange: (v) => { prefs.saleProfit = v; savePrefs(prefs); } }),
       )),
@@ -253,6 +276,37 @@ export function renderAppearance(el) {
 }
 
 export function renderAbout(el) {
+  // التحديثات: الفحص التلقائي يعمل في الخلفية مرة في اليوم؛ هنا يفحص الزبون فورًا
+  const up = app.updater;
+  const updates = h('div');
+  let checking = false;
+  let note = '';
+  function paintUpdates() {
+    const v = up.available;
+    const t = up.target;
+    const last = up.checkedAt ? `آخر فحص: ${new Date(up.checkedAt).toLocaleString('en-GB', { hour12: false, dateStyle: 'short', timeStyle: 'short' })}` : '';
+    fill(updates, card(
+      h('div', { class: `update-card ${v ? 'has-update' : ''}` }, icon('refresh', 28),
+        h('div', null,
+          h('strong', null, v ? ['تحديث جديد: ', num(v)] : 'التحديثات'),
+          h('p', { class: 'muted small' }, v ? 'يُثبَّت فوق النسخة الحالية ولا يمسح بياناتك.' : (note || (up.flavor === 'play' ? 'التحديث من Google Play.' : up.flavor === 'web' ? 'نسخة الويب تتحدّث وحدها عند فتحها والإنترنت يعمل.' : 'التطبيق يفحص وحده مرة في اليوم.'))),
+          last && up.flavor !== 'web' && up.flavor !== 'play' ? h('p', { class: 'muted small' }, num(last)) : null)),
+      v && t ? button(`${t.label} ${v}`, { icon: 'refresh', block: true, size: 'lg', onclick: () => openLink(t.url) }) : null,
+      button(checking ? 'جارٍ الفحص…' : 'تحقق من التحديثات', { kind: v ? 'text' : 'outline', icon: 'refresh', block: true, onclick: checkNow }),
+    ));
+  }
+  async function checkNow() {
+    if (checking) return;
+    checking = true; note = ''; paintUpdates();
+    const r = await up.check({ force: true });
+    checking = false;
+    if (r.status === 'store') { openLink(up.target.url); note = 'فُتحت صفحة التطبيق في Google Play: إن ظهر زر «تحديث» فاضغطه.'; }
+    else if (r.status === 'available') { feedback.ok(); toast(`يوجد تحديث جديد ${r.version}`, { kind: 'ok' }); }
+    else if (r.status === 'latest') { feedback.ok(); note = `عندك أحدث نسخة (${app.info.version}).`; toast('عندك أحدث نسخة ✓', { kind: 'ok' }); }
+    else if (r.status === 'downloading') { note = 'نسخة جديدة تنزل الآن — تُطبَّق عند العودة للرئيسية.'; toast('نسخة جديدة تنزل الآن', { kind: 'ok' }); }
+    else { feedback.error(); note = 'تعذّر الفحص — تأكد من الإنترنت وحاول مرة أخرى.'; toast('تعذّر الفحص — تأكد من الإنترنت', { kind: 'error' }); }
+    paintUpdates();
+  }
   el.append(
     header('عن التطبيق', { back: true }),
     h('div', { class: 'page' },
@@ -261,13 +315,21 @@ export function renderAbout(el) {
         row({ title: 'النسخة', end: app.info.flavor === 'play' ? 'Google Play' : app.info.flavor === 'direct' ? 'تثبيت مباشر' : app.info.flavor === 'desktop' ? 'نسخة الحاسوب' : 'تجريبية' }),
         row({ title: 'رقم البناء', end: num(String(app.info.build)) }),
       )),
+      updates,
       card(h('div', { class: 'list' },
         row({ icon: 'lock', title: 'سياسة الخصوصية', onclick: () => window.open('https://makeflow.tech/apps/cashier/privacy.html', '_blank') }),
         row({ icon: 'clipboard', title: 'شروط الاستخدام', onclick: () => window.open('https://makeflow.tech/apps/cashier/terms.html', '_blank') }),
       )),
-      h('p', { class: 'made-by' }, 'أحد منتجات ', h('b', null, 'MakeFlow')),
+      makeflowMark(),
     ),
   );
+  paintUpdates();
+  return bus.on('update', () => paintUpdates());
+}
+
+/** شعار الشركة (في «عن التطبيق» و«المزيد»). */
+export function makeflowMark(text = 'أحد منتجات') {
+  return h('div', { class: 'made-by made-by-logo' }, h('span', null, text), h('img', { src: 'icons/makeflow.png', alt: 'MakeFlow', width: '150', height: '44' }));
 }
 
 // ---------- تفضيلات هذا الجهاز (ليست بيانات المحل، لا تُزامن) ----------

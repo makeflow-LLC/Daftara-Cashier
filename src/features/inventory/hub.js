@@ -59,7 +59,7 @@ export function renderInventory(el, params) {
   const act = (ic, label, fn, tone = '') => h('button', { class: `quick-btn ${tone}`, type: 'button', onclick: fn }, icon(ic, 26), h('span', null, label));
   fill(actions,
     act('truck', 'شراء بضاعة', () => navigate('/inventory/purchase'), 'quick-brand'),
-    act('users', 'الموردون', () => navigate('/suppliers')),
+    act('users', 'ديون التجار', () => navigate('/suppliers')),
     app.feature('stockCount') ? act('clipboard', 'جرد', () => navigate('/inventory/count')) : null,
     act('trash', 'تالف', damage));
 
@@ -70,7 +70,7 @@ export function renderInventory(el, params) {
     const canOrder = (tab === 'out' || tab === 'low') && items.length;
     fill(body,
       items.length ? h('p', { class: 'muted small' }, t.hint) : null,
-      canOrder ? button('اطلب من المورّد عبر واتساب', { icon: 'truck', block: true, onclick: () => reorder([...alerts.out, ...alerts.low]) }) : null,
+      canOrder ? button('اطلب من التاجر عبر واتساب', { icon: 'truck', block: true, onclick: () => reorder([...alerts.out, ...alerts.low]) }) : null,
       items.length ? h('div', { class: 'list section' }, ...items.map((p) => h('button', { class: 'row row-tap', type: 'button', onclick: () => navigate(`/products/edit?id=${p.id}`) },
         productThumb(p, 40),
         h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, p.name),
@@ -91,7 +91,7 @@ export function renderInventory(el, params) {
         h('span', { class: 'stepper-val num' }, formatQty(it.qty)),
         h('button', { type: 'button', 'aria-label': 'زيادة', onclick: () => { it.qty += QTY_SCALE; paintRows(); } }, icon('plus', 18))))));
     paintRows();
-    openSheet((close) => h('div', null, rows, h('div', { class: 'rc-actions' }, button('اختر المورّد وأرسل', {
+    openSheet((close) => h('div', null, rows, h('div', { class: 'rc-actions' }, button('اختر التاجر وأرسل', {
       block: true, size: 'lg', icon: 'truck',
       onclick: async () => {
         const chosen = items.filter((it) => it.on);
@@ -101,7 +101,7 @@ export function renderInventory(el, params) {
         close();
         openLink(whatsappLink(s.phone, reorderText({ shopName: app.shop.name, supplierName: s.name, items: chosen.map((it) => ({ name: it.p.name, unit: it.p.unit, qty: it.qty })) })));
       },
-    }))), { title: 'طلبية للمورّد' });
+    }))), { title: 'طلبية للتاجر' });
   }
 
   async function damage() {

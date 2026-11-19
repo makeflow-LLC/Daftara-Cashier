@@ -16,6 +16,7 @@ import { app } from '../../core/app.js';
 import { bus } from '../../core/bus.js';
 import { navigate } from '../../core/router.js';
 import { productThumb } from '../products/thumb.js';
+import { linkPieceSheet } from '../products/link.js';
 import { openPay } from './pay.js';
 import { showReceipt } from './receipt.js';
 import { readPrefs } from '../settings/settings.js';
@@ -216,6 +217,8 @@ export function renderSale(el) {
     openSheet((close) => h('div', null,
       h('p', null, 'هذا الباركود غير مسجّل: ', num(code)),
       button('أضفه كصنف جديد', { block: true, icon: 'plus', onclick: () => { close(); navigate(`/products/edit?barcode=${encodeURIComponent(code)}`); } }),
+      // قطعة من كرتونة/كروز مسجّل بباركود عبوته: تُربط به ولا تصير صنفًا جديدًا
+      button('قطعة من صنف مسجّل (كرتونة، كروز…)', { kind: 'outline', block: true, icon: 'box', onclick: () => { close(); linkPieceSheet(code, { products: products || [], onLinked: (p) => { loadProducts(); addProduct(p); } }); } }),
       button('تجاهل', { kind: 'text', onclick: close }),
     ), { title: 'صنف غير معروف' });
   }

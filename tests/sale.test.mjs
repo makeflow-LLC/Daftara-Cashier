@@ -120,8 +120,8 @@ test('inventory: purchase updates stock and weighted cost, supplier balance, pay
   assert.equal((await inventory.supplier(sup.id)).balance, 10000);
   await inventory.paySupplier(sup.id, 4000);
   assert.equal((await inventory.supplier(sup.id)).balance, 6000);
-  assert.deepEqual(await inventory.supplierTotals(), { total: 6000, count: 1 });
-  await assert.rejects(inventory.savePurchase({ lines: [purchaseLine(product)], paid: 'credit' }), /اختر المورّد/);
+  assert.deepEqual(await inventory.supplierTotals(), { total: 6000, count: 1, credit: 0, suppliers: 1 });
+  await assert.rejects(inventory.savePurchase({ lines: [purchaseLine(product)], paid: 'credit' }), /اختر التاجر/);
   assert.equal(await db.invoices.count(), 1, 'failed purchase saved nothing');
 });
 
@@ -181,7 +181,7 @@ test('feedback message carries type, shop and version; FAQ entries are complete'
   if (!feedbackMessage) return; // يحتاج DOM في بعض البيئات
   const m = feedbackMessage({ type: 'feature', text: ' أريد طباعة حرارية ', shopName: 'بقالة النور', version: '0.1.20', flavor: 'direct', sdk: 30 });
   assert.ok(m.startsWith('*دفترة كاشير — طلب ميزة*') && m.includes('أريد طباعة حرارية') && m.includes('بقالة النور') && m.includes('0.1.20 (direct) · أندرويد 30'));
-  assert.equal(SUPPORT_PHONE, '970597750343');
+  assert.equal(SUPPORT_PHONE, '970567900316');
   assert.equal(FEEDBACK_TYPES.length, 3);
 });
 
@@ -212,4 +212,93 @@ test('customer: edit a mistyped payment and delete a debt — the record and the
   assert.equal(view.entries.find((e) => e.id === debt.id).cancelled, false, 'undo brings the debt back');
   assert.equal(view.raw.length, 2, 'WhatsApp statement shows only real entries');
   await assert.rejects(customers.voidEntry({ ...debt, invoice_id: 'x', id: 'y' }), (e) => /مرتجع/.test(e.errors.amount));
+});
+
+test('trader debts: opening balance, manual debt, payments by method, edit, delete and undo', async () => {
+  const { inventory, cash, db } = await setup();
+  // تاجر جديد وعليّ له 1,200 من الدفتر القديم
+  const t = await inventory.saveSupplier({ name: 'تاجر الجملة أبو خالد', phone: '0599111222', note: 'يمرّ كل خميس', opening: 120000 });
+  let s = await inventory.supplier(t.id);
+  assert.equal(s.balance, 120000);
+  assert.deepEqual(s.entries.map((e) => [e.type, e.amount]), [['opening', 120000]]);
+  await assert.rejects(inventory.saveSupplier({ name: '' }), /اسم التاجر/);
+  await assert.rejects(inventory.saveSupplier({ name: 'x', opening: -5 }));
+
+  // أخذت بضاعة بالدين: لا فاتورة ولا مخزون
+  const stockBefore = await db.movements.count();
+  await inventory.addSupplierDebt(t.id, 80000, 'فاتورة 1250');
+  assert.equal(await db.movements.count(), stockBefore, 'a manual debt never touches stock');
+  await assert.rejects(inventory.addSupplierDebt(t.id, 0), (e) => !!e.errors.amount);
+
+  // دفعة نقدًا تخرج من الدرج، ودفعة بتحويل لا تمسّه
+  const drawer0 = (await cash.summary()).expectedCash;
+  await inventory.paySupplier(t.id, 50000, { note: 'سند 55' });
+  assert.equal((await cash.summary()).expectedCash, drawer0 - 50000);
+  const transfer = await db.payment_methods.get(await db.payment_methods.put({ id: uuid(), name: 'تحويل بنكي', kind: 'transfer', sort: 1, active: true }));
+  await inventory.paySupplier(t.id, 30000, { method: transfer });
+  assert.equal((await cash.summary()).expectedCash, drawer0 - 50000, 'a transfer never leaves the drawer');
+  s = await inventory.supplier(t.id);
+  assert.equal(s.balance, 120000 + 80000 - 50000 - 30000);
+  assert.ok(s.oldestUnpaidAt, 'still owing → oldest unpaid debt is known');
+  assert.equal(s.entries[0].balance, s.balance, 'newest first with the running balance');
+
+  // تعديل الدفعة النقدية 500 → 400: الرصيد والدرج يُصحَّحان، والقديمة تظهر ملغاة
+  const cashPay = s.entries.find((e) => e.type === 'payment' && e.note === 'سند 55');
+  await inventory.editSupplierEntry(cashPay, 40000);
+  s = await inventory.supplier(t.id);
+  assert.equal(s.balance, 120000 + 80000 - 40000 - 30000);
+  assert.equal((await cash.summary()).expectedCash, drawer0 - 40000);
+  assert.equal(s.entries.filter((e) => e.cancelled).length, 1);
+  assert.equal(s.entries.find((e) => e.type === 'payment' && !e.cancelled && e.amount === -40000).note, 'سند 55', 'the note survives an amount edit');
+
+  // حذف الدين اليدوي ثم التراجع
+  const debt = s.entries.find((e) => e.type === 'adjustment' && !e.cancelled);
+  const undo = await inventory.voidSupplierEntry(debt);
+  assert.equal((await inventory.supplier(t.id)).balance, 120000 - 40000 - 30000);
+  await inventory.voidSupplierEntry(undo);
+  s = await inventory.supplier(t.id);
+  assert.equal(s.balance, 120000 + 80000 - 40000 - 30000);
+  assert.equal(s.entries.find((e) => e.id === debt.id).cancelled, false);
+
+  // حذف دفعة التحويل: لا يتغير الدرج
+  const tr = s.entries.find((e) => e.type === 'payment' && !e.cancelled && e.amount === -30000);
+  await inventory.voidSupplierEntry(tr);
+  assert.equal((await cash.summary()).expectedCash, drawer0 - 40000);
+  assert.equal((await inventory.supplier(t.id)).balance, 120000 + 80000 - 40000);
+
+  // دفعت أكثر مما عليّ لتاجر آخر: «لك عنده»، ولا يدخل في مجموع ما عليك
+  const t2 = await inventory.saveSupplier({ name: 'شركة الألبان' });
+  await inventory.paySupplier(t2.id, 7000, { method: transfer });
+  assert.deepEqual(await inventory.supplierTotals(), { total: 160000, count: 1, credit: 7000, suppliers: 2 });
+  const list = await inventory.suppliers();
+  assert.deepEqual(list.map((x) => [x.name, x.balance]), [['تاجر الجملة أبو خالد', 160000], ['شركة الألبان', -7000]]);
+  assert.equal(list[1].oldestUnpaidAt, null);
+  assert.equal(inventory.searchSuppliers(list, 'الالبان').length, 1);
+  assert.equal(inventory.searchSuppliers(list, '599111').length, 1, 'search by phone');
+});
+
+test('trader debts: entries from a purchase invoice are not editable here', async () => {
+  const { inventory, product } = await setup();
+  const sup = await inventory.saveSupplier({ name: 'أبو سامي' });
+  await inventory.savePurchase({ lines: [purchaseLine(product, { qty: 2000, unitCost: 500 })], supplierId: sup.id, paid: 'credit' });
+  const s = await inventory.supplier(sup.id);
+  await assert.rejects(inventory.voidSupplierEntry(s.entries[0]), (e) => /فاتورة/.test(e.errors.amount));
+  await assert.rejects(inventory.editSupplierEntry(s.entries[0], 100), (e) => /فاتورة/.test(e.errors.amount));
+});
+
+test('trader statement text for WhatsApp', async () => {
+  const { supplierStatementText } = await import('../src/domain/ledger.js');
+  const text = supplierStatementText({
+    shopName: 'بقالة النور', supplierName: 'أبو خالد', currency: 'ILS',
+    entries: [
+      { type: 'opening', amount: 120000, created_at: '2026-11-01T08:00:00.000Z' },
+      { type: 'adjustment', amount: 80000, note: 'فاتورة 1250', created_at: '2026-11-05T08:00:00.000Z' },
+      { type: 'payment', amount: -50000, created_at: '2026-11-10T08:00:00.000Z' },
+    ],
+  });
+  assert.match(text, /كشف حساب بقالة النور عندك/);
+  assert.match(text, /بضاعة بالدين \(فاتورة 1250\)\s+\+800\.00/);
+  assert.match(text, /دفعة له\s+−500\.00/);
+  assert.match(text, /الباقي لك عندي: 1,500\.00 ₪/);
+  assert.match(supplierStatementText({ shopName: 'م', supplierName: 'ت', entries: [{ type: 'payment', amount: -700, created_at: '2026-11-01T08:00:00.000Z' }] }), /لي عندك: 7\.00/);
 });

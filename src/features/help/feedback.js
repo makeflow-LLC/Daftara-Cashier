@@ -8,7 +8,7 @@ import { feedback } from '../../ui/feedback.js';
 import { app } from '../../core/app.js';
 import { openLink } from '../customers/customers.js';
 
-export const SUPPORT_PHONE = '970597750343';
+export const SUPPORT_PHONE = '970567900316';
 
 export const FEEDBACK_TYPES = [
   { key: 'bug', label: 'مشكلة', icon: 'alert', hint: 'ماذا حدث؟ وفي أي شاشة؟', tone: 'pink' },

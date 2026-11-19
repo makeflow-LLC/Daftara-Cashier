@@ -118,7 +118,7 @@ export function reportSections(r, snapshot, { currency = 'ILS', showProfit = tru
   if (snapshot) {
     sections.push({ title: 'الوضع الآن', head: ['البند', 'القيمة'], rows: [
       ...(showProfit ? [['قيمة المخزون بالتكلفة', m(snapshot.stockCost)]] : []),
-      ['قيمة المخزون بسعر البيع', m(snapshot.stockSell)], ['ديون الزبائن', m(snapshot.customerDebts)], ['عليك للموردين', m(snapshot.supplierBalances)],
+      ['قيمة المخزون بسعر البيع', m(snapshot.stockSell)], ['ديون الزبائن', m(snapshot.customerDebts)], ['عليك للتجار', m(snapshot.supplierBalances)],
     ] });
   }
   return sections.filter((s) => s.rows.length);

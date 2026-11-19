@@ -9,6 +9,7 @@ import { configureFeedback } from './ui/feedback.js';
 import { closeTopSheet, closeAllSheets, toast } from './ui/overlay.js';
 import { closeScanner } from './ui/scanner.js';
 import { startPwa } from './core/pwa.js';
+import { appLock } from './features/shell/lock.js';
 
 async function start() {
   if (window.__oldWebView) return;
@@ -36,6 +37,7 @@ async function start() {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) app.license.compute(); });
   app.bus.on('toast', (a) => toast(...a)); // رسائل من الخدمات (مثل SMS) تظهر للمستخدم
   if (app.ctx.shopId) app.reminders.start(); // التذكير الدوري بالديون
+  if (app.ctx.shopId) app.dues.start(); // مواعيد السداد للتجار
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTopSheet(); });
 
   if (!app.ctx.shopId) {
@@ -48,8 +50,10 @@ async function start() {
     registerAll();
     await render();
   }
+  appLock.start(); // قفل البصمة (إن شغّله صاحب المحل): شاشة القفل تظهر قبل أن تُرى أي بيانات
   hideSplash();
   androidBackButton();
+  app.updater.start(); // فحص التحديثات في الخلفية، مرة في اليوم
 }
 
 let shellMounted = false;

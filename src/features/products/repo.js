@@ -1,7 +1,7 @@
 // بيانات الأصناف على الجهاز: قراءة، بحث بالباركود، حفظ (مع حركة المخزون وسجل الأسعار والعبوات) — في معاملة واحدة.
 // مستقلة عن الواجهة فتُختبر وحدها (tests/products.test.mjs).
 import { signedQty } from '../../domain/stock.js';
-import { normalizeBarcode, internalBarcode, isShareableBarcode, validateProduct, validatePack } from '../../domain/product.js';
+import { normalizeBarcode, internalBarcode, isInternalBarcode, isAcceptableBarcode, isShareableBarcode, validateProduct, validatePack, pieceLinkPlan } from '../../domain/product.js';
 import { normalizeScaleCode, parseScaleBarcode, scaleQuantity } from '../../domain/scale.js';
 
 export function createProductRepo({ db, store, getContext }) {
@@ -106,6 +106,12 @@ export function createProductRepo({ db, store, getContext }) {
         const dup = await repo.findByCode(data.barcode);
         if (dup && dup.product.id !== data.id) throw Object.assign(new Error('duplicate'), { errors: { barcode: `هذا الباركود مسجّل لـ «${dup.product.name}»` } });
       }
+      // باركود واحد لا يكون للقطعة وللعبوة معًا (ولا لعبوتين): الماسح لن يعرف أيهما يبيع
+      const packCodes = (packs || (data.id ? (await db.product_units.where('product_id').equals(data.id).toArray()).filter((u) => !u.deleted) : []))
+        .map((pk) => normalizeBarcode(pk.barcode)).filter(Boolean);
+      if ((data.barcode && packCodes.includes(data.barcode)) || new Set(packCodes).size !== packCodes.length) {
+        throw Object.assign(new Error('duplicate'), { errors: { packs: 'باركود القطعة وباركود العبوة لا يكونان نفس الرقم' } });
+      }
       for (const pk of packs || []) {
         const err = validatePack(pk);
         if (err) throw Object.assign(new Error('invalid pack'), { errors: { packs: err } });
@@ -159,6 +165,28 @@ export function createProductRepo({ db, store, getContext }) {
         return p;
       });
       return { product, isNew, warnings: v.warnings, deviceId: ctx.deviceId };
+    },
+
+    /**
+     * يربط باركود قطعة منفردة بصنف مسجّل (أُدخل بباركود كرتونته). انظر pieceLinkPlan.
+     * يرجع { product, plan } أو يرمي خطأ فيه errors.barcode.
+     */
+    async linkPiece(productId, raw) {
+      const code = normalizeBarcode(raw);
+      const fail = (msg) => Object.assign(new Error('link'), { errors: { barcode: msg } });
+      if (!isAcceptableBarcode(code)) throw fail('الباركود غير صحيح');
+      const full = await repo.get(productId);
+      if (!full) throw fail('الصنف غير موجود');
+      const dup = await repo.findByCode(code);
+      if (dup) throw fail(`هذا الباركود مسجّل لـ «${dup.product.name}»`);
+      const plan = pieceLinkPlan(full);
+      if (!plan) throw fail(`«${full.name}» له باركود قطعة آخر — عدّله من بطاقة الصنف`);
+      const { qty, avg_cost, units, images, ...row } = full;
+      const packs = plan.kind === 'move'
+        ? units.map((u) => (u.id === plan.pack.id ? { ...u, barcode: full.barcode } : u))
+        : null;
+      const { product } = await repo.save({ ...row, barcode: code, internal_code: isInternalBarcode(code) }, { packs });
+      return { product, plan };
     },
 
     remove(id) {

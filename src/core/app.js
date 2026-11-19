@@ -22,6 +22,9 @@ import { createSaleRepo } from '../features/sale/repo.js';
 import { createCustomerRepo } from '../features/customers/repo.js';
 import { createInventoryRepo } from '../features/inventory/repo.js';
 import { createCashRepo } from '../features/cash/repo.js';
+import { createWalletRepo } from '../features/wallet/repo.js';
+import { createUpdater } from './update.js';
+import { createDues } from './dues.js';
 
 const clock = makeClock();
 
@@ -98,6 +101,7 @@ export const app = {
     app.customers = createCustomerRepo(deps);
     app.inventory = createInventoryRepo({ ...deps, clock });
     app.cash = createCashRepo({ ...deps, clock });
+    app.wallet = createWalletRepo({ ...deps, customers: app.customers });
     if (app.ctx.shopId) await app.loadShop();
     app.license = createLicense({
       meta: app.meta, info: app.info, deviceId, shopCreatedAt: app.shop?.created_at || null,
@@ -105,13 +109,17 @@ export const app = {
       billing: globalThis.Capacitor?.Plugins?.CashierBilling || null,
     });
     await app.license.init();
+    app.updater = createUpdater({ meta: app.meta, getInfo: () => ({ ...app.info, release: !!app.config.release }), emit: (v) => bus.emit('update', v) });
+    await app.updater.load();
     app.startSync();
     app.account = createAccount(app);
     await app.account.init();
     app.sms = createSms(app, { toast: (...a) => bus.emit('toast', a) });
     app.reminders = createReminders(app, { toast: (...a) => bus.emit('toast', a), emit: () => bus.emit('reminders', app.reminders.due) });
+    app.dues = createDues(app, { toast: (...a) => bus.emit('toast', a), emit: (a) => bus.emit('dues', a) });
     bus.on('data', async (e) => {
       if (e.tables.includes('shops')) await app.loadShop();
+      if (e.tables.some((t) => t === 'shops' || t === 'suppliers' || t === 'supplier_entries')) app.dues.refresh().catch(() => {});
       if (e.prefixChanged) app.ctx.prefix = e.prefixChanged;
     });
     return app;
