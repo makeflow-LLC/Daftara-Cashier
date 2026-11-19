@@ -15,6 +15,8 @@ import { navigate } from '../../core/router.js';
 import { openLink } from '../customers/customers.js';
 import { debtTabs } from '../customers/tabs.js';
 import { showReceipt } from '../sale/receipt.js';
+import { dueStatus } from '../../domain/dues.js';
+import { duePicker, dueSheet, dueStrip, dueTag, dueBanner } from './due.js';
 
 const cur = () => app.shop?.base_currency || 'ILS';
 const minorOf = () => CURRENCIES[cur()].minor;
@@ -76,12 +78,13 @@ export function renderSuppliers(el) {
   let query = '';
   const search = input({ type: 'search', placeholder: 'ابحث باسم التاجر أو رقمه', autocomplete: 'off', oninput: (e) => { query = e.target.value; paint(); } });
   const tabs = debtTabs('suppliers');
+  const dues = dueBanner({ inList: true });
   const totalEl = h('div');
   const tools = h('div');
   const body = h('div');
   const add = () => editSupplier(null, (s) => navigate(`/suppliers/view?id=${s.id}`));
 
-  el.append(header('التجار', { actions: [syncBadge()] }), h('div', { class: 'page' }, tabs.el, totalEl, tools, body));
+  el.append(header('التجار', { actions: [syncBadge()] }), h('div', { class: 'page' }, tabs.el, totalEl, dues.el, tools, body));
 
   function paint() {
     if (!all.length) {
@@ -109,7 +112,9 @@ export function renderSuppliers(el) {
     const items = app.inventory.searchSuppliers(all, query);
     fill(body, items.length ? h('div', { class: 'list' }, ...items.slice(0, 200).map((s) => {
       const days = daysSince(s.oldestUnpaidAt);
-      const sub = [s.phone ? num(s.phone) : null, s.balance > 0 && days >= 1 ? `أقدم دين ${ageText(days)}` : null].filter(Boolean);
+      const due = s.balance > 0 ? app.dues.get(s.id) : null;
+      // الموعد أهم من عمر الدين: إن حُدّد يظهر مكانه
+      const sub = [s.phone ? num(s.phone) : null, due ? dueTag(dueStatus(due)) : s.balance > 0 && days >= 1 ? `أقدم دين ${ageText(days)}` : null].filter(Boolean);
       return h('button', { class: 'row row-tap', type: 'button', onclick: () => navigate(`/suppliers/view?id=${s.id}`) },
         h('span', { class: `avatar ${s.balance > 0 ? 'owed' : ''}` }, s.name.trim().charAt(0)),
         h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, s.name),
@@ -122,7 +127,9 @@ export function renderSuppliers(el) {
 
   async function load() { all = await app.inventory.suppliers(); paint(); tabs.refresh(); }
   load();
-  return bus.on('data', (e) => { if (e.tables.includes('suppliers') || e.tables.includes('supplier_entries')) load(); });
+  const offData = bus.on('data', (e) => { if (e.tables.includes('suppliers') || e.tables.includes('supplier_entries')) load(); });
+  const offDues = bus.on('dues', paint);
+  return () => { offData(); offDues(); dues.off(); };
 }
 
 // ============ صفحة التاجر ============
@@ -152,6 +159,7 @@ export async function renderSupplier(el, params) {
         h('div', { class: 'hero-value' }, money(Math.abs(s.balance))),
         owe && days >= 1 ? h('div', { class: 'hero-mini-label' }, `أقدم دين لم تسدّده ${ageText(days)}`) : null,
         s.note ? h('div', { class: 'hero-mini-label' }, s.note) : null),
+      dueStrip(s, paint),
       h('div', { class: 'big-actions' },
         h('button', { class: 'big-btn pay', type: 'button', onclick: paySheet }, icon('cash', 26), h('span', null, 'دفعت له')),
         h('button', { class: 'big-btn debt', type: 'button', onclick: debtSheet }, icon('plus', 26), h('span', null, 'دين جديد'))),
@@ -190,6 +198,7 @@ export async function renderSupplier(el, params) {
   function debtSheet() {
     const amt = input({ dir: 'ltr', inputmode: 'decimal', class: 'input input-xl', placeholder: '0' });
     const note = input({ maxlength: 80, placeholder: 'مثال: فاتورة 1250، زيت وسكر (اختياري)' });
+    const picker = duePicker(app.dues.get(s.id)); // الموعد الحالي يبقى إن لم يُغيَّر
     let busy = false;
     openSheet((close) => h('form', {
       onsubmit: async (e) => {
@@ -200,11 +209,12 @@ export async function renderSupplier(el, params) {
         busy = true;
         try {
           await app.inventory.addSupplierDebt(s.id, v, note.value);
+          await app.dues.set(s.id, picker.value());
           feedback.ok(); close(); await load();
           toast(`سُجّل ${formatMoney(v, cur())} — صار عليك له ${formatMoney(Math.max(0, s.balance), cur())}`, { kind: 'ok', ms: 3500 });
         } catch (err) { busy = false; feedback.error(); toast(err.errors?.amount || 'تعذّر الحفظ', { kind: 'error' }); }
       },
-    }, field('قيمة البضاعة التي أخذتها بالدين', amt), field('ملاحظة', note),
+    }, field('قيمة البضاعة التي أخذتها بالدين', amt), field('ملاحظة', note), picker.el,
       button('حفظ الدين', { type: 'submit', block: true, size: 'lg', icon: 'check' }),
       h('p', { class: 'muted small' }, 'يزيد ما عليك له فقط ولا يغيّر المخزون. لإدخال الأصناف وكمياتها استعمل «شراء بفاتورة».'),
     ), { title: `دين جديد لـ ${s.name}` });
@@ -235,6 +245,7 @@ export async function renderSupplier(el, params) {
         try {
           await app.inventory.paySupplier(s.id, v, { method, note: note.value });
           feedback.ok(); close(); await load();
+          await afterPayment();
           toast(s.balance > 0 ? `دُفع ${formatMoney(v, cur())} — الباقي له ${formatMoney(s.balance, cur())}` : s.balance < 0 ? `دُفع ${formatMoney(v, cur())} — صار لك عنده ${formatMoney(-s.balance, cur())}` : `دُفع ${formatMoney(v, cur())} — سدّدت كل ما عليك له ✓`, { kind: 'ok', ms: 3500 });
         } catch (err) { busy = false; feedback.error(); toast(err.errors?.amount || 'تعذّر الحفظ', { kind: 'error' }); }
       },
@@ -244,6 +255,14 @@ export async function renderSupplier(el, params) {
       field('ملاحظة', note),
       button('حفظ الدفعة', { type: 'submit', block: true, size: 'lg', icon: 'check' })), { title: `دفعة إلى ${s.name}` });
     setTimeout(() => amt.focus(), 150);
+  }
+
+  // بعد الدفعة: سدّدت الكل ← يسقط الموعد. بقي عليك والموعد حلّ أو فات ← «متى تدفع الباقي؟»
+  async function afterPayment() {
+    const due = app.dues.get(s.id);
+    if (!due) return;
+    if (s.balance <= 0) { await app.dues.set(s.id, null); paint(); return; }
+    if (dueStatus(due).days <= 0) dueSheet(s, { title: `بقي عليك ${formatMoney(s.balance, cur())} — متى تدفعه؟`, onSaved: paint });
   }
 
   // تعديل أو حذف دين/دفعة/رصيد سابق: يُضاف قيد تصحيح (والدرج يُصحَّح للدفعات النقدية)، والأصلية تظهر «ملغاة»

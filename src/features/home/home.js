@@ -10,6 +10,7 @@ import { openFeedback } from '../help/feedback.js';
 import { licenseBanner } from '../subscribe/subscribe.js';
 import { accountBanner } from '../account/account.js';
 import { reminderBanner } from '../customers/remind.js';
+import { dueBanner } from '../inventory/due.js';
 import { shouldShowInstallHint, dismissInstallHint, isIos } from '../../core/pwa.js';
 
 export function renderHome(el) {
@@ -20,6 +21,7 @@ export function renderHome(el) {
   const dateText = today.toLocaleDateString('ar-PS-u-nu-latn', { weekday: 'long', day: 'numeric', month: 'long' });
 
   const guide = h('div');
+  const dues = dueBanner(); // موعد سداد لتاجر اقترب أو فات
   // تحديث جديد (وجده الفحص التلقائي): لافتة تقود إلى «عن التطبيق» حيث زر التنزيل
   const updateBox = h('div');
   const paintUpdate = () => {
@@ -42,6 +44,7 @@ export function renderHome(el) {
       updateBox,
       licenseBanner(),
       reminderBanner(),
+      dues.el,
       accountBanner(),
       stats,
       h('div', { class: 'quick' },
@@ -120,7 +123,7 @@ export function renderHome(el) {
   });
   const offShop = bus.on('shop', paint);
   const offUpdate = bus.on('update', paintUpdate);
-  return () => { off(); offShop(); offUpdate(); };
+  return () => { off(); offShop(); offUpdate(); dues.off(); };
 }
 
 function quick(ic, label, onclick, tone = '') {

@@ -1022,3 +1022,18 @@ body{font-weight:500}
 .home-page .stats .stat:nth-child(2){background:var(--brand-100);border-color:var(--brand-200)}
 .home-page .stats .stat:nth-child(3){background:var(--pink-100);border-color:#f4a9c6}
 .home-page .stats .stat-value{font-size:20px}
+
+/* موعد السداد للتجار */
+.due-strip{display:flex;align-items:center;gap:var(--space-3);width:100%;margin-bottom:var(--space-3);padding:10px var(--space-3);border-radius:var(--radius-lg);border:2px solid;text-align:right;background:var(--blue-100);border-color:#b9d4f7;color:var(--blue-700)}
+.due-strip .row-main{display:flex;flex-direction:column;flex:1;min-width:0}
+.due-strip strong{font-size:15.5px}
+.due-strip .row-main span{font-size:13px}
+.due-strip.due-none{border-style:dashed}
+.due-strip.due-soon,.due-strip.due-today{background:var(--amber-100);border-color:#f3cf8f;color:var(--amber-700)}
+.due-strip.due-overdue{background:var(--pink-100);border-color:#f5a9c8;color:var(--pink-700)}
+.due-change{flex:none;padding:6px 12px;border-radius:var(--radius-pill);background:#fff;font-weight:700;font-size:13px}
+.due-tag{display:inline-block;padding:1px 8px;border-radius:var(--radius-pill);font-size:12.5px;font-weight:700;background:var(--blue-100);color:var(--blue-700)}
+.due-tag.due-soon,.due-tag.due-today{background:var(--amber-100);color:var(--amber-700)}
+.due-tag.due-overdue{background:var(--pink-100);color:var(--pink-700)}
+.due-chips{flex-wrap:wrap}
+.due-picked{margin:6px 0}

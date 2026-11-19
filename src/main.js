@@ -37,6 +37,7 @@ async function start() {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) app.license.compute(); });
   app.bus.on('toast', (a) => toast(...a)); // رسائل من الخدمات (مثل SMS) تظهر للمستخدم
   if (app.ctx.shopId) app.reminders.start(); // التذكير الدوري بالديون
+  if (app.ctx.shopId) app.dues.start(); // مواعيد السداد للتجار
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTopSheet(); });
 
   if (!app.ctx.shopId) {

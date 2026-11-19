@@ -24,6 +24,7 @@ import { createInventoryRepo } from '../features/inventory/repo.js';
 import { createCashRepo } from '../features/cash/repo.js';
 import { createWalletRepo } from '../features/wallet/repo.js';
 import { createUpdater } from './update.js';
+import { createDues } from './dues.js';
 
 const clock = makeClock();
 
@@ -115,8 +116,10 @@ export const app = {
     await app.account.init();
     app.sms = createSms(app, { toast: (...a) => bus.emit('toast', a) });
     app.reminders = createReminders(app, { toast: (...a) => bus.emit('toast', a), emit: () => bus.emit('reminders', app.reminders.due) });
+    app.dues = createDues(app, { toast: (...a) => bus.emit('toast', a), emit: (a) => bus.emit('dues', a) });
     bus.on('data', async (e) => {
       if (e.tables.includes('shops')) await app.loadShop();
+      if (e.tables.some((t) => t === 'shops' || t === 'suppliers' || t === 'supplier_entries')) app.dues.refresh().catch(() => {});
       if (e.prefixChanged) app.ctx.prefix = e.prefixChanged;
     });
     return app;
