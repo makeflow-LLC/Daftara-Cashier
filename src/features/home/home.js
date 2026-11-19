@@ -20,6 +20,14 @@ export function renderHome(el) {
   const dateText = today.toLocaleDateString('ar-PS-u-nu-latn', { weekday: 'long', day: 'numeric', month: 'long' });
 
   const guide = h('div');
+  // تحديث جديد (وجده الفحص التلقائي): لافتة تقود إلى «عن التطبيق» حيث زر التنزيل
+  const updateBox = h('div');
+  const paintUpdate = () => {
+    const v = app.updater.available;
+    fill(updateBox, v ? h('button', { class: 'lic-banner lic-info', type: 'button', onclick: () => navigate('/settings/about') },
+      icon('refresh', 26), h('span', { class: 'row-main' }, h('strong', null, 'تحديث جديد ', num(v)), h('span', null, 'يُثبَّت فوق النسخة الحالية ولا يمسح بياناتك')), h('span', { class: 'lic-cta' }, 'حدّث')) : null);
+  };
+  paintUpdate();
   const hour = today.getHours();
   const greet = hour < 12 ? 'صباح الخير' : hour < 17 ? 'نهارك سعيد' : 'مساء الخير';
 
@@ -31,6 +39,7 @@ export function renderHome(el) {
       kpis),
     h('div', { class: 'page home-page' },
       installBanner(),
+      updateBox,
       licenseBanner(),
       reminderBanner(),
       accountBanner(),
@@ -107,7 +116,8 @@ export function renderHome(el) {
     if (e.tables.some((t) => ['invoices', 'payments', 'cash_sessions', 'movements', 'products', 'customer_entries', 'customers'].includes(t))) paint();
   });
   const offShop = bus.on('shop', paint);
-  return () => { off(); offShop(); };
+  const offUpdate = bus.on('update', paintUpdate);
+  return () => { off(); offShop(); offUpdate(); };
 }
 
 function quick(ic, label, onclick, tone = '') {

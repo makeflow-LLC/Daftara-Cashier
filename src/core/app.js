@@ -23,6 +23,7 @@ import { createCustomerRepo } from '../features/customers/repo.js';
 import { createInventoryRepo } from '../features/inventory/repo.js';
 import { createCashRepo } from '../features/cash/repo.js';
 import { createWalletRepo } from '../features/wallet/repo.js';
+import { createUpdater } from './update.js';
 
 const clock = makeClock();
 
@@ -107,6 +108,8 @@ export const app = {
       billing: globalThis.Capacitor?.Plugins?.CashierBilling || null,
     });
     await app.license.init();
+    app.updater = createUpdater({ meta: app.meta, getInfo: () => ({ ...app.info, release: !!app.config.release }), emit: (v) => bus.emit('update', v) });
+    await app.updater.load();
     app.startSync();
     app.account = createAccount(app);
     await app.account.init();

@@ -181,7 +181,7 @@ test('feedback message carries type, shop and version; FAQ entries are complete'
   if (!feedbackMessage) return; // يحتاج DOM في بعض البيئات
   const m = feedbackMessage({ type: 'feature', text: ' أريد طباعة حرارية ', shopName: 'بقالة النور', version: '0.1.20', flavor: 'direct', sdk: 30 });
   assert.ok(m.startsWith('*دفترة كاشير — طلب ميزة*') && m.includes('أريد طباعة حرارية') && m.includes('بقالة النور') && m.includes('0.1.20 (direct) · أندرويد 30'));
-  assert.equal(SUPPORT_PHONE, '970597750343');
+  assert.equal(SUPPORT_PHONE, '970567900316');
   assert.equal(FEEDBACK_TYPES.length, 3);
 });
 

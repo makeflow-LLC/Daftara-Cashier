@@ -986,3 +986,17 @@ body{font-weight:500}
 .wallet-manual .muted{color:#666}
 .wallet-code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:21px;font-weight:700;letter-spacing:.5px;color:#111;user-select:all;word-break:break-all;text-align:center}
 .wallet-steps{display:flex;flex-direction:column;gap:6px;margin:var(--space-4) 0 var(--space-2);padding-right:1.4em;font-weight:600;font-size:15.5px}
+
+/* شعار MakeFlow، التحديثات، وقفل البصمة */
+.made-by-logo{display:flex;flex-direction:column;align-items:center;gap:6px}
+.made-by-logo img{width:150px;height:auto;display:block}
+.update-card{display:flex;align-items:flex-start;gap:var(--space-3);padding:var(--space-3);color:var(--brand-700)}
+.update-card strong{color:var(--color-text);font-size:16.5px}
+.update-card p{margin:2px 0 0}
+.update-card.has-update strong{color:var(--brand-700)}
+.app-lock{position:fixed;top:0;right:0;bottom:0;left:0;z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-3);padding:var(--space-5);background:var(--color-bg,#eef0ef);text-align:center}
+.app-lock-ic{width:96px;height:96px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--brand-100);color:var(--brand-700)}
+.app-lock-name{font-size:24px;font-weight:700}
+.app-lock p{margin:0;color:var(--color-muted)}
+.app-lock-btn{margin-top:var(--space-4);background:var(--grad-brand);color:#fff;box-shadow:var(--shadow-brand)}
+.app-lock-logo{position:absolute;bottom:28px;width:130px;height:auto;opacity:.9}
