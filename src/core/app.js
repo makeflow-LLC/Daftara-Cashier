@@ -22,6 +22,7 @@ import { createSaleRepo } from '../features/sale/repo.js';
 import { createCustomerRepo } from '../features/customers/repo.js';
 import { createInventoryRepo } from '../features/inventory/repo.js';
 import { createCashRepo } from '../features/cash/repo.js';
+import { createWalletRepo } from '../features/wallet/repo.js';
 
 const clock = makeClock();
 
@@ -98,6 +99,7 @@ export const app = {
     app.customers = createCustomerRepo(deps);
     app.inventory = createInventoryRepo({ ...deps, clock });
     app.cash = createCashRepo({ ...deps, clock });
+    app.wallet = createWalletRepo({ ...deps, customers: app.customers });
     if (app.ctx.shopId) await app.loadShop();
     app.license = createLicense({
       meta: app.meta, info: app.info, deviceId, shopCreatedAt: app.shop?.created_at || null,

@@ -22,6 +22,7 @@ import { renderSubscribe } from './subscribe/subscribe.js';
 import { renderAccount, renderAccountRequired } from './account/account.js';
 import { renderSmsSettings } from './settings/sms.js';
 import { renderScaleSettings } from './settings/scale.js';
+import { renderWallet, renderWalletSettings } from './wallet/wallet.js';
 import {
   renderSettings, renderShopProfile, renderFeatures, renderCurrencies,
   renderPayments, renderSync, renderAppearance, renderAbout,
@@ -64,6 +65,7 @@ export const MODULES = [
     ],
   },
   { id: 'reports', routes: [{ path: '/reports', tab: 'settings', chrome: false, render: renderReports }] },
+  { id: 'wallet', routes: [{ path: '/wallet', write: true, chrome: false, render: renderWallet }] },
   { id: 'cash', routes: [{ path: '/cash', tab: 'settings', chrome: false, render: renderCash }] },
   { id: 'invoices', routes: [{ path: '/invoices', tab: 'settings', chrome: false, render: renderInvoices }] },
   {
@@ -86,6 +88,7 @@ export const MODULES = [
       { path: '/account/required', chrome: false, render: renderAccountRequired },
       { path: '/settings/sms', tab: 'settings', chrome: false, render: renderSmsSettings },
       { path: '/settings/scale', tab: 'settings', chrome: false, render: renderScaleSettings },
+      { path: '/settings/wallets', tab: 'settings', chrome: false, render: renderWalletSettings },
       { path: '/settings', tab: 'settings', chrome: false, render: renderSettings },
       { path: '/settings/shop', tab: 'settings', chrome: false, render: renderShopProfile },
       { path: '/settings/features', tab: 'settings', chrome: false, render: renderFeatures },

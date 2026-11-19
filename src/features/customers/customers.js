@@ -219,6 +219,12 @@ export async function renderCustomer(el, params) {
       isPay && c.balance > 0 ? h('div', { class: 'chips pay-quick' }, h('button', { class: 'chip', type: 'button', onclick: () => { amt.value = formatDecimal(c.balance, minor, { trim: true, group: false }); } }, 'كامل المبلغ ', num(formatMoney(c.balance, cur())))) : null,
       isPay ? (methods.length > 1 ? h('div', { class: 'field' }, chips) : null) : field('ملاحظة', note),
       button(isPay ? 'حفظ الدفعة' : 'حفظ الدين', { type: 'submit', block: true, size: 'lg', icon: 'check' }),
+      // الزبون يدفع من محفظته: رمز QR بالمبلغ المكتوب، والدفعة تُسجَّل على حسابه بعد التأكد من وصولها
+      isPay ? button('ادفع بالمحفظة (QR)', { kind: 'outline', block: true, icon: 'wallet', onclick: () => {
+        const v = parseMoney(amt.value || '', cur());
+        close();
+        navigate(`/wallet?customer=${c.id}${v > 0 ? `&amount=${formatDecimal(v, minor, { trim: true, group: false })}` : ''}`);
+      } }) : null,
     ), { title: isPay ? `دفعة من ${c.name}` : `دين على ${c.name}` });
     setTimeout(() => amt.focus(), 150);
   }

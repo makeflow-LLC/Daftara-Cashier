@@ -6,6 +6,7 @@ import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback, configureFeedback } from '../../ui/feedback.js';
 import { FEATURES, SHOP_TYPES } from '../../domain/features.js';
 import { CURRENCIES, EXTRA_CURRENCIES, parseRate } from '../../domain/currency.js';
+import { shopWallets } from '../../domain/wallet.js';
 import { formatDecimal, normalizeDigits, parseDecimal } from '../../domain/money.js';
 import { app } from '../../core/app.js';
 import { bus } from '../../core/bus.js';
@@ -25,6 +26,7 @@ export function renderSettings(el) {
         row({ icon: 'tag', title: 'التصنيفات', sub: 'ألبان، معلبات، منظفات…', onclick: go('/settings/categories') }),
         f.multiCurrency ? row({ icon: 'coins', title: 'العملات وأسعار الصرف', onclick: go('/settings/currencies') }) : null,
         row({ icon: 'wallet', title: 'طرق الدفع', sub: 'نقدًا، تحويل، محافظ، آجل', onclick: go('/settings/payments') }),
+        row({ icon: 'wallet', title: 'الاستلام بالمحفظة (QR)', sub: shopWallets(app.shop?.settings).map((w) => w.name).join('، ') || 'جوال باي، بال باي — اكتب رقم محفظتك', onclick: go('/settings/wallets') }),
         row({ icon: 'scan', title: 'ميزان الباركود', sub: app.shop?.settings?.scale?.enabled ? 'مفعّل — ملصق الميزان يُقرأ بوزنه' : 'مطفأ — امسح ملصق الميزان بوزنه أو سعره', onclick: go('/settings/scale') }),
         row({ icon: 'chat', title: 'رسائل SMS للزبائن', sub: app.shop?.settings?.sms?.enabled ? 'مفعّلة' : 'مطفأة — رسالة تلقائية بعد الدين والدفعة', onclick: go('/settings/sms') }),
       )),

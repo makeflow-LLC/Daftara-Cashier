@@ -967,3 +967,22 @@ body{font-weight:500}
 }
 .scan-box{isolation:isolate}
 .install-banner{margin:0 0 var(--space-4);background:var(--blue-100);border-color:#a9c9f3;color:var(--blue-700)}
+
+/* الاستلام بالمحفظة برمز QR. الرمز دائمًا أسود على أبيض (حتى لو صارت الواجهة داكنة) ليقرأه أي جوال */
+.wallet-btn{display:flex;align-items:center;gap:var(--space-3);width:100%;margin-top:var(--space-3);padding:var(--space-3) var(--space-4);border-radius:var(--radius-lg);background:var(--color-card);border:1.5px solid var(--frame);box-shadow:var(--shadow-sm);color:var(--brand-700);text-align:right}
+.wallet-btn .row-main{display:flex;flex-direction:column;flex:1;min-width:0}
+.wallet-btn strong{font-size:16px}
+.wallet-btn .row-main span{font-size:13px;color:var(--color-muted)}
+.wallet-btn:active{background:var(--brand-100)}
+.wallet-tabs{justify-content:center;margin-bottom:var(--space-3)}
+.wallet-tabs .chip{min-height:46px;padding:0 22px;font-size:16px}
+.wallet-card{display:flex;flex-direction:column;align-items:center;gap:var(--space-2);padding:var(--space-4);border-radius:var(--radius-lg);background:#fff;color:#111;border:1.5px solid var(--frame);color-scheme:light}
+.wallet-qr{width:78vw;height:78vw;max-width:340px;max-height:340px;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-2)}
+.wallet-qr svg{width:100%;height:100%;display:block}
+.wallet-qr.empty{border:2px dashed #cfd6d2;border-radius:var(--radius-lg);color:#77807b;font-weight:600;text-align:center;padding:var(--space-4)}
+.wallet-target{font-size:14.5px;color:#555}
+.wallet-manual{display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;padding-top:var(--space-2);border-top:1.5px dashed #dde3df}
+.wallet-manual[hidden]{display:none}
+.wallet-manual .muted{color:#666}
+.wallet-code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:21px;font-weight:700;letter-spacing:.5px;color:#111;user-select:all;word-break:break-all;text-align:center}
+.wallet-steps{display:flex;flex-direction:column;gap:6px;margin:var(--space-4) 0 var(--space-2);padding-right:1.4em;font-weight:600;font-size:15.5px}

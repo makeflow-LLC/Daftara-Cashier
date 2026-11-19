@@ -41,6 +41,9 @@ export function renderHome(el) {
         quick('box', 'المخزون', () => navigate('/inventory')),
         quick('users', 'الزبائن والديون', () => navigate('/customers')),
       ),
+      // استلام أي مبلغ من أي مشترٍ بالمحفظة (غير مرتبط بزبون). بلا رقم محفظة: الشاشة تقود إلى الإعدادات
+      h('button', { class: 'wallet-btn', type: 'button', onclick: () => navigate('/wallet') },
+        icon('wallet', 26), h('span', { class: 'row-main' }, h('strong', null, 'استلام بالمحفظة (QR)'), h('span', null, 'جوال باي وبال باي: الزبون يمسح الرمز ويحوّل')), icon('chevron', 20)),
       guide,
       section('تنبيهات', alerts),
       h('button', { class: 'beta-banner', type: 'button', onclick: () => openFeedback('note') },
