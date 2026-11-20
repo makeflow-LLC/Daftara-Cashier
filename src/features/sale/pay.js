@@ -14,7 +14,11 @@ import { pickCustomer } from '../customers/picker.js';
 const KIND_ICON = { cash: 'cash', transfer: 'wallet', credit: 'user' };
 
 /** يفتح ورقة الدفع. onConfirm({ payments, customer }) يحفظ البيع. */
-export function openPay({ total, customer, onConfirm, onClose = null }) {
+/**
+ * credit: رصيد مرتجع للتبديل (رُدّ للزبون في فاتورة المرتجع) — يدفع الزبون الفرق فقط، أو يُرد له الباقي.
+ * في السجلات: المرتجع أخرج المبلغ نقدًا من الدرج، والبيع الجديد يُدخله نقدًا، فالصافي = الفرق الفعلي.
+ */
+export function openPay({ total, customer, credit = 0, onConfirm, onClose = null }) {
   const base = app.shop?.base_currency || 'ILS';
   let methods = [];
   let cust = customer;
@@ -37,16 +41,28 @@ export function openPay({ total, customer, onConfirm, onClose = null }) {
     }
 
     const pay = (m, amount) => ({ method_id: m.id, kind: m.kind, amount, fee_bp: 0, currency: base });
+    const due = Math.max(0, total - credit);       // ما يدفعه الزبون فعلًا
+    const back = Math.max(0, credit - total);      // ما يُرد له إن أخذ بأقل من المرتجع
+    // مع رصيد المرتجع: الجزء المقابل له نقدًا (يعادل ما أخرجه المرتجع من الدرج)، والفرق بالطريقة المختارة
+    function build(m) {
+      const cashM = methods.find((x) => x.kind === 'cash') || m;
+      if (!credit || m === cashM) return [pay(m, total)];
+      return due > 0 ? [pay(cashM, Math.min(credit, total)), pay(m, due)] : [pay(cashM, total)];
+    }
 
     function paintMain() {
       fill(body,
-        h('div', { class: 'pay-total' }, h('span', null, 'المطلوب'), money(total)),
+        h('div', { class: 'pay-total' }, h('span', null, credit ? 'ثمن البضاعة الجديدة' : 'المطلوب'), money(total)),
+        credit ? h('div', { class: 'rc-kv' }, h('span', null, 'رصيد المرتجع'), money(-credit)) : null,
+        credit ? h('div', { class: `pay-change ${back ? 'bad' : 'ok'}` }, h('span', null, back ? 'رُدّ للزبون الفرق' : due ? 'يدفع الزبون الفرق' : 'متساويان — لا فرق'), money(back || due)) : null,
         cust ? h('div', { class: 'pay-cust' }, icon('user', 18), h('span', null, cust.name),
           h('button', { class: 'link-btn', type: 'button', onclick: () => { cust = null; paintMain(); } }, 'إزالة')) : null,
-        h('div', { class: 'pay-methods' }, ...methods.map((m) => h('button', {
-          class: `pay-method pay-${m.kind}`, type: 'button', onclick: () => confirm([pay(m, total)]),
-        }, icon(KIND_ICON[m.kind], 26), h('span', null, m.name)))),
-        app.feature('splitPayment') ? button('تقسيم الدفع على أكثر من طريقة', { kind: 'text', onclick: () => { split = true; rows = []; paintSplit(); } }) : null,
+        credit && !due
+          ? button('تم التبديل', { block: true, size: 'lg', icon: 'check', onclick: () => { const m = methods.find((x) => x.kind === 'cash') || methods[0]; if (m) confirm(build(m)); } })
+          : h('div', { class: 'pay-methods' }, ...methods.map((m) => h('button', {
+            class: `pay-method pay-${m.kind}`, type: 'button', onclick: () => confirm(build(m)),
+          }, icon(KIND_ICON[m.kind], 26), h('span', null, m.name)))),
+        app.feature('splitPayment') && !credit ? button('تقسيم الدفع على أكثر من طريقة', { kind: 'text', onclick: () => { split = true; rows = []; paintSplit(); } }) : null,
       );
     }
 

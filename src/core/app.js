@@ -25,6 +25,9 @@ import { createInventoryRepo } from '../features/inventory/repo.js';
 import { createCashRepo } from '../features/cash/repo.js';
 import { createWalletRepo } from '../features/wallet/repo.js';
 import { createDues } from './dues.js';
+import { createExpenseRepo } from '../features/expenses/repo.js';
+import { createPayroll } from './payroll.js';
+import { createChat } from './chat.js';
 
 const clock = makeClock();
 
@@ -124,6 +127,7 @@ export const app = {
     app.customers = createCustomerRepo(deps);
     app.inventory = createInventoryRepo({ ...deps, clock });
     app.cash = createCashRepo({ ...deps, clock });
+    app.expenses = createExpenseRepo({ ...deps, clock });
     app.wallet = createWalletRepo({ ...deps, customers: app.customers });
     if (app.ctx.shopId) await app.loadShop();
     app.license = createLicense({
@@ -138,6 +142,8 @@ export const app = {
     app.sms = createSms(app, { toast: (...a) => bus.emit('toast', a) });
     app.reminders = createReminders(app, { toast: (...a) => bus.emit('toast', a), emit: () => bus.emit('reminders', app.reminders.due) });
     app.dues = createDues(app, { toast: (...a) => bus.emit('toast', a), emit: () => bus.emit('dues') });
+    app.payroll = createPayroll(app, { toast: (...a) => bus.emit('toast', a) });
+    app.chat = createChat(app, { toast: (...a) => bus.emit('toast', a) });
     bus.on('data', async (e) => {
       if (e.tables.includes('shops')) await app.loadShop();
       if (e.prefixChanged) app.ctx.prefix = e.prefixChanged;

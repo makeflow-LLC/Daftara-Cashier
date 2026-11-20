@@ -8,11 +8,26 @@
 import { TABLES, TABLE, toRemote } from './tables.js';
 import { HttpError } from './supabase.js';
 import { remoteWins, normalizeTimestamps } from '../domain/merge.js';
-import { foldProduct } from '../domain/stock.js';
+import { foldByLocation } from '../domain/stock.js';
 
 const PUSH_BATCH = 200;
 const PULL_LIMIT = 500;
 const MAX_TRIES = 5;
+
+/**
+ * الخادم أقدم من التطبيق (لم يُشغَّل عليه setup.sql الجديد بعد): عمود أو جدول جديد غير موجود عنده.
+ * يرجع { column } أو { table: true } أو null. بدون هذا يُرفض كل سجل في الجدول (كل دفعة بيع مثلًا) ثم يُعزل نهائيًا.
+ */
+export function schemaGap(err) {
+  if (!(err instanceof HttpError)) return null;
+  const b = err.body && typeof err.body === 'object' ? err.body : {};
+  const msg = String(b.message || '');
+  // PostgREST PGRST204: Could not find the 'x' column of 'cashier_y' in the schema cache — أو Postgres 42703
+  const m = /Could not find the '([a-z_0-9]+)' column/.exec(msg) || /column "([a-z_0-9]+)" of relation "[a-z_0-9]+" does not exist/.exec(msg);
+  if (m) return { column: m[1] };
+  if (b.code === 'PGRST205' || b.code === '42P01' || /Could not find the table|relation "[a-z_0-9.]+" does not exist/.test(msg)) return { table: true };
+  return null;
+}
 
 export function createSyncEngine({ db, api, getContext, emit = () => {}, now = () => new Date().toISOString(), gate = null }) {
   let running = null;
@@ -57,10 +72,23 @@ export function createSyncEngine({ db, api, getContext, emit = () => {}, now = (
   }
 
   // ---------- الرفع ----------
+  // أعمدة جديدة لا يعرفها الخادم بعد: تُرفع السجلات بدونها (حتى يُعاد تشغيل التطبيق)، فلا يتوقف رفع الجدول كله
+  const missingCols = new Map();
+  // جداول جديدة غير موجودة على الخادم بعد: تبقى سجلاتها في الطابور وتُجرَّب مرة في كل مزامنة
+  let skipTables = new Set();
+  const strip = (name, row) => {
+    const miss = missingCols.get(name);
+    if (!miss || !miss.size) return row;
+    const out = { ...row };
+    for (const c of miss) delete out[c];
+    return out;
+  };
+
   async function push() {
     let pushed = 0;
+    skipTables = new Set();
     for (let round = 0; round < 50; round++) {
-      const entries = await db.outbox.orderBy('seq').filter((e) => !e.dead).limit(PUSH_BATCH).toArray();
+      const entries = await db.outbox.orderBy('seq').filter((e) => !e.dead && !skipTables.has(e.table)).limit(PUSH_BATCH).toArray();
       if (!entries.length) break;
       const groups = new Map();
       for (const e of entries) {
@@ -83,27 +111,40 @@ export function createSyncEngine({ db, api, getContext, emit = () => {}, now = (
     if (gone.length) await db.outbox.bulkDelete(gone);
     if (!live.length) return 0;
     const opts = { ignoreDuplicates: t.mode === 'append' };
-    try {
-      await api.rest.upsert(t.remote, live.map(([, r]) => r), opts);
-      await db.outbox.bulkDelete(live.map(([e]) => e.seq));
-      return live.length;
-    } catch (err) {
-      if (!(err instanceof HttpError) || err.transient) throw err;
-      // خطأ بيانات: نرفع واحدًا واحدًا لنعزل السجل المعطوب ولا نوقف الباقي
-      let ok = 0;
-      for (const [e, r] of live) {
-        try {
-          await api.rest.upsert(t.remote, [r], opts);
-          await db.outbox.delete(e.seq);
-          ok++;
-        } catch (one) {
-          if (!(one instanceof HttpError) || one.transient) throw one;
-          const tries = (e.tries || 0) + 1;
-          await db.outbox.update(e.seq, { tries, dead: tries >= MAX_TRIES, error: String(one.message).slice(0, 300) });
+    let failure = null;
+    for (let attempt = 0; attempt <= Object.keys(t.columns).length; attempt++) {
+      try {
+        await api.rest.upsert(t.remote, live.map(([, r]) => strip(name, r)), opts);
+        await db.outbox.bulkDelete(live.map(([e]) => e.seq));
+        return live.length;
+      } catch (err) {
+        if (!(err instanceof HttpError) || err.transient) throw err;
+        const gap = schemaGap(err);
+        const miss = missingCols.get(name) || new Set();
+        if (gap && gap.column && gap.column in t.columns && !miss.has(gap.column)) {
+          miss.add(gap.column); missingCols.set(name, miss);
+          continue; // نعيد بلا العمود الذي لا يعرفه الخادم
         }
+        if (gap && gap.table) { skipTables.add(name); return 0; }
+        failure = err;
+        break;
       }
-      return ok;
     }
+    if (!failure) return 0;
+    // خطأ بيانات: نرفع واحدًا واحدًا لنعزل السجل المعطوب ولا نوقف الباقي
+    let ok = 0;
+    for (const [e, r] of live) {
+      try {
+        await api.rest.upsert(t.remote, [strip(name, r)], opts);
+        await db.outbox.delete(e.seq);
+        ok++;
+      } catch (one) {
+        if (!(one instanceof HttpError) || one.transient) throw one;
+        const tries = (e.tries || 0) + 1;
+        await db.outbox.update(e.seq, { tries, dead: tries >= MAX_TRIES, error: String(one.message).slice(0, 300) });
+      }
+    }
+    return ok;
   }
 
   // ---------- السحب ----------
@@ -140,7 +181,7 @@ export function createSyncEngine({ db, api, getContext, emit = () => {}, now = (
   async function apply(t, rawRows) {
     const rows = rawRows.map(normalizeTimestamps);
     const touched = new Set();
-    const changed = await db.transaction('rw', [db.table(t.name), db.outbox, db.stock, db.movements], async () => {
+    const changed = await db.transaction('rw', [db.table(t.name), db.outbox, db.stock, db.wh_stock, db.movements], async () => {
       let n = 0;
       const locals = await db.table(t.name).bulkGet(rows.map((r) => r.id));
       for (let i = 0; i < rows.length; i++) {
@@ -168,10 +209,12 @@ export function createSyncEngine({ db, api, getContext, emit = () => {}, now = (
 
   async function rebuildStock(productId) {
     const mv = await db.movements.where('product_id').equals(productId).toArray();
-    const { qty, avgCost } = foldProduct(mv);
+    const { shop, warehouses } = foldByLocation(mv);
     let last = null;
     for (const m of mv) if (m.type === 'sale' && (!last || m.created_at > last)) last = m.created_at;
-    await db.stock.put({ product_id: productId, qty, avgCost, last_sale_at: last });
+    await db.stock.put({ product_id: productId, qty: shop.qty, avgCost: shop.avgCost, last_sale_at: last });
+    await db.wh_stock.where('product_id').equals(productId).delete();
+    for (const [branchId, w] of warehouses) await db.wh_stock.put({ branch_id: branchId, product_id: productId, qty: w.qty, avgCost: w.avgCost });
   }
 
   // ---------- الدورة الكاملة ----------

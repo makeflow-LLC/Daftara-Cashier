@@ -12,6 +12,10 @@ import { lockNow } from '../staff/staff.js';
 export function renderMore(el) {
   const can = (p) => app.can(p);
   const tile = (ic, label, tone, onclick, show = true) => !show ? null : h('button', { class: `hub-tile hub-${tone}`, type: 'button', onclick }, h('span', { class: 'hub-ic' }, icon(ic, 28)), h('span', { class: 'hub-label' }, label));
+  const isOwner = !app.staff || !!app.user?.owner;
+  // المحادثة: شارة بعدد الرسائل والتعميمات غير المقروءة
+  const chatTile = tile('chat', 'المحادثة والتعميمات', 'pink', () => navigate('/chat'));
+  app.chat.unread().then((u) => { const n = u.chats + u.announcements; if (n) chatTile.append(h('span', { class: 'badge' }, String(n))); });
   const go = (p) => () => navigate(p);
   const shopCard = h('button', { class: 'shop-card', type: 'button', onclick: go('/settings/shop') },
     h('span', { class: 'shop-logo' }, (app.shop?.name || '؟').trim().charAt(0)),
@@ -26,12 +30,17 @@ export function renderMore(el) {
       tile('chart', 'التقارير', 'green', go('/reports'), can('reports')),
       tile('receipt', 'الفواتير', 'blue', go('/invoices')),
       tile('cash', 'الصندوق', 'amber', go('/cash'), can('cash')),
+      tile('coins', 'المصاريف', 'pink', go('/expenses'), can('cash')),
+      tile('users', 'الرواتب', 'violet', go('/payroll'), isOwner),
       tile('box', 'المخزون', 'violet', go('/inventory'), can('purchases')),
       tile('truck', 'ديون التجار', 'teal', go('/suppliers'), can('purchases')),
+      tile('warehouse', 'المخازن والنقل', 'blue', go('/inventory/warehouses'), can('purchases')),
+      tile('undo', 'مرتجع وتبديل', 'amber', go('/sale/returns'), can('returns')),
       tile('star', 'العروض', 'green', go('/offers'), can('products')),
       tile('store', 'كتالوج واتساب', 'teal', go('/settings/catalog'), can('settings')),
       tile('tag', 'أدوات', 'pink', go('/tools'), can('products')),
-      tile('users', 'الموظفون', 'blue', go('/settings/staff'), !app.staff || !!app.user?.owner)),
+      tile('lock', 'الموظفون والصلاحيات', 'blue', go('/settings/staff'), isOwner),
+      chatTile),
     h('h2', { class: 'section-title' }, 'التطبيق'),
     h('div', { class: 'hub' },
       app.staff ? tile('lock', `قفل (${app.user?.name || ''})`, 'gray', lockNow) : null,

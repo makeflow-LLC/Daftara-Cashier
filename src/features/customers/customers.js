@@ -14,6 +14,7 @@ import { bus } from '../../core/bus.js';
 import { navigate } from '../../core/router.js';
 import { showReceipt } from '../sale/receipt.js';
 import { debtTabs } from './tabs.js';
+import { showVoucher } from './voucher.js';
 
 const cur = () => app.shop?.base_currency || 'ILS';
 const dateText = (iso) => new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
@@ -117,7 +118,11 @@ export async function renderCustomer(el, params) {
     );
     fill(list, c.entries.length ? h('div', { class: 'section' }, h('h2', { class: 'section-title' }, 'كشف الحساب'),
       h('div', { class: 'list' }, ...c.entries.map((e) => {
-        const tap = e.invoice_id ? () => showReceipt(e.invoice_id, { doneLabel: 'إغلاق', doneIcon: 'x' }) : editableEntry(e) && app.can('delete') ? () => entrySheet(e) : null;
+        // دفعة: الضغط يفتح سند القبض (ومنه التعديل والحذف لمن يملك الصلاحية)
+        const canEdit = editableEntry(e) && app.can('delete');
+        const tap = e.invoice_id ? () => showReceipt(e.invoice_id, { doneLabel: 'إغلاق', doneIcon: 'x' })
+          : e.type === 'payment' && e.payment_id ? () => showVoucher(e.payment_id, { doneLabel: 'إغلاق', onEdit: canEdit ? () => entrySheet(e) : null })
+            : canEdit ? () => entrySheet(e) : null;
         if (e.cancelled) {
           return h('div', { class: 'row entry-cancelled' },
             h('span', { class: 'row-ic' }, icon('x', 20)),
@@ -208,13 +213,14 @@ export async function renderCustomer(el, params) {
         if (!v || v <= 0) { feedback.error(); toast('اكتب المبلغ', { kind: 'error' }); amt.focus(); return; }
         busy = true;
         try {
-          if (isPay) await app.customers.recordPayment(c.id, v, method);
-          else await app.customers.addDebt(c.id, v, note.value);
+          const entry = isPay ? await app.customers.recordPayment(c.id, v, method) : await app.customers.addDebt(c.id, v, note.value);
           app.sms.notify(isPay ? 'payment' : 'debt', c, v); // رسالة SMS تلقائية إن شغّلها صاحب المحل
           feedback.ok();
           close();
           await load();
           toast(isPay ? `استُلمت ${formatMoney(v, cur())} — الباقي عليه ${formatMoney(Math.max(0, c.balance), cur())}` : `سُجّل دين ${formatMoney(v, cur())}`, { kind: 'ok', ms: 3500 });
+          // سند قبض بالدفعة: يُرسل للزبون واتساب أو يُطبع
+          if (isPay && entry && entry.payment_id) showVoucher(entry.payment_id);
         } catch (err) { busy = false; feedback.error(); toast(err.errors?.amount || 'تعذّر الحفظ', { kind: 'error' }); }
       },
     },

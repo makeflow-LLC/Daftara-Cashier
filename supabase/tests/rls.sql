@@ -72,6 +72,30 @@ select pg_temp.expect_error($q$update cashier_inventory_movements set qty = 1$q$
 select pg_temp.expect_error($q$delete from cashier_products$q$, 'hard delete');
 select pg_temp.expect_error($q$insert into cashier_inventory_movements (id, shop_id, product_id, type, qty) values (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', gen_random_uuid(), 'gift', 1)$q$, 'bad movement type');
 
+-- المحادثة والتعميمات (0007): إضافة فقط، ونوع معروف، ونص لا يتجاوز 2000 حرف
+insert into cashier_messages (id, shop_id, kind, from_id, from_name, body)
+values ('00000000-0000-0000-0000-0000000000e1', :S1, 'announce', 'owner', 'أبو أحمد', 'الدوام من 9')
+on conflict (id) do nothing;
+insert into cashier_messages (id, shop_id, kind, from_id, from_name, to_id, body)
+values ('00000000-0000-0000-0000-0000000000e2', :S1, 'chat', 'owner', 'أبو أحمد', 'm1', 'رسالة خاصة')
+on conflict (id) do nothing;
+insert into cashier_messages (id, shop_id, kind, from_id, body)
+values ('00000000-0000-0000-0000-0000000000e1', :S1, 'announce', 'owner', 'نص آخر')
+on conflict (id) do nothing;
+do $$ begin assert (select body from cashier_messages where kind = 'announce') = 'الدوام من 9', 'message append idempotent'; end $$;
+do $$ begin assert (select heads ? 'cashier_messages' from cashier_shop_heads where shop_id = '11111111-1111-1111-1111-111111111111'), 'messages head tracked for pull'; end $$;
+select pg_temp.expect_error($q$update cashier_messages set body = 'عُدّلت'$q$, 'message is append-only');
+select pg_temp.expect_error($q$delete from cashier_messages$q$, 'message hard delete');
+select pg_temp.expect_error($q$insert into cashier_messages (id, shop_id, kind, body) values (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'spam', 'x')$q$, 'bad message kind');
+select pg_temp.expect_error($q$insert into cashier_messages (id, shop_id, body) values (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', repeat('x', 2001))$q$, 'message too long');
+-- المصاريف: راتب موظف بشهره، وسند القبض برقمه
+insert into cashier_expenses (id, shop_id, category, amount, employee_id, period, updated_at)
+values ('00000000-0000-0000-0000-0000000000f1', :S1, 'salary', 200000, '00000000-0000-0000-0000-0000000000f9', '2026-11', '2026-01-01T10:00:00Z')
+on conflict (id) do update set amount = excluded.amount, updated_at = excluded.updated_at;
+insert into cashier_payments (id, shop_id, direction, method_kind, amount, number)
+values ('00000000-0000-0000-0000-0000000000f2', :S1, 'in', 'cash', 4000, 'A-V0001') on conflict (id) do nothing;
+do $$ begin assert (select period from cashier_expenses) = '2026-11' and (select number from cashier_payments) = 'A-V0001', 'salary period and receipt number stored'; end $$;
+
 -- الأجهزة: A للجهاز الأول، B للثاني، ونفس الجهاز يحتفظ بحرفه
 do $$ begin
   assert public.cashier_register_device('11111111-1111-1111-1111-111111111111', 'dddddddd-0000-0000-0000-000000000001', 'جوال 1', 'A') = 'A', 'first device A';
@@ -94,6 +118,8 @@ select public.cashier_create_shop(:S2, 'ملابس', 'clothing');
 do $$ begin assert (select count(*) from cashier_products) = 0, 'B sees no S1 products'; end $$;
 do $$ begin assert (select count(*) from cashier_shops) = 1, 'B sees only own shop'; end $$;
 do $$ begin assert (select count(*) from cashier_inventory_movements) = 0, 'B sees no S1 movements'; end $$;
+do $$ begin assert (select count(*) from cashier_messages) = 0 and (select count(*) from cashier_expenses) = 0, 'B sees no S1 messages or expenses'; end $$;
+select pg_temp.expect_error($q$insert into cashier_messages (id, shop_id, kind, body) values (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'chat', 'hack')$q$, 'B writes a message into S1');
 do $$ begin assert (select count(*) from storage.objects) = 0, 'B sees no S1 images'; end $$;
 do $$ begin assert (select count(*) from cashier_shop_heads where shop_id = '11111111-1111-1111-1111-111111111111') = 0, 'B sees no S1 heads'; end $$;
 select pg_temp.expect_error($q$insert into cashier_products (id, shop_id, name) values (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'hack')$q$, 'B writes into S1');
@@ -122,6 +148,7 @@ select set_config('request.jwt.claim.sub', :A, false);
 select pg_temp.check((select count(*) from cashier_products) = 1, 'expired shop still reads its data');
 select pg_temp.expect_error($q$insert into cashier_products (id, shop_id, name) values (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'بعد الانتهاء')$q$, 'expired shop cannot insert');
 select pg_temp.expect_error($q$insert into cashier_inventory_movements (id, shop_id, product_id, type, qty) values (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', gen_random_uuid(), 'sale', -1000)$q$, 'expired shop cannot append');
+select pg_temp.expect_error($q$insert into cashier_messages (id, shop_id, kind, body) values (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'chat', 'بعد الانتهاء')$q$, 'expired shop cannot send messages');
 select pg_temp.expect_error($q$update cashier_products set name = 'x', updated_at = now() where true$q$, 'expired shop cannot update');
 select pg_temp.expect_error($q$insert into storage.objects (bucket_id, name) values ('cashier-media', '11111111-1111-1111-1111-111111111111/products/z.webp')$q$, 'expired shop cannot upload');
 -- كود مزوَّر يُرفض، والكود الموقَّع يفتح المحل

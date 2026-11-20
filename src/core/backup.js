@@ -2,10 +2,10 @@
 // بعد التحقق من الملف، ثم تعيد حساب المخزون من الحركات وتضع كل شيء في طابور الرفع.
 import { SYNCED } from '../sync/tables.js';
 import { makeBackup, validateBackup } from '../domain/tools.js';
-import { foldProduct } from '../domain/stock.js';
+import { foldByLocation } from '../domain/stock.js';
 import { LICENSE_META } from './license.js';
 
-const META_KEYS = ['shopId', 'devicePrefix', 'internalSeq', 'seq:sale', 'seq:sale_return', 'seq:purchase'];
+const META_KEYS = ['shopId', 'devicePrefix', 'internalSeq', 'seq:sale', 'seq:sale_return', 'seq:purchase', 'seq:receipt'];
 
 export async function exportBackup(db) {
   const tables = {};
@@ -21,12 +21,12 @@ export function checkBackup(data) {
 
 export async function restoreBackup(db, data) {
   checkBackup(data);
-  const all = [...SYNCED, 'outbox', 'stock', 'held', 'meta'].map((n) => db.table(n));
+  const all = [...SYNCED, 'outbox', 'stock', 'wh_stock', 'held', 'meta'].map((n) => db.table(n));
   await db.transaction('rw', all, async () => {
     // يبقى على الجهاز: هويته وحالة الترخيص (الاستعادة لا تبدأ تجربة جديدة ولا تُضيع اشتراكًا)
     const keep = [];
     for (const k of ['deviceId', ...LICENSE_META]) { const r = await db.meta.get(k); if (r) keep.push(r); }
-    for (const t of [...SYNCED, 'outbox', 'stock', 'held']) await db.table(t).clear();
+    for (const t of [...SYNCED, 'outbox', 'stock', 'wh_stock', 'held']) await db.table(t).clear();
     await db.meta.clear();
     for (const r of keep) await db.meta.put(r);
     for (const [k, v] of Object.entries(data.meta)) await db.meta.put({ key: k, value: v });
@@ -39,10 +39,11 @@ export async function restoreBackup(db, data) {
     const byProduct = new Map();
     for (const m of data.tables.movements || []) { if (!byProduct.has(m.product_id)) byProduct.set(m.product_id, []); byProduct.get(m.product_id).push(m); }
     for (const [pid, mv] of byProduct) {
-      const { qty, avgCost } = foldProduct(mv);
+      const { shop, warehouses } = foldByLocation(mv);
       let last = null;
       for (const m of mv) if (m.type === 'sale' && (!last || m.created_at > last)) last = m.created_at;
-      await db.stock.put({ product_id: pid, qty, avgCost, last_sale_at: last });
+      await db.stock.put({ product_id: pid, qty: shop.qty, avgCost: shop.avgCost, last_sale_at: last });
+      for (const [branchId, w] of warehouses) await db.wh_stock.put({ branch_id: branchId, product_id: pid, qty: w.qty, avgCost: w.avgCost });
     }
   });
 }

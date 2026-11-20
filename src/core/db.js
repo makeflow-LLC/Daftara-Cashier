@@ -5,6 +5,7 @@
 //   stock    مخزون كل صنف محسوب من الحركات (ذاكرة مؤقتة تُعاد من الحركات في أي وقت)
 //   held     سلال البيع المعلّقة (لهذا الجهاز فقط)
 //   files    صور تنتظر الرفع، ونسخ مصغّرة للعرض بلا إنترنت
+//   wh_stock مخزون كل صنف في كل مخزن خارجي (حركات تحمل branch_id)، محسوب من الحركات مثل stock
 // لا نفهرس قيمًا منطقية (true/false) لأن IndexedDB لا يفهرسها.
 
 export const DB_NAME = 'daftara-cashier';
@@ -41,5 +42,7 @@ export function createDb(Dexie, name = DB_NAME) {
   });
   // 2: رقم الصنف في الميزان (باركود الميزان)
   db.version(2).stores({ products: 'id, barcode, scale_code, category_id, name, updated_at' });
+  // 3: المحادثة الداخلية والتعميمات، ومخزون المخازن الخارجية
+  db.version(3).stores({ messages: 'id, created_at, kind', wh_stock: '[branch_id+product_id], branch_id, product_id' });
   return db;
 }

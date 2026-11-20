@@ -2,6 +2,7 @@
 // بلا فتح، تُحسب الفترة من أول اليوم بنقد افتتاحي صفر.
 import { sessionSummary, closingResult } from '../../domain/cash.js';
 import { startOfDay } from '../../core/queries.js';
+import { drawerExpenses } from '../../domain/expenses.js';
 
 export function createCashRepo({ db, store, getContext, clock }) {
   const repo = {
@@ -24,8 +25,12 @@ export function createCashRepo({ db, store, getContext, clock }) {
     },
     async summary() {
       const cur = await repo.current();
-      const [payments, methods] = await Promise.all([db.payments.where('created_at').aboveOrEqual(cur.since).toArray(), db.payment_methods.toArray()]);
-      return { ...cur, ...sessionSummary({ opening: cur.opening, payments, methodNames: new Map(methods.map((m) => [m.id, m.name])) }) };
+      const [payments, methods, expenses] = await Promise.all([
+        db.payments.where('created_at').aboveOrEqual(cur.since).toArray(), db.payment_methods.toArray(), db.expenses.toArray(),
+      ]);
+      // المصاريف المدفوعة نقدًا منذ فتح الصندوق تخرج من الدرج
+      const cashIds = new Set(methods.filter((m) => m.kind === 'cash').map((m) => m.id));
+      return { ...cur, ...sessionSummary({ opening: cur.opening, payments, methodNames: new Map(methods.map((m) => [m.id, m.name])), expenses: drawerExpenses(expenses, cashIds, cur.since) }) };
     },
     async open(openingCash) {
       if (!Number.isSafeInteger(openingCash) || openingCash < 0) throw new Error('اكتب المبلغ الموجود في الدرج');

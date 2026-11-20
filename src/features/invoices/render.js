@@ -78,7 +78,7 @@ export async function renderInvoiceCanvas(model, logoUrl = null) {
     text(r.calc, R, y, { size: 26, color: '#605d5d', dir: 'ltr', align: 'right' });
     text(r.total, L, y, { size: 28, weight: 700, align: 'left', dir: 'ltr' }); y += 40 + 14;
   });
-  dash(y); y += 20;
+  if (model.rows.length) { dash(y); y += 20; } // سند القبض بلا سطور: الخط السابق يكفي
   for (const t of model.totals) {
     const size = t.strong ? 40 : 28;
     text(t.label, R, y, { size, weight: t.strong ? 700 : 400, color: t.strong ? '#201e1d' : '#605d5d' });

@@ -43,7 +43,7 @@ export const TABLES = [
   { name: 'payments', remote: 'cashier_payments', mode: 'append', columns: {
     id: null, shop_id: null, invoice_id: null, customer_id: null, supplier_id: null, cash_session_id: null,
     direction: 'in', method_id: null, method_kind: 'cash', amount: 0, fee: 0, currency: 'ILS',
-    amount_currency: null, rate: null, note: null, device_id: null, created_by: null, ...APPEND } },
+    amount_currency: null, rate: null, note: null, device_id: null, created_by: null, number: null, ...APPEND } },
   { name: 'customer_entries', remote: 'cashier_customer_entries', mode: 'append', columns: {
     id: null, shop_id: null, customer_id: null, type: 'adjustment', amount: 0, invoice_id: null, payment_id: null,
     note: null, device_id: null, created_by: null, ...APPEND } },
@@ -60,9 +60,13 @@ export const TABLES = [
     expected: null, counted: null, difference: null, note: null, closed_by: null, ...LWW } },
   { name: 'expenses', remote: 'cashier_expenses', mode: 'lww', columns: {
     id: null, shop_id: null, branch_id: null, category: null, amount: 0, method_id: null, cash_session_id: null,
-    note: null, attachment_path: null, spent_at: null, ...LWW } },
+    note: null, attachment_path: null, spent_at: null, employee_id: null, period: null, created_by: null, ...LWW } },
   { name: 'audit_log', remote: 'cashier_audit_log', mode: 'append', columns: {
     id: null, shop_id: null, user_id: null, device_id: null, action: '', entity: null, entity_id: null, data: null, ...APPEND } },
+  // المحادثة الداخلية والتعميمات: kind = chat (رسالة) | announce (تعميم) | read (إشعار قراءة تعميم، ref_id = التعميم)
+  { name: 'messages', remote: 'cashier_messages', mode: 'append', columns: {
+    id: null, shop_id: null, kind: 'chat', from_id: null, from_name: null, to_id: null, ref_id: null, body: '',
+    device_id: null, created_by: null, ...APPEND } },
 ];
 
 export const TABLE = Object.fromEntries(TABLES.map((t) => [t.name, t]));

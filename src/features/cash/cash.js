@@ -13,6 +13,7 @@ import { whatsappLink } from '../../domain/ledger.js';
 import { app } from '../../core/app.js';
 import { bus } from '../../core/bus.js';
 import { openLink } from '../customers/customers.js';
+import { navigate } from '../../core/router.js';
 
 const cur = () => app.shop?.base_currency || 'ILS';
 
@@ -31,10 +32,12 @@ export function renderCash(el) {
         h('div', { class: 'hero-mini-label' }, s.virtual ? ['محسوب منذ ', num(dateTimeText(s.since))] : ['منذ فتح الصندوق ', num(dateTimeText(s.since))])),
       h('div', { class: 'card' },
         kv('نقد أول اليوم', money(s.opening)), kv('دخل نقدًا (بيع ودفعات زبائن)', money(s.cashIn)), kv('خرج نقدًا (مشتريات، دفعات للتجار، مرتجع)', money(s.cashOut)),
+        s.expenses ? kv('مصاريف من الدرج', money(s.expenses)) : null,
         ...s.methods.map((m) => kv(m.name, money(m.total))),
         s.credit ? kv('بيع آجل', money(s.credit)) : null),
       button('أغلق الصندوق', { block: true, size: 'lg', icon: 'check', onclick: () => closeSheet(s) }),
       s.virtual ? button('ابدأ اليوم بنقد في الدرج', { kind: 'outline', icon: 'cash', block: true, onclick: openSheetDay }) : null,
+      button('المصاريف (كهرباء، إيجار، مواصلات…)', { kind: 'outline', icon: 'coins', block: true, onclick: () => navigate('/expenses') }),
     );
     const list = await app.cash.history();
     fill(hist, list.length ? h('div', { class: 'section' }, h('h2', { class: 'section-title' }, 'الإغلاقات السابقة'),
@@ -104,5 +107,5 @@ export function renderCash(el) {
   }
 
   load();
-  return bus.on('data', (e) => { if (e.tables.includes('payments') || e.tables.includes('cash_sessions')) load(); });
+  return bus.on('data', (e) => { if (e.tables.includes('payments') || e.tables.includes('cash_sessions') || e.tables.includes('expenses')) load(); });
 }

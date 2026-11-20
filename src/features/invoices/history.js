@@ -8,18 +8,21 @@ import { app } from '../../core/app.js';
 import { bus } from '../../core/bus.js';
 import { startOfDay } from '../../core/queries.js';
 import { showReceipt } from '../sale/receipt.js';
+import { showVoucher } from '../customers/voucher.js';
+import { matchesInvoiceNumber } from '../../domain/numbering.js';
 
-const TYPES = [['', 'الكل'], ['sale', 'بيع'], ['sale_return', 'مرتجع'], ['purchase', 'شراء']];
+const TYPES = [['', 'الكل'], ['sale', 'بيع'], ['sale_return', 'مرتجع'], ['purchase', 'شراء'], ['receipt', 'سندات القبض']];
 const RANGES = [['today', 'اليوم'], ['week', 'آخر 7 أيام'], ['month', 'آخر 30 يومًا'], ['all', 'كل الوقت']];
 const ICON = { sale: 'receipt', sale_return: 'undo', purchase: 'truck', purchase_return: 'undo' };
 
 export function renderInvoices(el, params) {
   let all = [];
   let lines = null;
+  let receipts = [];
   let names = { customerNames: new Map(), supplierNames: new Map() };
   let type = params.type || '';
   let range = params.range || 'week';
-  const q = input({ type: 'search', placeholder: 'رقم الفاتورة، اسم الزبون، أو اسم صنف', autocomplete: 'off' });
+  const q = input({ type: 'search', placeholder: 'رقم الفاتورة أو السند، اسم الزبون، أو اسم صنف', autocomplete: 'off' });
   const typeChips = h('div', { class: 'chips chips-scroll' });
   const rangeChips = h('div', { class: 'chips chips-scroll' });
   const body = h('div');
@@ -36,6 +39,7 @@ export function renderInvoices(el, params) {
     fill(typeChips, ...TYPES.map(([k, l]) => h('button', { class: `chip ${type === k ? 'on' : ''}`, type: 'button', onclick: () => { type = k; paint(); } }, l)));
     fill(rangeChips, ...RANGES.map(([k, l]) => h('button', { class: `chip ${range === k ? 'on' : ''}`, type: 'button', onclick: () => { range = k; paint(); } }, l)));
     const query = q.value.trim();
+    if (type === 'receipt') { paintReceipts(query); return; }
     let productHits = new Set();
     const nq = normalizeArabic(query);
     if (nq && !/^\d+$/.test(nq)) {
@@ -59,7 +63,26 @@ export function renderInvoices(el, params) {
       : emptyState('receipt', 'لا فواتير', query ? `لا فاتورة تطابق «${query}»` : 'لا فواتير في هذه المدة — جرّب «كل الوقت».'));
   }
 
+  // سندات القبض: دفعات الزبائن من ديونهم (ليست فواتير، لكن صاحب المحل يبحث عنها هنا)
+  function paintReceipts(query) {
+    const f = from();
+    const nq = normalizeArabic(query);
+    const items = receipts.filter((r) => (!f || r.payment.created_at >= f)
+      && (!nq || normalizeArabic(r.customerName).includes(nq) || (r.payment.number && matchesInvoiceNumber(r.payment.number, query))));
+    const total = items.reduce((a, r) => a + r.payment.amount, 0);
+    fill(body, items.length ? h('div', null,
+      h('div', { class: 'list-count muted small' }, `${items.length} سند — المجموع `, money(total)),
+      h('div', { class: 'list' }, ...items.slice(0, 150).map((r) => h('button', { class: 'row row-tap', type: 'button', onclick: () => showVoucher(r.payment.id, { doneLabel: 'إغلاق' }) },
+        h('span', { class: 'row-ic' }, icon('cash', 20)),
+        h('span', { class: 'row-main' },
+          h('span', { class: 'row-title' }, 'سند قبض ', r.payment.number ? num(r.payment.number) : null, r.customerName ? h('span', { class: 'muted' }, ` · ${r.customerName}`) : null),
+          h('span', { class: 'row-sub' }, num(dateTimeText(r.payment.created_at)))),
+        money(r.payment.amount, r.payment.currency)))))
+      : emptyState('cash', 'لا سندات قبض', query ? `لا سند يطابق «${query}»` : 'حين يدفع زبون من دينه يُحفظ له سند قبض هنا — جرّب «كل الوقت».'));
+  }
+
   async function load() {
+    receipts = await app.customers.receipts();
     const [inv, cs, ss] = await Promise.all([app.db.invoices.toArray(), app.db.customers.toArray(), app.db.suppliers.toArray()]);
     all = inv;
     lines = null;
@@ -69,5 +92,5 @@ export function renderInvoices(el, params) {
   let t = null;
   q.addEventListener('input', () => { clearTimeout(t); t = setTimeout(paint, 150); });
   load();
-  return bus.on('data', (e) => { if (e.tables.includes('invoices')) load(); });
+  return bus.on('data', (e) => { if (e.tables.includes('invoices') || e.tables.includes('customer_entries')) load(); });
 }

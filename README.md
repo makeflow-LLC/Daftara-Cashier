@@ -186,6 +186,36 @@ payments and backup stay open.
   `https://makeflow.tech/apps/cashier/app/`. The device key on the web is the random id stored in the browser, so
   clearing site data gives a new device (trial/activation codes are per device).
 
+## Expenses, payroll, net profit, warehouses, vouchers, chat (phase 2)
+
+- `src/domain/expenses.js` — pure: expense categories (fixed + the shop's own in `settings.expenseCategories`), totals per
+  category, what left the cash drawer, and payroll: employees live in `settings.payroll.employees`
+  (`{ id, name, salary, payDay, staffId, since, active }`); paying a salary is an expense with `category = 'salary'`,
+  `employee_id` and `period` (`YYYY-MM`), so "paid / partial / late" is derived, never stored.
+- `src/features/expenses/` — expenses screen (month by month, by category) and payroll screen (owner only).
+  `src/core/payroll.js` reminds once a day; the home screen lists due and late salaries.
+  A cash expense reduces the expected drawer (`features/cash/repo.js`); "outside the drawer" and transfers do not.
+- Reports: `buildReport` also takes `expenses` and `movements` → `expensesTotal`, `damageTotal`, `netProfit`, `byMonth`,
+  and the "profit and loss" sections (hidden from staff without `see_profit`, since they include salaries).
+- Cost of goods: `knownCost()` in `domain/stock.js` — an average cost of 0 means "unknown", so the product card cost is
+  used; positive adjustments with a cost count in the weighted average; editing the cost on the card revalues the stock.
+  Reports repair old invoice lines saved with zero cost from the product card (`missingCost` in `domain/reports.js`).
+- Warehouses: a warehouse is a non-main row in `branches`; its movements carry `branch_id`, so they never enter the
+  shop's sellable stock. Local cache `wh_stock` (`[branch_id+product_id]`) is rebuilt from movements like `stock`
+  (`foldByLocation`). `buildTransfer` writes a `transfer_out` / `transfer_in` pair sharing one `ref_id`.
+  Screens in `src/features/inventory/warehouses.js`; a purchase can be received into a warehouse (`branchId`).
+- Receipt voucher: every customer debt payment gets `payments.number` (`A-V0001`, counter `seq:receipt`);
+  `voucherModel` reuses the invoice renderer for screen, image, text and print (`features/customers/voucher.js`).
+- Exchange: "return, then swap for other goods" records the return (cash out) and opens the sale with that credit;
+  the pay sheet records the matching part in cash and only the difference with the chosen method, so the drawer moves
+  by the real difference.
+- Internal chat and announcements: one append-only table `messages` (`kind`: `chat` | `announce` | `read`).
+  Identity is the staff member, `owner`, or `dev:<prefix>` for a shop without staff. Private messages are filtered in
+  the UI (`domain/chat.js`); read state per person is device-local, announcement reads are synced.
+- Migration `0007` adds the new columns and `cashier_messages` — **run `supabase/setup.sql` before releasing**.
+  Until then the app keeps working: unknown columns are dropped from uploads and messages wait in the outbox
+  (`schemaGap` in `sync/engine.js`), but voucher numbers and salary links uploaded in that window stay device-only.
+
 ## Windows (desktop) and releases
 
 - `desktop/` — Electron wrapper (same `www`, flavor `desktop`): pages served from `app://cashier` (ES modules,
@@ -234,6 +264,7 @@ codes page; the code works once.
 1. Supabase Studio → SQL Editor → paste `supabase/setup.sql` (all migrations in one file, built by
    `node scripts/build-setup-sql.mjs`) → Run. Safe to re-run after every update.
    (1.1.0 adds `0006_shop_catalog.sql`: the WhatsApp catalog link shows "not available" until this is run.)
+   (1.4.0 adds `0007_expenses_chat_warehouses.sql`: chat, announcements, salary links and voucher numbers sync only after this is run.)
 2. Auth settings: enable **anonymous sign-ins** (`GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED=true`).
 3. GitHub → Settings → Secrets and variables → Actions: add `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
    Without them the app builds and works fully on the device, with sync off.

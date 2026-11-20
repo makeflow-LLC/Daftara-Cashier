@@ -25,12 +25,13 @@ import { readPrefs } from '../settings/settings.js';
 
 const PREF = 'cashier-sale-camera';
 
-export function renderSale(el) {
+export function renderSale(el, params = {}) {
   const t0 = performance.now();
   const base = app.shop?.base_currency || 'ILS';
   // الربح خاص بصاحب المحل: لا يظهر في شاشة البيع إلا إن فعّله من الإعدادات (الزبون قد يرى الشاشة)
   const showProfit = app.can('see_profit') && readPrefs().saleProfit === true;
-  let cart = { lines: [], discount: null, customer: null };
+  // exchange: تبديل — { amount, number } رصيد مرتجع يُخصم مما يدفعه الزبون في هذه الفاتورة
+  let cart = { lines: [], discount: null, customer: null, exchange: null };
   let products = null;          // تُحمَّل بعد الرسم (لا تؤخر فتح الشاشة)
   let byId = new Map();         // للعروض على التصنيفات
   let scanner = null;
@@ -77,7 +78,7 @@ export function renderSale(el) {
     saveTimer = setTimeout(() => app.sales.saveCurrent(serialize()), 300);
   }
   function serialize() {
-    return { lines: cart.lines, discount: cart.discount, customer: cart.customer ? { id: cart.customer.id, name: cart.customer.name, phone: cart.customer.phone } : null };
+    return { lines: cart.lines, discount: cart.discount, exchange: cart.exchange || null, customer: cart.customer ? { id: cart.customer.id, name: cart.customer.name, phone: cart.customer.phone } : null };
   }
 
   // العروض تُحسب من جديد مع كل تغيير: السطور كما في السلة + خصم العرض (domain/offers.js)
@@ -94,7 +95,11 @@ export function renderSale(el) {
       fill(cartEl, h('div', { class: 'list cart-list' }, ...pr.lines.map((l, i) => lineRow(l, i))));
     }
     fill(custEl, cart.customer ? h('div', { class: 'cust-chip' }, icon('user', 16), h('span', null, cart.customer.name),
-      h('button', { class: 'icon-btn sm', type: 'button', 'aria-label': 'إزالة الزبون', onclick: () => { cart.customer = null; customerDiscount(); changed(); } }, icon('x', 16))) : null);
+      h('button', { class: 'icon-btn sm', type: 'button', 'aria-label': 'إزالة الزبون', onclick: () => { cart.customer = null; customerDiscount(); changed(); } }, icon('x', 16))) : null,
+      // تبديل: رصيد المرتجع ظاهر حتى تُدفع الفاتورة (الإلغاء = رُدّ له المبلغ نقدًا كما في فاتورة المرتجع)
+      cart.exchange ? h('div', { class: 'cust-chip exchange-chip' }, icon('swap', 16),
+        h('span', null, 'تبديل: للزبون ', money(cart.exchange.amount), cart.exchange.number ? [' من المرتجع ', num(cart.exchange.number)] : null),
+        h('button', { class: 'icon-btn sm', type: 'button', 'aria-label': 'إلغاء التبديل', onclick: () => { cart.exchange = null; changed(); toast('أُلغي التبديل — رُدّ للزبون مبلغ المرتجع نقدًا', { kind: 'info', ms: 4000 }); } }, icon('x', 16))) : null);
     fill(totalEl,
       h('div', { class: 'pt-main' }, money(t.total)),
       h('div', { class: 'pt-sub' },
@@ -379,7 +384,7 @@ export function renderSale(el) {
         onclick: async () => {
           if (cart.lines.length) await app.sales.hold(serialize(), cart.customer ? cart.customer.name : null);
           const c = await app.sales.takeHeld(hd.id);
-          cart = { lines: c.lines, discount: c.discount, customer: c.customer };
+          cart = { lines: c.lines, discount: c.discount, customer: c.customer, exchange: c.exchange || null };
           close(); changed(); paintHeld();
         },
       }, h('span', { class: 'row-ic' }, icon('cart', 20)),
@@ -397,6 +402,7 @@ export function renderSale(el) {
     if (scanner) scanner.pause();
     openPay({
       total: t.total,
+      credit: cart.exchange ? cart.exchange.amount : 0,
       customer: cart.customer,
       onConfirm: async ({ payments, customer }) => {
         const r = await app.sales.checkout({ lines: pr.lines, discount: cart.discount, payments, customerId: customer ? customer.id : null, currency: base });
@@ -426,7 +432,15 @@ export function renderSale(el) {
   // ---------- البدء ----------
   paint();
   paintHeld();
-  app.sales.loadCurrent().then((c) => { if (c && c.lines.length && !cart.lines.length) { cart = { lines: c.lines, discount: c.discount, customer: c.customer }; paint(); } });
+  app.sales.loadCurrent().then(async (c) => {
+    if (c && c.lines.length && !cart.lines.length) cart = { lines: c.lines, discount: c.discount, customer: c.customer, exchange: c.exchange || null };
+    // قادم من «بدّل ببضاعة أخرى» في المرتجع: رصيد المرتجع وزبونه. نمسحهما من العنوان حتى لا يتكررا عند إعادة الفتح
+    const amount = Number(params.exchange);
+    if (Number.isSafeInteger(amount) && amount > 0) cart.exchange = { amount, number: params.ref || null };
+    if (params.customer) { const cu = await app.db.customers.get(params.customer); if (cu && !cu.deleted) cart.customer = { id: cu.id, name: cu.name, phone: cu.phone }; }
+    if (params.exchange || params.customer) { history.replaceState(null, '', '#/sale'); app.sales.saveCurrent(serialize()); }
+    paint();
+  });
   setTimeout(loadProducts, 0);
   // الحاسوب: قارئ باركود USB بدل الكاميرا، والمؤشر في البحث جاهز للكتابة
   if (isDesktop()) { cameraOn = false; camBtn.hidden = true; setTimeout(() => search.focus(), 50); }
