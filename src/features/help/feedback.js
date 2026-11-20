@@ -47,3 +47,9 @@ export function openFeedback(initial = 'note') {
   ), { title: 'أرسل ملاحظة' });
   setTimeout(() => text.focus(), 200);
 }
+
+/** يفتح واتساب الدعم بسؤال عن التطبيق (about: اسم الصفحة التي يسأل منها، اختياري). */
+export function askSupport(about = null) {
+  const text = about ? `مرحبًا، عندي سؤال عن «${about}» في دفترة كاشير: ` : 'مرحبًا، عندي سؤال عن دفترة كاشير: ';
+  openLink(`https://wa.me/${SUPPORT_PHONE}?text=${encodeURIComponent(text)}`);
+}

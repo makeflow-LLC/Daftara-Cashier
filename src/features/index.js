@@ -23,7 +23,7 @@ import { renderExpenses } from './expenses/expenses.js';
 import { renderPayroll } from './expenses/payroll.js';
 import { renderChat } from './chat/chat.js';
 import { renderMore } from './more/more.js';
-import { renderHelp } from './help/help.js';
+import { renderHelp, renderHelpTopic } from './help/help.js';
 import { renderSubscribe } from './subscribe/subscribe.js';
 import { renderAccount, renderAccountRequired } from './account/account.js';
 import { renderSmsSettings } from './settings/sms.js';
@@ -114,6 +114,7 @@ export const MODULES = [
     routes: [
       { path: '/more', tab: 'settings', render: renderMore },
       { path: '/help', tab: 'settings', chrome: false, render: renderHelp },
+      { path: '/help/topic', tab: 'settings', chrome: false, render: renderHelpTopic },
       { path: '/subscribe', tab: 'settings', chrome: false, render: renderSubscribe },
       { path: '/account', perm: 'settings', tab: 'settings', chrome: false, render: renderAccount },
       { path: '/account/required', chrome: false, render: renderAccountRequired },

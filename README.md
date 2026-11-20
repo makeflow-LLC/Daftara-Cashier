@@ -133,6 +133,18 @@ Nothing else needs to change.
 - Product form shows only the essentials; the rest is under «خيارات إضافية». Sale screen buttons carry
   visible labels. Tajawal font (two weights, 18 KB) and light page transitions.
 
+## User guide and per-page help
+
+- `src/domain/guide.js` — pure data: one topic per screen (`why`, `steps`, `tips`, `shots`, `routes`), grouped in
+  categories, plus search. `src/domain/faq.js` — the FAQ (an item belongs to a topic through its `go` route or `t`).
+- `src/features/help/` — `/help` (illustrated guide + FAQ, one search over both), `/help/topic?id=…`, and `sheet.js`:
+  the «شرح» button. `header()` in `ui/components.js` adds it to every screen automatically (the help module registers
+  itself with `setHelpButton`); home, first-run setup, the lock screen and the scanner add it by hand.
+- Screenshots live in `guide/*.webp` (540px, ~20 KB each, shipped with the app). `npm run guide:shots` rebuilds them
+  from the real app with a demo shop (needs Playwright + Chromium: `npm i --no-save playwright`).
+- A new route must be listed in a topic's `routes`: `tests/guide.test.mjs` fails otherwise, and also checks that
+  every image, FAQ link and «open» button points at something that exists.
+
 ## Licensing (milestone 9)
 
 30-day free trial from install, then 30 ₪/month or 300 ₪/year. After expiry (plus 3 grace days for paid

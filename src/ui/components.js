@@ -5,12 +5,25 @@ import { bus } from '../core/bus.js';
 import { app } from '../core/app.js';
 import { formatMoney } from '../domain/currency.js';
 
-/** رأس الشاشة: عنوان، زر رجوع اختياري، وأزرار على اليسار. */
-export function header(title, { back = false, actions = [], sub = null } = {}) {
+// زر «شرح» في رأس كل صفحة: تسجّله وحدة المساعدة عند الإقلاع (features/help/sheet.js)، فلا تعرف المكوّنات عنها شيئًا.
+let helpFactory = null;
+export function setHelpButton(fn) {
+  helpFactory = fn;
+}
+/** زر «شرح» للصفحة المفتوحة، أو null إن لم يكن لها شرح. opts: { compact, dark, topic }. */
+export function helpButton(opts) {
+  return helpFactory ? helpFactory(opts || {}) : null;
+}
+
+/** رأس الشاشة: عنوان، زر رجوع اختياري، وأزرار على اليسار. آخرها زر «شرح» لهذه الصفحة (help: false يخفيه). */
+export function header(title, { back = false, actions = [], sub = null, help = true } = {}) {
+  const shown = actions.filter(Boolean);
+  // مع زرين أو أكثر في الرأس يصغر «شرح» إلى علامة الاستفهام وحدها حتى لا يُقصّ العنوان
+  const helpBtn = help ? helpButton({ compact: shown.length >= 2 }) : null;
   return h('header', { class: 'topbar' },
     back ? h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'رجوع', onclick: () => history.back() }, icon('back')) : null,
     h('div', { class: 'topbar-title' }, h('h1', null, title), sub ? h('div', { class: 'topbar-sub' }, sub) : null),
-    h('div', { class: 'topbar-actions' }, ...actions),
+    h('div', { class: 'topbar-actions' }, ...shown, helpBtn),
   );
 }
 

@@ -5,11 +5,11 @@
 //   APP_FLAVOR                        direct | play | desktop | web (أو الوسيط الثاني)
 //   VERSION_NAME                      رقم الإصدار للزبائن (من وسم الإصدار v1.0.0)
 //   node scripts/build-www.mjs <المجلد> [flavor]
-import { cpSync, rmSync, mkdirSync, writeFileSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, cpSync, rmSync, mkdirSync, writeFileSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, dirname, relative, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ENTRIES = ['index.html', 'styles', 'src', 'vendor', 'icons', 'fonts'];
+const ENTRIES = ['index.html', 'styles', 'src', 'vendor', 'icons', 'fonts', 'guide']; // guide: صور دليل الاستخدام
 
 if (!process.argv[2]) { console.error('usage: build-www.mjs <dir>'); process.exit(1); }
 const out = resolve(process.argv[2]);
@@ -17,7 +17,7 @@ process.chdir(resolve(dirname(fileURLToPath(import.meta.url)), '..'));
 
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
-for (const e of ENTRIES) cpSync(e, `${out}/${e}`, { recursive: true });
+for (const e of ENTRIES) if (e !== 'guide' || existsSync(e)) cpSync(e, `${out}/${e}`, { recursive: true });
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 const build = parseInt(process.env.VERSION_CODE || '0', 10) || 0;
