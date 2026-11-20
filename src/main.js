@@ -12,6 +12,8 @@ import { startPwa } from './core/pwa.js';
 import { appLock } from './features/shell/lock.js';
 import { watchDailyReport } from './features/reports/daily.js';
 import { updates } from './core/updates.js';
+import { setHelpButton } from './ui/components.js';
+import { pageHelpButton } from './features/help/sheet.js';
 
 async function start() {
   if (window.__oldWebView) return;
@@ -21,6 +23,7 @@ async function start() {
   configureFeedback({ sound: prefs.sound, vibrate: prefs.vibrate });
 
   await app.boot();
+  setHelpButton(pageHelpButton); // زر «شرح» في رأس كل صفحة
   const view = document.getElementById('view');
   mount(view);
   onRoute(closeAllSheets);

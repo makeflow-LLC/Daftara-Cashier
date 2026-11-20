@@ -6,6 +6,7 @@
 import { h } from './dom.js';
 import { icon } from './icons.js';
 import { feedback } from './feedback.js';
+import { helpButton } from './components.js';
 import { normalizeBarcode } from '../domain/product.js';
 import { createDetector, cameraVideo, cameraStream } from './detector.js';
 
@@ -97,6 +98,7 @@ export function openScanner({ title = 'امسح الباركود', onCode, conti
       h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'إغلاق', onclick: () => ctl.close() }, icon('x')),
       h('div', { class: 'scan-title' }, title),
       torchBtn,
+      helpButton({ compact: true, dark: true }),
     ),
     frame,
     status,

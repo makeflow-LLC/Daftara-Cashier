@@ -1,7 +1,7 @@
 // الرئيسية: مبيعات اليوم وربحه، عدد الفواتير، النقد في الدرج، وأهم التنبيهات.
 import { h, num, fill } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
-import { money, section, row, syncBadge, emptyState } from '../../ui/components.js';
+import { money, section, row, syncBadge, emptyState, helpButton } from '../../ui/components.js';
 import { app } from '../../core/app.js';
 import { bus } from '../../core/bus.js';
 import { todaySummary } from '../../core/queries.js';
@@ -39,7 +39,7 @@ export function renderHome(el) {
     h('div', { class: 'home-top' },
       h('div', { class: 'home-head' },
         h('div', { class: 'topbar-title' }, h('div', { class: 'home-greet' }, `${greet} 👋`), h('h1', null, app.shop?.name || 'محلي'), h('div', { class: 'home-date' }, dateText)),
-        h('div', { class: 'home-badges' }, userChip(), syncBadge())),
+        h('div', { class: 'home-badges' }, userChip(), syncBadge(), helpButton({ dark: true }))),
       kpis),
     h('div', { class: 'page home-page' },
       updateBox,

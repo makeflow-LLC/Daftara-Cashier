@@ -1,7 +1,7 @@
 // الإعداد الأول: اسم المحل ثم نوعه (ضغطة واحدة تنشئ كل شيء). يعمل بلا إنترنت.
 import { h, fill } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
-import { field, input, button } from '../../ui/components.js';
+import { field, input, button, helpButton } from '../../ui/components.js';
 import { toast } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
 import { SHOP_TYPES } from '../../domain/features.js';
@@ -78,6 +78,7 @@ export function renderSetup(el) {
 
 function hero(title, sub) {
   return h('div', { class: 'setup-hero' },
+    h('div', { class: 'setup-help' }, helpButton({ dark: true, topic: 'start' })),
     logo(64),
     h('h1', null, title),
     h('p', null, sub),

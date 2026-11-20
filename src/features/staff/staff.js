@@ -2,7 +2,7 @@
 // كل بيع ودفعة وحركة تُحفظ باسم من دخل، فيعرف صاحب المحل من باع ماذا (التقارير وتقرير اليوم).
 import { h, fill } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
-import { header, button, input, field, switchRow, emptyState } from '../../ui/components.js';
+import { header, button, input, field, switchRow, emptyState, helpButton } from '../../ui/components.js';
 import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
 import { PERMISSIONS, ROLES, pinProblem, makePin, checkPin, pinTaken, PIN_MAX } from '../../domain/staff.js';
@@ -65,7 +65,7 @@ export function renderLock(el) {
   const box = h('div', { class: 'setup-body' });
   let off = null;
   el.append(h('div', { class: 'setup lock' },
-    h('div', { class: 'setup-hero' }, logo(56), h('h1', null, app.shop?.name || 'دفترة كاشير'), h('p', null, 'من يستعمل الجهاز الآن؟')),
+    h('div', { class: 'setup-hero' }, h('div', { class: 'setup-help' }, helpButton({ dark: true, topic: 'lock' })), logo(56), h('h1', null, app.shop?.name || 'دفترة كاشير'), h('p', null, 'من يستعمل الجهاز الآن؟')),
     box));
 
   function choose() {

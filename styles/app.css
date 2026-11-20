@@ -1178,3 +1178,49 @@ body{font-weight:500}
 /* ===== التبديل ===== */
 .exchange-chip{background:var(--warn-100);color:var(--warn-800)}
 .exchange-chip .num{font-weight:700}
+
+/* ===== زر «شرح» في رأس كل صفحة ===== */
+.help-btn{flex:none;display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 6px 0 14px;border-radius:var(--radius-pill);background:var(--blue-100);border:2px solid #a9c9f3;color:var(--blue-700);font-size:15px;font-weight:700;white-space:nowrap}
+.help-btn:active{transform:scale(.96)}
+.help-q{flex:none;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:var(--blue);color:#fff;font-size:17px;font-weight:700;line-height:1}
+.help-btn.compact{width:40px;padding:0;justify-content:center;border-color:transparent;background:transparent}
+.help-btn.compact .help-q{width:30px;height:30px;font-size:19px}
+.help-btn.dark{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.5);color:#fff}
+.help-btn.dark .help-q{background:#fff;color:var(--brand-700)}
+.help-btn.dark.compact{background:transparent;border-color:transparent}
+.setup-hero{position:relative}
+.setup-help{position:absolute;top:calc(var(--sat) + 12px);left:var(--space-3)}
+
+/* ===== دليل الاستخدام: الموضوع ===== */
+.g-label{display:flex;align-items:center;gap:6px;font-size:14px;font-weight:700;margin-bottom:4px}
+.g-why{padding:var(--space-3);border-radius:var(--radius-lg);background:var(--blue-100);border:2px solid #a9c9f3;margin-bottom:var(--space-3)}
+.g-why .g-label{color:var(--blue-700)}
+.g-why p{margin:0;font-size:16.5px;line-height:1.75}
+.g-h{display:flex;align-items:center;gap:6px;font-size:17px;margin:var(--space-4) 0 var(--space-2)}
+.g-h .ic{color:var(--brand)}
+.g-steps{list-style:none;margin:0;padding:0;background:#fff;border:2px solid var(--frame);border-radius:var(--radius-lg)}
+.g-steps li{display:flex;align-items:flex-start;gap:var(--space-3);padding:12px var(--space-3);font-size:16px;line-height:1.7;border-bottom:1.5px solid var(--color-hairline)}
+.g-steps li:last-child{border-bottom:0}
+.g-n{flex:none;width:28px;height:28px;margin-top:1px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:var(--brand);color:#fff;font-size:15px;font-weight:700}
+.g-tips{margin-top:var(--space-3);padding:var(--space-3);border-radius:var(--radius-lg);background:var(--amber-100);border:2px solid #f3c77a}
+.g-tips .g-label{color:var(--amber-700)}
+.g-tips ul{margin:0;padding:0 var(--space-4) 0 0;font-size:15.5px;line-height:1.75}
+.g-shots{display:flex;justify-content:center;gap:var(--space-3);margin:var(--space-3) 0}
+.g-shots.many{justify-content:flex-start;overflow-x:auto;margin-left:calc(-1 * var(--space-4));margin-right:calc(-1 * var(--space-4));padding:0 var(--space-4) 6px}
+.g-shot{flex:none;width:210px;margin:0;text-align:center}
+.g-shot-btn{display:block;width:100%;padding:0;border-radius:22px;border:5px solid #26302d;background:#26302d;overflow:hidden;box-shadow:var(--shadow-md);min-height:120px}
+.g-shot img{display:block;width:100%;height:auto;border-radius:17px;background:#eef1f0}
+.g-shot figcaption{margin-top:6px;font-size:13.5px;color:var(--color-muted)}
+.g-shot.zoom{width:100%;max-width:420px}
+.g-actions{display:flex;flex-wrap:wrap;gap:var(--space-2);margin-top:var(--space-4)}
+.g-actions .btn{flex:1;min-width:150px}
+.g-open{margin-top:var(--space-4)}
+.g-navs{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2);margin:var(--space-3) 0 var(--space-4)}
+.g-nav{display:flex;flex-direction:column;gap:2px;padding:10px var(--space-3);border-radius:var(--radius-md);background:#fff;border:2px solid var(--frame);text-align:right;min-height:60px}
+.g-nav:last-child{text-align:left;align-items:flex-end}
+.g-nav-dir{display:inline-flex;align-items:center;gap:4px;font-size:13px;color:var(--color-muted)}
+.g-nav strong{font-size:15px}
+.g-list .row-sub{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.g-n-of{margin-right:auto;font-size:13px;font-weight:600}
+.g-count{margin:0 0 var(--space-2);font-size:14px}
+.home-badges{flex-direction:column;align-items:flex-end;flex-wrap:nowrap}

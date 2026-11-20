@@ -6,6 +6,7 @@
   "scripts": {
     "test": "node --test tests/*.test.mjs",
     "www": "node scripts/build-www.mjs www",
+    "guide:shots": "node scripts/guide-shots.mjs",
     "serve": "npm run www && node scripts/serve.mjs www 8080",
     "web": "node scripts/build-www.mjs www-web web",
     "serve:web": "npm run web && node scripts/serve.mjs www-web 8081",
