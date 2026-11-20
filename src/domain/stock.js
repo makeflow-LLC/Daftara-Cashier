@@ -16,8 +16,12 @@ export const MOVEMENT_TYPES = Object.freeze({
   transfer_out: -1,    // تحويل إلى فرع (المرحلة 2)
 });
 
-/** الحركات التي تُدخل بضاعة بتكلفة معروفة فتدخل في متوسط التكلفة المرجّح. */
-const COSTED_INFLOWS = new Set(['opening', 'purchase', 'transfer_in']);
+/**
+ * الحركات التي تُدخل بضاعة بتكلفة معروفة فتدخل في متوسط التكلفة المرجّح.
+ * التسوية الموجبة منها: «عدّلت الكمية من بطاقة الصنف» هي أول دخول لبضاعة كثير من المحلات —
+ * بدونها يبقى متوسط التكلفة صفرًا فيُحسب الربح كأن البضاعة بلا تكلفة.
+ */
+const COSTED_INFLOWS = new Set(['opening', 'purchase', 'transfer_in', 'adjustment']);
 
 /**
  * يضبط إشارة الكمية حسب النوع: البيع دائمًا سالب، الشراء دائمًا موجب، والتسوية كما هي.
@@ -48,11 +52,38 @@ export function stockByProduct(movements) {
 export function applyMovement(state, m) {
   const qty = assertInt(m.qty, 'qty');
   let { qty: q, avgCost } = state;
-  if (qty > 0 && COSTED_INFLOWS.has(m.type) && Number.isSafeInteger(m.unit_cost)) {
+  // التسوية بلا تكلفة (جرد صنف لم تُعرف تكلفته) لا تُنزل المتوسط إلى الصفر
+  if (qty > 0 && COSTED_INFLOWS.has(m.type) && Number.isSafeInteger(m.unit_cost) && (m.type !== 'adjustment' || m.unit_cost > 0)) {
     if (q <= 0) avgCost = m.unit_cost;
     else avgCost = divRound(q * avgCost + qty * m.unit_cost, q + qty);
   }
   return { qty: q + qty, avgCost };
+}
+
+/**
+ * تكلفة الوحدة المعتمدة للبيع والتقييم: متوسط التكلفة من الحركات إن عُرف (> 0)، وإلا التكلفة المكتوبة في بطاقة الصنف.
+ * صنف بِيع قبل تسجيل أي بضاعة له متوسطه صفر — هذا «غير معروف» لا «مجاني».
+ */
+export function knownCost(avgCost, fallback = 0) {
+  if (Number.isSafeInteger(avgCost) && avgCost > 0) return avgCost;
+  return Number.isSafeInteger(fallback) && fallback > 0 ? fallback : 0;
+}
+
+/**
+ * حركات صنف واحد موزعة على أماكنها: المحل (branch_id فارغ) وكل مخزن خارجي (branch_id = المخزن).
+ * يرجع { shop: {qty, avgCost}, warehouses: Map(branch_id → {qty, avgCost}) }.
+ */
+export function foldByLocation(movements) {
+  const shop = [];
+  const by = new Map();
+  for (const m of movements) {
+    if (!m.branch_id) { shop.push(m); continue; }
+    if (!by.has(m.branch_id)) by.set(m.branch_id, []);
+    by.get(m.branch_id).push(m);
+  }
+  const warehouses = new Map();
+  for (const [id, mv] of by) warehouses.set(id, foldProduct(mv));
+  return { shop: foldProduct(shop), shopCount: shop.length, warehouses };
 }
 
 /** يطوي حركات صنف واحد (مرتبة زمنيًا) إلى {qty, avgCost}. */

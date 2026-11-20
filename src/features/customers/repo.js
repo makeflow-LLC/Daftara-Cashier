@@ -1,20 +1,29 @@
 // الزبائن على الجهاز. الرصيد لا يُحفظ أبدًا: مجموع قيود الزبون (دين +، دفعة −، مرتجع −).
 import { normalizeArabic, normalizeBarcode } from '../../domain/product.js';
 import { sum } from '../../domain/money.js';
-import { oldestUnpaidAt, ledgerView, effectiveEntries, balanceOf, editableEntry, VOID_PREFIX } from '../../domain/ledger.js';
+import { oldestUnpaidAt, ledgerView, effectiveEntries, balanceOf, editableEntry, cancelledIds, isVoidEntry, VOID_PREFIX } from '../../domain/ledger.js';
+import { formatInvoiceNumber } from '../../domain/numbering.js';
 import { uuid } from '../../core/ids.js';
 
-export function createCustomerRepo({ db, store }) {
+export function createCustomerRepo({ db, store, getContext = () => ({}) }) {
   function invalid(errors) { return Object.assign(new Error('invalid'), { errors }); }
 
   async function openSession() {
     return (await db.cash_sessions.orderBy('opened_at').reverse().limit(5).toArray()).find((x) => !x.deleted && !x.closed_at) || null;
   }
-  async function writePayment(w, { customerId, amount, method_id, kind, session, entryAt = null }) {
+  /** رقم سند القبض التالي من عدّاد هذا الجهاز (A-V0001) — داخل نفس معاملة الحفظ. */
+  async function nextReceiptNumber() {
+    const seq = ((await db.meta.get('seq:receipt'))?.value || 0) + 1;
+    await db.meta.put({ key: 'seq:receipt', value: seq });
+    const prefix = getContext().prefix;
+    return formatInvoiceNumber(/^[A-Z]{1,3}$/.test(prefix || '') ? prefix : 'A', 'receipt', seq);
+  }
+  async function writePayment(w, { customerId, amount, method_id, kind, session, entryAt = null, number = null }) {
     const paymentId = uuid();
     await w.append('payments', {
       id: paymentId, customer_id: customerId, direction: 'in', method_id, method_kind: kind,
       amount, cash_session_id: kind === 'cash' && session ? session.id : null, note: 'دفعة من دين',
+      number: number || await nextReceiptNumber(), // كل دفعة لها سند قبض برقم
     });
     return w.append('customer_entries', { customer_id: customerId, type: 'payment', amount: -amount, payment_id: paymentId, ...(entryAt ? { created_at: entryAt } : {}) });
   }
@@ -106,6 +115,35 @@ export function createCustomerRepo({ db, store }) {
     },
 
     /**
+     * بيانات سند القبض لدفعة: { payment, customer, methodName, balanceAfter, entry, cancelled } أو null.
+     * balanceAfter = رصيد الزبون بعد هذه الدفعة مباشرة (من كشف حسابه).
+     */
+    async receipt(paymentId) {
+      const payment = await db.payments.get(paymentId);
+      if (!payment || !payment.customer_id) return null;
+      const [customer, entries, method] = await Promise.all([
+        db.customers.get(payment.customer_id),
+        db.customer_entries.where('customer_id').equals(payment.customer_id).toArray(),
+        payment.method_id ? db.payment_methods.get(payment.method_id) : null,
+      ]);
+      const entry = ledgerView(entries).find((e) => e.payment_id === paymentId) || null;
+      return {
+        payment, customer: customer || null, methodName: method ? method.name : null, entry,
+        balanceAfter: entry && !entry.cancelled ? entry.balance : null, cancelled: !!(entry && entry.cancelled),
+      };
+    },
+    /** سندات القبض (دفعات الزبائن من ديونهم) غير الملغاة، الأحدث أولًا: [{ payment, customerName }]. */
+    async receipts(limit = 300) {
+      const [payments, entries, customers] = await Promise.all([db.payments.toArray(), db.customer_entries.toArray(), db.customers.toArray()]);
+      const gone = cancelledIds(entries); // دفعة حُذفت (قيد عكسي) لا سند لها
+      const live = new Set(entries.filter((e) => e.type === 'payment' && e.payment_id && !isVoidEntry(e) && !gone.has(e.id)).map((e) => e.payment_id));
+      const names = new Map(customers.map((c) => [c.id, c.name]));
+      return payments.filter((p) => p.direction === 'in' && p.customer_id && !p.invoice_id && live.has(p.id))
+        .sort((a, b) => (a.created_at < b.created_at ? 1 : -1)).slice(0, limit)
+        .map((payment) => ({ payment, customerName: names.get(payment.customer_id) || '' }));
+    },
+
+    /**
      * حذف قيد (دين أو دفعة): لا يُمحى شيء، بل يُضاف قيد عكسي، والدفعة النقدية تُصحَّح في الدرج أيضًا.
      * يرجع القيد العكسي (لـ «تراجع»: voidEntry عليه يعيد الأصلي).
      */
@@ -125,6 +163,7 @@ export function createCustomerRepo({ db, store }) {
           return writePayment(w, {
             customerId: entry.customer_id, amount, method_id: orig ? orig.method_id : null,
             kind: orig && orig.method_kind === 'transfer' ? 'transfer' : 'cash', session, entryAt: entry.created_at,
+            number: orig ? orig.number : null, // السند المعدَّل يحتفظ برقمه
           });
         }
         const sign = entry.amount < 0 ? -1 : 1;

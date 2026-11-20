@@ -15,19 +15,23 @@ import { sendFile } from '../invoices/share.js';
 import { staffName } from '../../domain/staff.js';
 import { navigate } from '../../core/router.js';
 
-const KINDS = [['today', 'اليوم'], ['week', '7 أيام'], ['month', 'هذا الشهر'], ['custom', 'مخصص']];
+const KINDS = [['today', 'اليوم'], ['week', '7 أيام'], ['month', 'هذا الشهر'], ['lastMonth', 'الشهر الماضي'], ['year', 'هذه السنة'], ['lastYear', 'السنة الماضية'], ['custom', 'مخصص']];
+// أقسام تظهر حتى بلا مبيعات (مصاريف شهر بلا بيع خسارة يجب أن تُرى)
+const ALWAYS = new Set(['الوضع الآن', 'الأرباح والخسائر', 'المصاريف حسب البند', 'شهرًا بشهر']);
 const FONT = '"Noto Naskh Arabic","Noto Sans Arabic",system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif';
 
 export async function loadData(range) {
   const db = app.db;
   const invoices = await db.invoices.where('created_at').between(range.from, range.to, true, false).toArray();
   const ids = new Set(invoices.map((i) => i.id));
-  const [lines, payments, products, categories, methods] = await Promise.all([
+  const [lines, payments, products, categories, methods, expenses, movements] = await Promise.all([
     db.invoice_lines.toArray().then((ls) => ls.filter((l) => ids.has(l.invoice_id))),
     db.payments.where('created_at').between(range.from, range.to, true, false).toArray(),
     db.products.toArray(), db.categories.toArray(), db.payment_methods.toArray(),
+    db.expenses.where('spent_at').between(range.from, range.to, true, false).toArray(),
+    db.movements.where('created_at').between(range.from, range.to, true, false).toArray(),
   ]);
-  return { invoices, lines, payments, products, categories, methods, from: range.from, to: range.to };
+  return { invoices, lines, payments, products, categories, methods, expenses, movements, from: range.from, to: range.to };
 }
 
 async function snapshot() {
@@ -91,7 +95,7 @@ export function renderReports(el) {
   const today = new Date().toLocaleDateString('en-CA');
   const fromIn = input({ type: 'date', dir: 'ltr', value: today });
   const toIn = input({ type: 'date', dir: 'ltr', value: today });
-  const chips = h('div', { class: 'chips' });
+  const chips = h('div', { class: 'chips chips-scroll' });
   const customRow = h('div', { class: 'grid-2', hidden: true }, h('label', { class: 'field' }, h('span', { class: 'field-label' }, 'من'), fromIn), h('label', { class: 'field' }, h('span', { class: 'field-label' }, 'إلى'), toIn));
   const body = h('div');
   let current = null;
@@ -112,7 +116,12 @@ export function renderReports(el) {
     const st = app.shop?.settings?.staff;
     const sections = reportSections(r, snap, { currency: cur, showProfit, staffName: st && st.members?.length ? (id) => staffName(st, id) : null });
     current = { r, sections, label: rg.label };
-    const maxDay = Math.max(1, ...r.byDay.map((d) => d.sales));
+    // مدة طويلة (سنة): أعمدة الشهور بدل مئات الأيام
+    const monthly = r.byDay.length > 62;
+    const barsData = monthly ? r.byMonth.map((x) => ({ key: x.month, sales: x.sales, label: String(Number(x.month.slice(5))) })) : r.byDay.map((d) => ({ key: d.day, sales: d.sales, label: d.day.slice(8) }));
+    const maxDay = Math.max(1, ...barsData.map((d) => d.sales));
+    const loss = r.netProfit < 0;
+    const any = r.invoiceCount || r.returnCount || r.expensesTotal || r.damageTotal;
     const table = (s) => h('div', { class: 'section' }, h('h2', { class: 'section-title' }, s.title),
       h('div', { class: 'list rep-table' },
         s.head.length > 2 ? h('div', { class: 'row rep-row rep-head' }, h('span', { class: 'row-main' }, s.head[0]), ...s.head.slice(1).map((c) => h('span', { class: 'rep-cell' }, c))) : null,
@@ -124,20 +133,27 @@ export function renderReports(el) {
         h('div', { class: 'hero-label' }, `صافي المبيعات — ${rg.label}`),
         h('div', { class: 'hero-value' }, money(r.net)),
         h('div', { class: 'hero-row' },
-          showProfit ? h('div', null, h('span', { class: 'hero-mini-label' }, 'الربح'), money(r.profit, undefined, r.profit < 0 ? 'neg' : '')) : null,
+          showProfit ? h('div', null, h('span', { class: 'hero-mini-label' }, 'ربح البضاعة'), money(r.profit, undefined, r.profit < 0 ? 'neg' : '')) : null,
           h('div', null, h('span', { class: 'hero-mini-label' }, 'الفواتير'), num(String(r.invoiceCount))),
           h('div', null, h('span', { class: 'hero-mini-label' }, 'متوسط الفاتورة'), money(r.avgInvoice)))),
+      // صافي الربح أو الخسارة: ربح البضاعة − المصاريف − التالف («شو ربحت وشو خسرت»)
+      showProfit ? h('button', { class: `balance-card pnl-card ${loss ? 'owed' : 'clear'}`, type: 'button', onclick: () => navigate('/expenses') },
+        h('div', { class: 'hero-label' }, `${loss ? 'صافي الخسارة' : 'صافي الربح'} — ${rg.label}`),
+        h('div', { class: 'hero-value' }, money(Math.abs(r.netProfit))),
+        h('div', { class: 'hero-mini-label' }, 'ربح البضاعة ', num(formatMoney(r.profit, cur)), ' − المصاريف ', num(formatMoney(r.expensesTotal, cur)),
+          r.damageTotal ? [' − تالف ', num(formatMoney(r.damageTotal, cur))] : null),
+        r.expensesTotal ? null : h('div', { class: 'hero-mini-label' }, 'لم تسجّل مصاريف في هذه المدة — اضغط لتسجيل الكهرباء والإيجار والرواتب')) : null,
       h('button', { class: 'beta-banner daily-banner', type: 'button', onclick: () => navigate('/reports/daily') },
         icon('chart', 26), h('span', { class: 'row-main' }, h('strong', null, 'تقرير اليوم بالرسوم البيانية'), h('span', null, 'ملف PDF ملوّن: مقارنة بأمس والأسبوع الماضي، الساعات، الأكثر مبيعًا')), icon('chevron', 20)),
       h('div', { class: 'product-actions' },
         button('PDF', { kind: 'outline', icon: 'receipt', onclick: () => exportFile('pdf') }),
         button('Excel', { kind: 'outline', icon: 'clipboard', onclick: () => exportFile('xlsx') })),
-      r.byDay.length > 1 ? h('div', { class: 'section' }, h('h2', { class: 'section-title' }, 'المبيعات يومًا بيوم'),
-        h('div', { class: 'card bars' }, ...r.byDay.map((d) => h('div', { class: 'bar-col', title: formatMoney(d.sales, cur) },
+      barsData.length > 1 ? h('div', { class: 'section' }, h('h2', { class: 'section-title' }, monthly ? 'المبيعات شهرًا بشهر' : 'المبيعات يومًا بيوم'),
+        h('div', { class: 'card bars' }, ...barsData.map((d) => h('div', { class: 'bar-col', title: formatMoney(d.sales, cur) },
           h('div', { class: 'bar', style: { height: `${Math.max(3, Math.round((Math.max(0, d.sales) / maxDay) * 100))}%` } }),
-          h('span', { class: 'bar-label num' }, d.day.slice(8)))))) : null,
+          h('span', { class: 'bar-label num' }, d.label))))) : null,
       r.invoiceCount || r.returnCount ? null : emptyState('chart', 'لا مبيعات في هذه المدة', 'اختر مدة أخرى من الأعلى.'),
-      ...sections.filter((s) => s.title !== 'حسب اليوم' && (r.invoiceCount || s.title === 'الوضع الآن')).map(table),
+      ...sections.filter((s) => s.title !== 'حسب اليوم' && (r.invoiceCount || (ALWAYS.has(s.title) && (any || s.title === 'الوضع الآن')))).map(table),
     );
   }
 

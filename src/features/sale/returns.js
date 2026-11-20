@@ -11,6 +11,7 @@ import { netLineTotals } from '../../domain/cart.js';
 import { divRound } from '../../domain/money.js';
 import { app } from '../../core/app.js';
 import { showReceipt } from './receipt.js';
+import { navigate } from '../../core/router.js';
 
 export function renderReturns(el) {
   const q = input({ type: 'search', placeholder: 'رقم الفاتورة، مثل 42', inputmode: 'search', autocomplete: 'off' });
@@ -73,27 +74,38 @@ export function renderReturns(el) {
     }
     paintRows();
     paintRefund();
+    let busy = false;
+    // exchange: بعد تسجيل المرتجع تُفتح شاشة البيع وللزبون رصيده، فيدفع الفرق فقط (أو يُرد له الباقي)
+    async function save(close, exchange) {
+      if (busy) return;
+      const chosen = rows.filter((r) => picks.get(r.line.id) > 0).map((r) => ({ line: r.line, qty: picks.get(r.line.id) }));
+      if (!chosen.length) { feedback.error(); toast('اختر صنفًا واحدًا على الأقل', { kind: 'error' }); return; }
+      busy = true;
+      try {
+        const r = await app.sales.processReturn(invoice.id, chosen, refund);
+        feedback.ok();
+        close();
+        if (exchange) {
+          toast(`سُجّل المرتجع ${r.invoice.number} — اختر البضاعة البديلة`, { kind: 'ok', ms: 4000 });
+          const cust = invoice.customer_id ? `&customer=${invoice.customer_id}` : '';
+          // خُصم من دينه: لا رصيد نقدي، يبدأ بيعًا جديدًا للزبون نفسه
+          navigate(refund === 'cash' ? `/sale?exchange=${r.total}&ref=${encodeURIComponent(r.invoice.number)}${cust}` : `/sale?${cust.slice(1)}`);
+          return;
+        }
+        toast(`سُجّل المرتجع ${r.invoice.number}${refund === 'cash' ? ' — رُد للزبون نقدًا' : ' — خُصم من دينه'}`, { kind: 'ok', ms: 4000 });
+        load();
+        showReceipt(r.invoice.id, { doneLabel: 'تم', doneIcon: 'check' });
+      } catch (e) { busy = false; feedback.error(); toast(e.message, { kind: 'error' }); }
+    }
     openSheet((close) => h('div', null,
       h('p', { class: 'muted' }, 'اختر ما يرجعه الزبون:'),
       body, refundChips, totalEl,
-      button('سجّل المرتجع', {
-        block: true, size: 'lg', icon: 'check',
-        onclick: async () => {
-          const chosen = rows.filter((r) => picks.get(r.line.id) > 0).map((r) => ({ line: r.line, qty: picks.get(r.line.id) }));
-          if (!chosen.length) { feedback.error(); toast('اختر صنفًا واحدًا على الأقل', { kind: 'error' }); return; }
-          try {
-            const r = await app.sales.processReturn(invoice.id, chosen, refund);
-            feedback.ok();
-            close();
-            toast(`سُجّل المرتجع ${r.invoice.number}${refund === 'cash' ? ' — رُد للزبون نقدًا' : ' — خُصم من دينه'}`, { kind: 'ok', ms: 4000 });
-            load();
-            showReceipt(r.invoice.id, { doneLabel: 'تم', doneIcon: 'check' });
-          } catch (e) { feedback.error(); toast(e.message, { kind: 'error' }); }
-        },
-      }),
+      button('سجّل المرتجع', { block: true, size: 'lg', icon: 'check', onclick: () => save(close, false) }),
+      button('بدّل ببضاعة أخرى', { kind: 'outline', block: true, icon: 'swap', onclick: () => save(close, true) }),
+      h('p', { class: 'muted small' }, 'التبديل: يُسجَّل المرتجع ثم تفتح شاشة البيع، ويدفع الزبون فرق السعر فقط.'),
     ), { title: `مرتجع من ${invoice.number}` });
   }
 
-  el.append(header('مرتجع', { back: true }), h('div', { class: 'page' }, h('div', { class: 'search-row' }, icon('search', 20), q), list));
+  el.append(header('مرتجع وتبديل', { back: true }), h('div', { class: 'page' }, h('div', { class: 'search-row' }, icon('search', 20), q), list));
   load();
 }

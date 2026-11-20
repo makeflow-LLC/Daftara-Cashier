@@ -11,6 +11,7 @@ import { searchProducts } from '../../domain/product.js';
 import { formatQty, parseQty, unit as unitOf, QTY_SCALE } from '../../domain/units.js';
 import { whatsappLink } from '../../domain/ledger.js';
 import { stockValue } from '../../domain/stock.js';
+import { formatMoney } from '../../domain/currency.js';
 import { app } from '../../core/app.js';
 import { bus } from '../../core/bus.js';
 import { navigate } from '../../core/router.js';
@@ -19,6 +20,7 @@ import { openLink } from '../customers/customers.js';
 import { pickSupplier } from './suppliers.js';
 
 const TABS = [
+  { key: 'all', label: 'كل الأصناف', hint: '' },
   { key: 'out', label: 'نفد', hint: 'نفدت من المخزون' },
   { key: 'low', label: 'منخفض', hint: 'أوشكت على النفاد' },
   { key: 'expiring', label: 'ينتهي قريبًا', hint: 'تنتهي صلاحيتها خلال 30 يومًا', feature: 'expiry' },
@@ -73,8 +75,14 @@ export function openReorder(list) {
 }
 
 export function renderInventory(el, params) {
-  let alerts = { out: [], low: [], expiring: [], dead: [] };
-  let tab = 'out';
+  let alerts = { all: [], out: [], low: [], expiring: [], dead: [] };
+  // «كل الأصناف» أولًا: من أضاف بضاعة يجدها هنا بكميتها (لا في التنبيهات فقط). ?tab=alerts يفتح أول تنبيه فيه أصناف
+  let tab = params.tab === 'alerts' || params.reorder ? 'out' : 'all';
+  let query = '';
+  let whQty = new Map();
+  let whNames = new Map();
+  const search = input({ type: 'search', placeholder: 'ابحث في المخزون بالاسم أو الباركود', autocomplete: 'off', oninput: (e) => { query = e.target.value; paint(); } });
+  const searchRow = h('div', { class: 'search-row' }, icon('search', 20), search);
   const actions = h('div', { class: 'quick inv-actions' });
   const valueEl = h('div');
   const chips = h('div', { class: 'chips chips-scroll' });
@@ -82,16 +90,19 @@ export function renderInventory(el, params) {
   const tabs = TABS.filter((t) => !t.feature || app.feature(t.feature));
 
   const helper = h('div');
-  el.append(header('المخزون', { back: true }), h('div', { class: 'page' }, actions, helper, valueEl, h('h2', { class: 'section-title' }, 'التنبيهات'), chips, body));
+  el.append(header('المخزون', { back: true }), h('div', { class: 'page' }, actions, helper, valueEl, h('h2', { class: 'section-title' }, 'البضاعة والتنبيهات'), chips, searchRow, body));
   const act = (ic, label, fn, tone = '') => h('button', { class: `quick-btn ${tone}`, type: 'button', onclick: fn }, icon(ic, 26), h('span', null, label));
   fill(actions,
     act('truck', 'شراء بضاعة', () => navigate('/inventory/purchase'), 'quick-brand'),
     act('users', 'ديون التجار', () => navigate('/suppliers')),
     app.feature('stockCount') ? act('clipboard', 'جرد', () => navigate('/inventory/count')) : null,
-    act('trash', 'تالف', damage));
+    act('trash', 'تالف', damage),
+    act('warehouse', 'المخازن والنقل', () => navigate('/inventory/warehouses')));
 
   function paint() {
     fill(chips, ...tabs.map((t) => h('button', { class: `chip ${tab === t.key ? 'on' : ''}`, type: 'button', onclick: () => { tab = t.key; paint(); } }, t.label, ' ', num(String(alerts[t.key].length)))));
+    searchRow.hidden = tab !== 'all';
+    if (tab === 'all') { paintAll(); return; }
     const items = alerts[tab];
     const t = tabs.find((x) => x.key === tab);
     const canOrder = (tab === 'out' || tab === 'low') && items.length;
@@ -104,6 +115,22 @@ export function renderInventory(el, params) {
           tab === 'expiring' ? h('span', { class: 'row-sub' }, 'ينتهي ', num(p.expiry_date)) : null),
         h('span', { class: `stock-badge ${tab === 'out' ? 'stock-out' : tab === 'low' ? 'stock-low' : ''}` }, h('span', { class: 'num' }, formatQty(p.qty)), h('small', null, unitOf(p.unit).short)))))
         : emptyState('check', 'لا شيء هنا', 'كل شيء على ما يرام في هذا القسم.'));
+  }
+
+  // كل الأصناف بكمياتها في المحل (وما في المخازن الخارجية إن وُجد)، مع بحث
+  function paintAll() {
+    const items = searchProducts(alerts.all, query, 150);
+    fill(body, items.length ? h('div', { class: 'list section' }, ...items.map((p) => {
+      const inWh = whQty.get(p.id) || [];
+      const lvl = p.qty <= 0 ? 'out' : '';
+      return h('button', { class: 'row row-tap', type: 'button', onclick: () => navigate(`/products/edit?id=${p.id}`) },
+        productThumb(p, 40),
+        h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, p.name),
+          inWh.length ? h('span', { class: 'row-sub' }, inWh.map((x) => `${whNames.get(x.branch_id) || 'مخزن'}: ${formatQty(x.qty)}`).join(' · ')) : null),
+        h('span', { class: `stock-badge ${lvl ? `stock-${lvl}` : ''}` }, h('span', { class: 'num' }, formatQty(p.qty)), h('small', null, unitOf(p.unit).short)));
+    }), alerts.all.length > items.length && !query.trim() ? h('p', { class: 'muted small' }, `تظهر أول ${items.length} — ابحث لتجد الباقي.`) : null)
+      : alerts.all.length ? emptyState('search', 'لا نتائج', `لا صنف يطابق «${query}»`)
+        : emptyState('box', 'لا أصناف بعد', 'أضف أصنافك من «الأصناف»، أو استلم بضاعة من «شراء بضاعة».'));
   }
 
   // طلبية: الكمية من سرعة البيع إن عُرفت (المساعد)، وإلا ضعف حدّ التنبيه
@@ -132,13 +159,21 @@ export function renderInventory(el, params) {
 
   async function load() {
     const products = await app.inventory.productsWithStock();
-    alerts = await app.inventory.alerts({ expiry: app.feature('expiry') });
-    if (!alerts[tab].length) tab = (tabs.find((t) => alerts[t.key].length) || tabs[0]).key;
+    alerts = { ...(await app.inventory.alerts({ expiry: app.feature('expiry') })), all: [...products].sort((a, b) => a.name.localeCompare(b.name, 'ar')) };
+    const whs = await app.inventory.warehouses();
+    whNames = new Map(whs.map((w) => [w.id, w.name]));
+    whQty = whs.length ? await app.inventory.warehouseQty() : new Map();
+    if (tab !== 'all' && !alerts[tab].length) tab = (tabs.find((t) => t.key !== 'all' && alerts[t.key].length) || tabs[0]).key;
     const cost = products.reduce((a, p) => a + stockValue(p.qty, p.avg_cost), 0);
     const sell = products.reduce((a, p) => a + stockValue(p.qty, p.sell_price), 0);
     fill(valueEl, app.can('see_cost') ? h('div', { class: 'stats inv-value' },
       h('div', { class: 'stat' }, h('div', { class: 'stat-label' }, 'قيمة المخزون بالتكلفة'), h('div', { class: 'stat-value' }, money(cost))),
-      h('div', { class: 'stat' }, h('div', { class: 'stat-label' }, 'قيمته بسعر البيع'), h('div', { class: 'stat-value' }, money(sell)))) : null);
+      h('div', { class: 'stat' }, h('div', { class: 'stat-label' }, 'قيمته بسعر البيع'), h('div', { class: 'stat-value' }, money(sell)))) : null,
+      whs.length ? h('button', { class: 'beta-banner helper-banner', type: 'button', onclick: () => navigate('/inventory/warehouses') },
+        icon('warehouse', 26),
+        h('span', { class: 'row-main' }, h('strong', null, whs.length === 1 ? whs[0].name : `${whs.length} مخازن`),
+          h('span', null, app.can('see_cost') ? ['بضاعة بقيمة ', num(formatMoney(whs.reduce((a, w) => a + w.value, 0), app.shop?.base_currency || 'ILS')), ' — انقل منها إلى المحل'] : 'انقل منها إلى المحل')),
+        icon('chevron', 20)) : null);
     const as = await app.inventory.assistant();
     fill(helper, as.soon.length || as.dead.length ? h('button', { class: 'beta-banner helper-banner', type: 'button', onclick: () => navigate('/inventory/assistant') },
       icon('bulb', 26),
@@ -149,5 +184,5 @@ export function renderInventory(el, params) {
     if (params.reorder && (alerts.out.length || alerts.low.length)) { params.reorder = null; reorder([...alerts.out, ...alerts.low]); }
   }
   load();
-  return bus.on('data', (e) => { if (e.tables.includes('movements') || e.tables.includes('products')) load(); });
+  return bus.on('data', (e) => { if (e.tables.includes('movements') || e.tables.includes('products') || e.tables.includes('branches')) load(); });
 }

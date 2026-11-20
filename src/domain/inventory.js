@@ -26,7 +26,7 @@ export function purchaseTotal(lines) {
  * يحوّل الشراء إلى سجلات: فاتورة شراء، سطورها، حركات دخول بتكلفة الوحدة الأساسية (تدخل في متوسط التكلفة)،
  * قيد على حساب المورّد، ودفعة خارجة إن دُفع نقدًا. paid: 'cash' | 'credit'.
  */
-export function buildPurchase({ lines, supplierId = null, paid = 'cash', note = null, attachmentPath = null }, env) {
+export function buildPurchase({ lines, supplierId = null, paid = 'cash', note = null, attachmentPath = null, branchId = null }, env) {
   if (!lines.length) throw new Error('أضف صنفًا واحدًا على الأقل');
   if (paid === 'credit' && !supplierId) throw new Error('اختر التاجر للشراء على الحساب');
   for (const l of lines) {
@@ -37,7 +37,7 @@ export function buildPurchase({ lines, supplierId = null, paid = 'cash', note = 
   const invoiceId = env.newId();
   const invoice = {
     id: invoiceId, number: formatInvoiceNumber(env.prefix, 'purchase', env.seq), seq: env.seq, type: 'purchase', status: 'final',
-    supplier_id: supplierId, currency: env.currency || 'ILS', subtotal: total, discount: 0, total, cost_total: total, fee_total: 0,
+    supplier_id: supplierId, branch_id: branchId || null, currency: env.currency || 'ILS', subtotal: total, discount: 0, total, cost_total: total, fee_total: 0,
     paid: paid === 'cash' ? total : 0, note, attachment_path: attachmentPath, device_id: env.deviceId ?? null, created_at: env.now,
   };
   const invoiceLines = lines.map((l, position) => ({
@@ -45,7 +45,7 @@ export function buildPurchase({ lines, supplierId = null, paid = 'cash', note = 
     unit_factor: l.factor, qty: l.qty, unit_price: l.unit_cost, discount: 0, total: lineAmount(l.unit_cost, l.qty), unit_cost: l.unit_cost, created_at: env.now,
   }));
   const movements = lines.map((l) => ({
-    id: env.newId(), product_id: l.product_id, type: 'purchase', qty: signedQty('purchase', packToBase(l.qty, l.factor)),
+    id: env.newId(), product_id: l.product_id, branch_id: branchId || null, type: 'purchase', qty: signedQty('purchase', packToBase(l.qty, l.factor)),
     unit_cost: divRound(l.unit_cost * QTY_SCALE, l.factor), ref_type: 'invoice', ref_id: invoiceId, created_at: env.now,
   }));
   const supplierEntries = [];
@@ -57,6 +57,44 @@ export function buildPurchase({ lines, supplierId = null, paid = 'cash', note = 
     if (supplierId) supplierEntries.push({ id: env.newId(), supplier_id: supplierId, type: 'payment', amount: -total, invoice_id: invoiceId, payment_id: pid, created_at: env.now });
   }
   return { invoice, lines: invoiceLines, movements, supplierEntries, payments, total };
+}
+
+// ---------- النقل بين المخزن والمحل ----------
+/**
+ * نقل بضاعة من مكان إلى مكان: null = المحل (ما يُباع منه)، أو معرّف مخزن خارجي.
+ * lines: [{ product_id, name, qty (بالوحدة الأساسية وبالألف), unit_cost, available }]
+ * لكل صنف حركتان: خروج من المصدر ودخول إلى الوجهة بنفس التكلفة، يجمعهما ref_id واحد.
+ */
+export function buildTransfer({ lines, from = null, to = null, note = null }, env) {
+  if ((from || null) === (to || null)) throw new Error('اختر مكانين مختلفين للنقل');
+  if (!lines || !lines.length) throw new Error('أضف صنفًا واحدًا على الأقل');
+  const transferId = env.newId();
+  const movements = [];
+  for (const l of lines) {
+    if (!Number.isSafeInteger(l.qty) || l.qty <= 0) throw new Error(`كمية «${l.name}» غير صحيحة`);
+    if (Number.isSafeInteger(l.available) && l.qty > l.available) throw new Error(`«${l.name}»: الكمية أكبر من الموجود`);
+    const cost = Number.isSafeInteger(l.unit_cost) && l.unit_cost > 0 ? l.unit_cost : null;
+    const base = { product_id: l.product_id, unit_cost: cost, ref_type: 'transfer', ref_id: transferId, note: note || null, created_at: env.now };
+    movements.push({ ...base, id: env.newId(), branch_id: from || null, type: 'transfer_out', qty: signedQty('transfer_out', l.qty) });
+    movements.push({ ...base, id: env.newId(), branch_id: to || null, type: 'transfer_in', qty: signedQty('transfer_in', l.qty) });
+  }
+  return { transferId, movements };
+}
+
+/**
+ * سجل النقل من الحركات: كل عملية نقل (ref_id) مرة واحدة، الأحدث أولًا:
+ * [{ id, at, from, to, items: [{ product_id, qty }], note }]
+ */
+export function transferHistory(movements) {
+  const by = new Map();
+  for (const m of movements) {
+    if (m.ref_type !== 'transfer' || !m.ref_id) continue;
+    const t = by.get(m.ref_id) || { id: m.ref_id, at: m.created_at, from: null, to: null, items: [], note: m.note || null };
+    if (m.type === 'transfer_out') t.from = m.branch_id || null;
+    if (m.type === 'transfer_in') { t.to = m.branch_id || null; t.items.push({ product_id: m.product_id, qty: m.qty }); }
+    by.set(m.ref_id, t);
+  }
+  return [...by.values()].sort((a, b) => (a.at < b.at ? 1 : -1));
 }
 
 // ---------- التنبيهات ----------

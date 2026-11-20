@@ -49,6 +49,8 @@ async function start() {
   app.bus.on('toast', (a) => toast(...a)); // رسائل من الخدمات (مثل SMS) تظهر للمستخدم
   if (app.ctx.shopId) app.reminders.start(); // التذكير الدوري بالديون
   if (app.ctx.shopId) app.dues.start(); // مواعيد السداد للتجار: تذكير مرة في اليوم
+  if (app.ctx.shopId) app.payroll.start(); // رواتب الموظفين: تذكير بما حان موعده
+  app.chat.start(); // رسالة أو تعميم جديد من جهاز آخر
   watchDailyReport(); // «📊 تقرير اليوم جاهز» في الساعة التي يختارها صاحب المحل
   updates.start(); // «تحديث جديد متوفر» حين يُنشر إصدار أحدث
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTopSheet(); });

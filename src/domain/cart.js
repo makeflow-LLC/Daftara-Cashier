@@ -2,7 +2,7 @@
 // كل المبالغ أعداد صحيحة بأصغر وحدة (أغورة)، والكميات بالألف. لا DOM ولا قاعدة بيانات.
 import { divRound, percentOf, allocate, sum, assertInt } from './money.js';
 import { lineAmount, packToBase, QTY_SCALE } from './units.js';
-import { signedQty } from './stock.js';
+import { signedQty, knownCost } from './stock.js';
 import { formatInvoiceNumber } from './numbering.js';
 
 // ---------- السطور ----------
@@ -13,7 +13,8 @@ import { formatInvoiceNumber } from './numbering.js';
  */
 export function makeLine(product, { pack = null, qty = QTY_SCALE, avgCost = null, key = null } = {}) {
   const factor = pack ? pack.factor : QTY_SCALE;
-  const baseCost = Number.isSafeInteger(avgCost) ? avgCost : product.cost_price || 0;
+  // متوسط التكلفة صفر = غير معروف (صنف بِيع قبل تسجيل بضاعته): نأخذ تكلفة بطاقة الصنف
+  const baseCost = knownCost(avgCost, product.cost_price);
   const unitPrice = pack
     ? (Number.isSafeInteger(pack.sell_price) ? pack.sell_price : lineAmount(product.sell_price, factor))
     : product.sell_price;

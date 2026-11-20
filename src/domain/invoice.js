@@ -45,15 +45,37 @@ export function receiptModel({ invoice, lines, payments = [], methodNames = new 
   };
 }
 
+/**
+ * سند قبض: ورقة للزبون حين يدفع من دينه (بنفس شكل الفاتورة: شاشة، صورة، نص، طباعة).
+ * data: { payment, customer, shop, methodName, balanceAfter } — balanceAfter رصيد الزبون بعد الدفعة (موجب = عليه).
+ */
+export function voucherModel({ payment, customer = null, shop = {}, methodName = null, balanceAfter = null }) {
+  const cur = payment.currency || 'ILS';
+  const m = (v) => formatMoney(v, cur);
+  const totals = [{ label: 'المبلغ المستلم', value: m(payment.amount), strong: true }];
+  totals.push({ label: 'طريقة الدفع', value: methodName || (payment.method_kind === 'transfer' ? 'تحويل' : 'نقدًا') });
+  if (Number.isSafeInteger(balanceAfter)) {
+    totals.push({ label: 'الرصيد قبل الدفعة', value: m(balanceAfter + payment.amount) });
+    totals.push({ label: balanceAfter > 0 ? 'الباقي عليه' : balanceAfter < 0 ? 'له عندنا' : 'الباقي', value: m(Math.abs(balanceAfter)) });
+  }
+  return {
+    shopName: shop.name || '', shopPhone: shop.phone || '', shopAddress: shop.address || '',
+    title: 'سند قبض', number: payment.number || '', date: dateTimeText(payment.created_at),
+    party: customer ? `استلمنا من: ${customer.name}` : '',
+    rows: [], totals,
+    foot: Number.isSafeInteger(balanceAfter) && balanceAfter <= 0 ? 'سُدّد الحساب كاملًا — شكرًا لكم' : 'شكرًا لكم',
+  };
+}
+
 /** نص الفاتورة لرسالة واتساب (الأخف على الإنترنت الضعيف). */
 export function invoiceText(model) {
   const out = [`*${model.shopName}*`];
   if (model.shopPhone) out.push(model.shopPhone);
-  out.push(`${model.title} ${model.number}`, model.date);
+  out.push(`${model.title} ${model.number}`.trim(), model.date);
   if (model.party) out.push(model.party);
   out.push('——————');
   for (const r of model.rows) out.push(`${r.name}\n   ${r.calc} = ${r.total}`);
-  out.push('——————');
+  if (model.rows.length) out.push('——————');
   for (const t of model.totals) out.push(t.strong ? `*${t.label}: ${t.value}*` : `${t.label}: ${t.value}`);
   if (model.foot) out.push(model.foot);
   return out.join('\n');

@@ -1132,3 +1132,49 @@ body{font-weight:500}
 
 /* الرئيسية بلا بطاقة «عليك للتجار» (موظف بلا صلاحية الشراء): «لك عند الزبائن» تملأ السطر */
 .home-page .stats .stat:nth-child(2):last-child{grid-column:1 / -1}
+
+/* ===== المصاريف والرواتب ===== */
+.month-nav{display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);margin:var(--space-2) 0 var(--space-3)}
+.month-nav strong{font-size:17px}
+.month-nav .icon-btn{background:#fff;border:2px solid var(--frame);border-radius:var(--radius-md)}
+.month-nav .icon-btn:disabled{opacity:.35}
+.expense-card{background:linear-gradient(135deg,#f5a11a 0%,#c96a00 100%);box-shadow:0 10px 24px rgba(201,106,0,.25)}
+.row-end.strong{color:var(--color-text);font-weight:700}
+.pill{flex:none;display:inline-block;margin-top:4px;padding:3px 10px;border-radius:var(--radius-pill);font-size:13px;font-weight:700;background:var(--neutral-200);color:var(--color-muted);text-align:center}
+.pill-ok{background:var(--brand-100);color:var(--brand-700)}
+.pill-bad{background:var(--danger-100);color:var(--danger-700)}
+.pill-warn{background:var(--warn-100);color:var(--warn-800)}
+.pnl-card{display:block;width:100%;text-align:right;margin-top:var(--space-3)}
+.pnl-card .hero-mini-label{display:block}
+
+/* ===== المحادثة والتعميمات ===== */
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:4px;margin:var(--space-2) 0 var(--space-3);border-radius:var(--radius-lg);background:var(--neutral-200)}
+.seg-btn{display:flex;align-items:center;justify-content:center;gap:8px;min-height:46px;border-radius:var(--radius-md);font-size:16px;font-weight:700;color:var(--color-muted)}
+.seg-btn.on{background:#fff;color:var(--brand-700);box-shadow:0 1px 4px rgba(45,43,43,.15)}
+.badge{flex:none;display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 7px;border-radius:12px;background:var(--danger);color:#fff;font-size:13px;font-weight:700;font-family:var(--font-num)}
+.hub-tile{position:relative}
+.hub-tile .badge{position:absolute;top:8px;left:8px}
+.announce{border-right:5px solid var(--neutral-400)}
+.announce.unread{border-right-color:var(--danger);background:var(--danger-100)}
+.announce-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;color:var(--brand-700)}
+.announce-time{margin-right:auto}
+.announce-body{white-space:pre-wrap;overflow-wrap:anywhere;font-size:16.5px;line-height:1.7;margin-bottom:6px}
+.chat-area{min-height:130px;padding-top:12px;resize:vertical;line-height:1.6;margin-bottom:var(--space-3)}
+.chat-page{padding-bottom:var(--space-2);min-height:calc(100vh - 150px)}
+.chat-list{display:flex;flex-direction:column;gap:6px;padding-top:var(--space-2)}
+.chat-day{align-self:center;margin:8px 0 2px;padding:2px 12px;border-radius:var(--radius-pill);background:var(--neutral-200);color:var(--color-muted);font-size:12.5px;font-weight:700}
+.bubble{align-self:flex-end;max-width:82%;padding:8px 12px;border-radius:16px 16px 16px 4px;background:#fff;border:1.5px solid var(--frame)}
+.bubble.mine{align-self:flex-start;border-radius:16px 16px 4px 16px;background:var(--brand-100);border-color:var(--brand-200)}
+.bubble-from{font-size:12.5px;font-weight:700;color:var(--blue-700);margin-bottom:2px}
+.bubble-body{white-space:pre-wrap;overflow-wrap:anywhere;font-size:16px;line-height:1.6}
+.bubble-time{font-size:11.5px;color:var(--color-muted);text-align:left;margin-top:2px}
+.chat-bar{position:sticky;bottom:0;display:flex;align-items:flex-end;gap:var(--space-2);padding:var(--space-2) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom,0px));background:var(--color-bg);border-top:1.5px solid var(--color-hairline)}
+.chat-input{flex:1;min-width:0;min-height:52px;max-height:130px;padding-top:12px;resize:none;line-height:1.5}
+.chat-send{flex:none;width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--grad-brand);color:#fff;box-shadow:var(--shadow-brand)}
+.chat-send:active{filter:brightness(.92)}
+.chat-send .ic{transform:scaleX(-1)}
+.chat-banner{margin:0 0 var(--space-3);background:var(--danger-100);border-color:#f4a9c6;color:var(--danger-700)}
+
+/* ===== التبديل ===== */
+.exchange-chip{background:var(--warn-100);color:var(--warn-800)}
+.exchange-chip .num{font-weight:700}

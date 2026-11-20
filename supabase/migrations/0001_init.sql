@@ -280,6 +280,7 @@ create table if not exists public.cashier_payments (
   amount_currency bigint,                          -- المبلغ بالعملة المدفوعة
   rate bigint,                                     -- سعر الصرف × 1,000,000
   note text, device_id uuid, created_by uuid,
+  number text,                                     -- رقم سند القبض لدفعة زبون من دينه (A-V0001)
   created_at timestamptz not null default now(), server_seq bigint, server_at timestamptz
 );
 create index if not exists cashier_payments_invoice on public.cashier_payments (shop_id, invoice_id);
@@ -324,6 +325,8 @@ create table if not exists public.cashier_expenses (
   id uuid primary key, shop_id uuid not null references public.cashier_shops(id) on delete cascade,
   branch_id uuid, category text, amount bigint not null, method_id uuid, cash_session_id uuid,
   note text, attachment_path text, spent_at timestamptz not null default now(),
+  employee_id uuid, period text,                   -- للرواتب: الموظف وشهر الراتب (YYYY-MM)
+  created_by uuid,
   created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
   deleted boolean not null default false, server_seq bigint, server_at timestamptz
 );

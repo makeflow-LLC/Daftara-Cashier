@@ -29,6 +29,9 @@ export async function renderPurchase(el, params) {
   let products = [];
   let scanner = null;
   let photo = null;
+  // أين تدخل البضاعة: المحل (null) أو مخزن خارجي — يظهر الاختيار فقط إن كان للمحل مخازن
+  const warehouses = await app.inventory.warehouses();
+  let dest = params.to && warehouses.some((w) => w.id === params.to) ? params.to : null;
 
   const scanBox = h('div', { class: 'scan-box sale-cam' }, h('span', { class: 'scan-laser' }));
   const camStatus = h('div', { class: 'cam-status' });
@@ -178,6 +181,10 @@ export async function renderPurchase(el, params) {
     const paintDue = () => fill(dueChips, h('span', { class: 'muted small' }, 'موعد الدفع:'),
       ...[[null, 'بلا'], [7, 'أسبوع'], [14, 'أسبوعين'], [30, 'شهر']].map(([n, l]) => h('button', { class: `chip ${dueDays === n ? 'on' : ''}`, type: 'button', onclick: () => { dueDays = n; paintDue(); } }, l)));
     paintDue();
+    const destChips = h('div', { class: 'chips due-chips' });
+    const paintDest = () => fill(destChips, h('span', { class: 'muted small' }, 'تدخل البضاعة إلى:'),
+      ...[{ id: null, name: 'المحل' }, ...warehouses].map((w) => h('button', { class: `chip ${dest === w.id ? 'on' : ''}`, type: 'button', onclick: () => { dest = w.id; paintDest(); } }, w.name)));
+    if (warehouses.length) paintDest();
     openSheet((close) => {
       async function save(paid) {
         if (busy) return;
@@ -190,7 +197,7 @@ export async function renderPurchase(el, params) {
             attachmentPath = `${app.ctx.shopId}/purchases/${id}.webp`;
             await app.db.files.put({ id, kind: 'purchase', path: attachmentPath, blob: photo.blob, thumb: photo.thumb, state: 'pending' });
           }
-          const r = await app.inventory.savePurchase({ lines: draft.lines, supplierId: draft.supplier ? draft.supplier.id : null, paid, attachmentPath });
+          const r = await app.inventory.savePurchase({ lines: draft.lines, supplierId: draft.supplier ? draft.supplier.id : null, paid, attachmentPath, branchId: dest });
           if (paid === 'credit' && draft.supplier && dueDays) await setSupplierDue(draft.supplier.id, addDays(localDay(), dueDays));
           draft = { lines: [], supplier: null }; photo = null;
           feedback.ok(); close(); paint();
@@ -200,6 +207,7 @@ export async function renderPurchase(el, params) {
       return h('div', null,
         h('div', { class: 'pay-total' }, h('span', null, 'إجمالي الشراء'), money(total, base)),
         draft.supplier ? h('div', { class: 'pay-cust' }, icon('truck', 18), h('span', null, draft.supplier.name)) : null,
+        warehouses.length ? destChips : null,
         h('div', { class: 'pay-methods' },
           h('button', { class: 'pay-method pay-cash', type: 'button', onclick: () => save('cash') }, icon('cash', 26), h('span', null, 'دفعت نقدًا')),
           h('button', { class: 'pay-method pay-credit', type: 'button', onclick: () => save('credit') }, icon('truck', 26), h('span', null, 'على الحساب'))),

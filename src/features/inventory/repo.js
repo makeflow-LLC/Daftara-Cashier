@@ -1,8 +1,8 @@
 // المخزون على الجهاز: الشراء (يحدّث المخزون ومتوسط التكلفة)، التجار (الموردون) وديونهم، الجرد، التالف، والتنبيهات.
 // كل تغيير في الكمية حركة تُضاف — لا رقم يُعدَّل.
-import { buildPurchase, stockAlerts, countSummary, reorderPlan, deadStock, VELOCITY_DAYS } from '../../domain/inventory.js';
+import { buildPurchase, buildTransfer, transferHistory, stockAlerts, countSummary, reorderPlan, deadStock, VELOCITY_DAYS } from '../../domain/inventory.js';
 import { oldestUnpaidAt, ledgerView, effectiveEntries, balanceOf, editableEntry, VOID_PREFIX } from '../../domain/ledger.js';
-import { signedQty } from '../../domain/stock.js';
+import { signedQty, knownCost, stockValue } from '../../domain/stock.js';
 import { normalizeArabic, normalizeBarcode } from '../../domain/product.js';
 import { sum } from '../../domain/money.js';
 import { uuid } from '../../core/ids.js';
@@ -68,8 +68,9 @@ export function createInventoryRepo({ db, store, getContext, clock }) {
         for (const p of r.payments) await w.append('payments', p);
         for (const e of r.supplierEntries) await w.append('supplier_entries', e);
         for (const pid of new Set(r.movements.map((m) => m.product_id))) {
-          const [p, s] = await Promise.all([db.products.get(pid), db.stock.get(pid)]);
-          if (p && s && s.avgCost !== p.cost_price) {
+          // البضاعة دخلت المحل أو مخزنًا خارجيًا: متوسط التكلفة من مكان دخولها
+          const [p, s] = await Promise.all([db.products.get(pid), purchase.branchId ? db.wh_stock.get([purchase.branchId, pid]) : db.stock.get(pid)]);
+          if (p && s && s.avgCost > 0 && s.avgCost !== p.cost_price) {
             await w.append('price_history', { product_id: pid, old_sell: p.sell_price, new_sell: p.sell_price, old_cost: p.cost_price, new_cost: s.avgCost, reason: 'purchase' });
             await w.put('products', { ...p, cost_price: s.avgCost });
           }
@@ -177,7 +178,7 @@ export function createInventoryRepo({ db, store, getContext, clock }) {
     async productsWithStock() {
       const [products, stock] = await Promise.all([db.products.toArray(), db.stock.toArray()]);
       const st = new Map(stock.map((s) => [s.product_id, s]));
-      return products.filter((p) => !p.deleted).map((p) => ({ ...p, qty: st.get(p.id)?.qty ?? 0, avg_cost: st.get(p.id)?.avgCost ?? p.cost_price, last_sale_at: st.get(p.id)?.last_sale_at ?? null }));
+      return products.filter((p) => !p.deleted).map((p) => ({ ...p, qty: st.get(p.id)?.qty ?? 0, avg_cost: knownCost(st.get(p.id)?.avgCost, p.cost_price), last_sale_at: st.get(p.id)?.last_sale_at ?? null }));
     },
     /** المباع من كل صنف منذ تاريخ (بالوحدة الأساسية وبالألف، بعد طرح المرتجع): Map(product_id → qty) */
     async soldSince(fromIso) {
@@ -203,7 +204,84 @@ export function createInventoryRepo({ db, store, getContext, clock }) {
     async damage(productId, qty, note = null) {
       if (!Number.isSafeInteger(qty) || qty <= 0) throw invalid({ qty: 'اكتب الكمية التالفة' });
       const s = await db.stock.get(productId);
-      return store.append('movements', { product_id: productId, type: 'damage', qty: signedQty('damage', qty), unit_cost: s ? s.avgCost : null, note });
+      const p = await db.products.get(productId);
+      return store.append('movements', { product_id: productId, type: 'damage', qty: signedQty('damage', qty), unit_cost: knownCost(s ? s.avgCost : 0, p ? p.cost_price : 0) || null, note });
+    },
+
+    // ---------- المخازن الخارجية ----------
+    // المخزن سجل في branches (غير الرئيسي). حركاته تحمل branch_id، فلا تدخل في مخزون المحل الذي يُباع منه.
+    async warehouses() {
+      const [branches, stock, products] = await Promise.all([db.branches.toArray(), db.wh_stock.toArray(), db.products.toArray()]);
+      const prod = new Map(products.filter((p) => !p.deleted).map((p) => [p.id, p]));
+      return branches.filter((b) => !b.deleted && !b.is_main).map((b) => {
+        const rows = stock.filter((s) => s.branch_id === b.id && s.qty > 0 && prod.has(s.product_id));
+        return { ...b, items: rows.length, value: rows.reduce((a, s) => a + stockValue(s.qty, knownCost(s.avgCost, prod.get(s.product_id).cost_price)), 0) };
+      }).sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+    },
+    async saveWarehouse({ id = null, name }) {
+      const n = String(name || '').trim();
+      if (!n) throw invalid({ name: 'اكتب اسم المخزن' });
+      const same = (await db.branches.toArray()).find((b) => !b.deleted && !b.is_main && b.name === n && b.id !== id);
+      if (same) throw invalid({ name: 'يوجد مخزن بهذا الاسم' });
+      return id ? store.patch('branches', id, { name: n }) : store.put('branches', { name: n, is_main: false });
+    },
+    /** لا يُحذف مخزن فيه بضاعة: انقلها أو صفّرها أولًا. */
+    async removeWarehouse(id) {
+      if ((await db.wh_stock.where('branch_id').equals(id).toArray()).some((s) => s.qty > 0)) throw invalid({ name: 'في المخزن بضاعة — انقلها إلى المحل أولًا' });
+      return store.remove('branches', id);
+    },
+    /** أصناف مكان مع كمياتها: branchId = مخزن، أو null = المحل. كل الأصناف (حتى ما كميته صفر) للاختيار منها. */
+    async stockAt(branchId = null) {
+      if (!branchId) return repo.productsWithStock();
+      const [products, stock] = await Promise.all([db.products.toArray(), db.wh_stock.where('branch_id').equals(branchId).toArray()]);
+      const st = new Map(stock.map((s) => [s.product_id, s]));
+      return products.filter((p) => !p.deleted).map((p) => ({ ...p, qty: st.get(p.id)?.qty ?? 0, avg_cost: knownCost(st.get(p.id)?.avgCost, p.cost_price) }));
+    },
+    /** كمية كل صنف في المخازن كلها: Map(product_id → [{ branch_id, qty }]) — لعرض «في المخزن 40» بجانب مخزون المحل. */
+    async warehouseQty() {
+      const out = new Map();
+      for (const s of await db.wh_stock.toArray()) {
+        if (s.qty <= 0) continue;
+        if (!out.has(s.product_id)) out.set(s.product_id, []);
+        out.get(s.product_id).push({ branch_id: s.branch_id, qty: s.qty });
+      }
+      return out;
+    },
+    /**
+     * يضبط الكمية الموجودة فعلًا من صنف في مخزن (بضاعة موجودة من قبل، أو تصحيح): حركة بالفرق.
+     * أول إدخال = رصيد افتتاحي بتكلفة الصنف.
+     */
+    async setWarehouseQty(branchId, productId, actual) {
+      if (!Number.isSafeInteger(actual) || actual < 0) throw invalid({ qty: 'اكتب الكمية الموجودة في المخزن' });
+      const [p, s] = await Promise.all([db.products.get(productId), db.wh_stock.get([branchId, productId])]);
+      if (!p || p.deleted) throw invalid({ qty: 'الصنف غير موجود' });
+      const diff = actual - (s ? s.qty : 0);
+      if (diff === 0) return null;
+      const first = !s;
+      return store.append('movements', {
+        branch_id: branchId, product_id: productId, type: first ? 'opening' : 'adjustment', qty: first ? signedQty('opening', diff) : diff,
+        unit_cost: knownCost(s ? s.avgCost : 0, p.cost_price) || null, note: first ? 'بضاعة موجودة في المخزن' : 'تصحيح كمية المخزن',
+      });
+    },
+    /**
+     * نقل بضاعة: from / to = معرّف مخزن أو null للمحل. lines: [{ product_id, name, qty }].
+     * لا يُنقل أكثر من الموجود في المصدر. يرجع { transferId, count }.
+     */
+    async transfer({ from = null, to = null, lines, note = null }) {
+      const full = [];
+      for (const l of lines) {
+        const [p, s] = await Promise.all([db.products.get(l.product_id), from ? db.wh_stock.get([from, l.product_id]) : db.stock.get(l.product_id)]);
+        full.push({ ...l, available: s ? Math.max(0, s.qty) : 0, unit_cost: knownCost(s ? s.avgCost : 0, p ? p.cost_price : 0) });
+      }
+      const r = buildTransfer({ lines: full, from, to, note: note ? String(note).trim() || null : null }, { newId: uuid, now: clock() });
+      await store.write(async (w) => { for (const m of r.movements) await w.append('movements', m); });
+      return { transferId: r.transferId, count: full.length };
+    },
+    /** آخر عمليات النقل، مع أسماء الأصناف. */
+    async transfers(limit = 30) {
+      const [ms, products] = await Promise.all([db.movements.where('[ref_type+ref_id]').between(['transfer', ''], ['transfer', '\uffff']).toArray(), db.products.toArray()]);
+      const names = new Map(products.map((p) => [p.id, p]));
+      return transferHistory(ms).slice(0, limit).map((t) => ({ ...t, items: t.items.map((i) => ({ ...i, name: names.get(i.product_id)?.name || 'صنف محذوف', unit: names.get(i.product_id)?.unit || 'piece' })) }));
     },
 
     // ---------- الجرد ----------

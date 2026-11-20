@@ -25,6 +25,7 @@ export function receiptElement(model, logoUrl = null) {
       model.shopAddress ? h('div', { class: 'rc-sub' }, model.shopAddress) : null),
     h('div', { class: 'rc-meta' }, h('span', null, model.title, ' ', num(model.number)), num(model.date)),
     model.party ? h('div', { class: 'rc-cust' }, model.party) : null,
+    // سند القبض بلا سطور أصناف: خط فاصل واحد
     h('div', { class: 'rc-lines' }, ...model.rows.map((r) => h('div', { class: 'rc-line' },
       h('div', { class: 'rc-name' }, r.name),
       h('div', { class: 'rc-calc' }, num(r.calc), num(r.total))))),

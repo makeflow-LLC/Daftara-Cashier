@@ -18,6 +18,10 @@ import { renderPurchase } from './inventory/purchase.js';
 import { renderSuppliers, renderSupplier } from './inventory/suppliers.js';
 import { renderCount } from './inventory/count.js';
 import { renderAssistant } from './inventory/assistant.js';
+import { renderWarehouses, renderWarehouse, renderTransfer } from './inventory/warehouses.js';
+import { renderExpenses } from './expenses/expenses.js';
+import { renderPayroll } from './expenses/payroll.js';
+import { renderChat } from './chat/chat.js';
 import { renderMore } from './more/more.js';
 import { renderHelp } from './help/help.js';
 import { renderSubscribe } from './subscribe/subscribe.js';
@@ -79,6 +83,15 @@ export const MODULES = [
       { path: '/reports/daily', perm: 'reports', tab: 'settings', chrome: false, render: renderDailyReport },
     ],
   },
+  {
+    // المصاريف (من له صلاحية الصندوق) والرواتب (صاحب المحل وحده)
+    id: 'expenses',
+    routes: [
+      { path: '/expenses', perm: 'cash', tab: 'settings', chrome: false, render: renderExpenses },
+      { path: '/payroll', perm: 'owner', tab: 'settings', chrome: false, render: renderPayroll },
+    ],
+  },
+  { id: 'chat', routes: [{ path: '/chat', tab: 'settings', chrome: false, render: renderChat }] },
   { id: 'wallet', routes: [{ path: '/wallet', write: true, chrome: false, render: renderWallet }] },
   { id: 'cash', routes: [{ path: '/cash', perm: 'cash', tab: 'settings', chrome: false, render: renderCash }] },
   { id: 'invoices', routes: [{ path: '/invoices', tab: 'settings', chrome: false, render: renderInvoices }] },
@@ -89,6 +102,9 @@ export const MODULES = [
       { path: '/inventory/purchase', perm: 'purchases', write: true, chrome: false, render: renderPurchase },
       { path: '/inventory/assistant', perm: 'purchases', chrome: false, render: renderAssistant },
       { path: '/inventory/count', perm: 'purchases', write: true, chrome: false, render: renderCount },
+      { path: '/inventory/warehouses', perm: 'purchases', tab: 'settings', chrome: false, render: renderWarehouses },
+      { path: '/inventory/warehouse', perm: 'purchases', tab: 'settings', chrome: false, render: renderWarehouse },
+      { path: '/inventory/transfer', perm: 'purchases', write: true, chrome: false, render: renderTransfer },
       { path: '/suppliers', perm: 'purchases', tab: 'customers', render: renderSuppliers },
       { path: '/suppliers/view', perm: 'purchases', tab: 'customers', chrome: false, render: renderSupplier },
     ],

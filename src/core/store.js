@@ -6,7 +6,7 @@ import { applyMovement } from '../domain/stock.js';
 import { uuid } from './ids.js';
 
 export function createStore({ db, clock, getContext, emit = () => {}, guard = () => {} }) {
-  const TX_TABLES = [...SYNCED, 'outbox', 'stock', 'meta', 'files'];
+  const TX_TABLES = [...SYNCED, 'outbox', 'stock', 'wh_stock', 'meta', 'files'];
 
   async function enqueue(table, id) {
     const key = `${table}:${id}`;
@@ -77,6 +77,13 @@ export function createStore({ db, clock, getContext, emit = () => {}, guard = ()
   }
 
   async function bumpStock(m) {
+    // حركة في مخزن خارجي: لا تمسّ مخزون المحل (ما يُباع منه)، بل رصيد ذلك المخزن
+    if (m.branch_id) {
+      const key = [m.branch_id, m.product_id];
+      const w = (await db.wh_stock.get(key)) || { branch_id: m.branch_id, product_id: m.product_id, qty: 0, avgCost: 0 };
+      await db.wh_stock.put({ ...w, ...applyMovement({ qty: w.qty, avgCost: w.avgCost }, m) });
+      return;
+    }
     const s = (await db.stock.get(m.product_id)) || { product_id: m.product_id, qty: 0, avgCost: 0, last_sale_at: null };
     const next = applyMovement({ qty: s.qty, avgCost: s.avgCost }, m);
     await db.stock.put({

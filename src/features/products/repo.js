@@ -1,6 +1,6 @@
 // بيانات الأصناف على الجهاز: قراءة، بحث بالباركود، حفظ (مع حركة المخزون وسجل الأسعار والعبوات) — في معاملة واحدة.
 // مستقلة عن الواجهة فتُختبر وحدها (tests/products.test.mjs).
-import { signedQty } from '../../domain/stock.js';
+import { signedQty, knownCost } from '../../domain/stock.js';
 import { normalizeBarcode, internalBarcode, isInternalBarcode, isAcceptableBarcode, isShareableBarcode, validateProduct, validatePack } from '../../domain/product.js';
 import { normalizeScaleCode, parseScaleBarcode, scaleQuantity } from '../../domain/scale.js';
 import { mainPack } from '../../domain/units.js';
@@ -21,7 +21,7 @@ export function createProductRepo({ db, store, getContext }) {
       for (const u of units) { if (!u.deleted) byProduct.set(u.product_id, [...(byProduct.get(u.product_id) || []), u]); }
       return products
         .filter((p) => !p.deleted)
-        .map((p) => ({ ...p, qty: stock.get(p.id)?.qty ?? 0, avg_cost: stock.get(p.id)?.avgCost ?? p.cost_price, pack: mainPack(byProduct.get(p.id)) }))
+        .map((p) => ({ ...p, qty: stock.get(p.id)?.qty ?? 0, avg_cost: knownCost(stock.get(p.id)?.avgCost, p.cost_price), pack: mainPack(byProduct.get(p.id)) }))
         .sort((a, b) => a.name.localeCompare(b.name, 'ar'));
     },
 
@@ -36,7 +36,7 @@ export function createProductRepo({ db, store, getContext }) {
       return {
         ...p,
         qty: s?.qty ?? 0,
-        avg_cost: s?.avgCost ?? p.cost_price,
+        avg_cost: knownCost(s?.avgCost, p.cost_price),
         units: units.filter((u) => !u.deleted),
         images: images.filter((i) => !i.deleted).sort((a, b) => a.position - b.position),
       };
@@ -147,6 +147,15 @@ export function createProductRepo({ db, store, getContext }) {
             const s = await db.stock.get(p.id);
             const diff = qty - (s?.qty ?? 0);
             if (diff !== 0) await w.append('movements', { product_id: p.id, type: 'adjustment', qty: diff, unit_cost: p.cost_price, note: 'تعديل من بطاقة الصنف' });
+          }
+        }
+        // التكلفة عُدّلت يدويًا والبضاعة موجودة: نعيد تقييم المخزون بها (خروج ثم دخول بنفس الكمية)،
+        // فيصير متوسط التكلفة = ما كتبه صاحب المحل، ويُحسب ربح البيع القادم به.
+        if (!isNew && before.cost_price !== p.cost_price && p.cost_price > 0) {
+          const s = await db.stock.get(p.id);
+          if (s && s.qty > 0 && s.avgCost !== p.cost_price) {
+            await w.append('movements', { product_id: p.id, type: 'adjustment', qty: -s.qty, unit_cost: null, note: 'إعادة تقييم التكلفة' });
+            await w.append('movements', { product_id: p.id, type: 'adjustment', qty: s.qty, unit_cost: p.cost_price, note: 'إعادة تقييم التكلفة' });
           }
         }
         // العبوات

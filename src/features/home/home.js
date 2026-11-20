@@ -30,6 +30,7 @@ export function renderHome(el) {
 
   const guide = h('div');
   const dailyBox = h('div', null, dailyReportBanner());
+  const chatBox = h('div');
   const updateBox = updateBanner();
   const hour = today.getHours();
   const greet = hour < 12 ? 'صباح الخير' : hour < 17 ? 'نهارك سعيد' : 'مساء الخير';
@@ -45,6 +46,7 @@ export function renderHome(el) {
       installBanner(),
       updateBox,
       licenseBanner(),
+      chatBox,
       reminderBanner(),
       dailyBox,
       accountBanner(),
@@ -116,7 +118,11 @@ export function renderHome(el) {
     const soonIds = new Set(soon.map((x) => x.p.id));
     // مواعيد الدفع للموردين: متأخر أو خلال 3 أيام
     const dues = app.can('purchases') ? supplierDues(await app.inventory.suppliers(), app.shop?.settings?.supplierDues, localDay()) : [];
+    // رواتب الموظفين: ما حان موعده أو تأخر (لصاحب المحل)
+    const salaries = await app.payroll.due();
+    const cur0 = app.shop?.base_currency || 'ILS';
     const items = [
+      ...salaries.slice(0, 3).map((st) => row({ icon: 'users', title: `راتب ${st.employee.name}: ${formatMoney(st.remaining, cur0)}`, sub: `موعده ${dueText(st.days)}`, tone: st.state === 'soon' ? 'warn' : 'danger', onclick: () => navigate('/payroll') })),
       ...dues.slice(0, 3).map((d) => row({ icon: 'truck', title: `ادفع لـ ${d.supplier.name}: ${formatMoney(d.supplier.balance, app.shop?.base_currency || 'ILS')}`, sub: `موعد الدفع ${dueText(d.days)}`, tone: d.state === 'overdue' || d.state === 'today' ? 'danger' : 'warn', onclick: () => navigate(`/suppliers/view?id=${d.supplier.id}`) })),
       ...soon.map((x) => row({ icon: 'bulb', title: x.p.name, sub: `${daysLeftText(x.daysLeft)} — اطلب ${formatQty(x.qty)}`, tone: 'warn', onclick: () => navigate('/inventory/assistant') })),
       ...a.out.slice(0, 3).map((p) => row({ icon: 'alert', title: p.name, sub: 'نفد من المخزون', tone: 'danger' })),
@@ -124,17 +130,29 @@ export function renderHome(el) {
       ...a.expiring.slice(0, 3).map((p) => row({ icon: 'alert', title: p.name, sub: `ينتهي ${p.expiry_date}`, tone: 'warn' })),
     ];
     fill(alerts, items.length
-      ? h('div', null, h('div', { class: 'list' }, ...items), h('button', { class: 'btn btn-text', type: 'button', onclick: () => navigate('/inventory') }, 'كل التنبيهات وطلب البضاعة'))
+      ? h('div', null, h('div', { class: 'list' }, ...items), h('button', { class: 'btn btn-text', type: 'button', onclick: () => navigate('/inventory?tab=alerts') }, 'كل التنبيهات وطلب البضاعة'))
       : emptyState('check', 'لا تنبيهات الآن', 'ننبهك هنا حين ينخفض مخزون صنف أو يقترب انتهاؤه.'));
   }
 
+  // تعميم جديد أو رسائل غير مقروءة: لافتة في أعلى الرئيسية
+  async function paintChat() {
+    const u = await app.chat.unread();
+    fill(chatBox, u.latest ? h('button', { class: 'beta-banner chat-banner', type: 'button', onclick: () => navigate('/chat?tab=ann') },
+      icon('megaphone', 26), h('span', { class: 'row-main' }, h('strong', null, `تعميم جديد من ${u.latest.from_name || 'صاحب المحل'}`), h('span', null, u.latest.body.replace(/\s+/g, ' ').slice(0, 70))), icon('chevron', 20))
+      : u.chats ? h('button', { class: 'beta-banner chat-banner', type: 'button', onclick: () => navigate('/chat') },
+        icon('chat', 26), h('span', { class: 'row-main' }, h('strong', null, u.chats === 1 ? 'رسالة جديدة في المحادثة' : `${u.chats} رسائل جديدة في المحادثة`), h('span', null, 'اضغط لقراءتها والرد')), icon('chevron', 20)) : null);
+  }
+
   paint();
+  paintChat();
+  const offChat = bus.on('chat', paintChat);
   const off = bus.on('data', (e) => {
-    if (e.tables.some((t) => ['invoices', 'payments', 'cash_sessions', 'movements', 'products', 'customer_entries', 'customers', 'supplier_entries', 'suppliers'].includes(t))) paint();
+    if (e.tables.some((t) => ['invoices', 'payments', 'cash_sessions', 'movements', 'products', 'customer_entries', 'customers', 'supplier_entries', 'suppliers', 'expenses'].includes(t))) paint();
+    if (e.tables.includes('messages')) paintChat();
   });
   const offShop = bus.on('shop', paint);
   const offDaily = bus.on('dailyReport', () => fill(dailyBox, dailyReportBanner()));
-  return () => { off(); offShop(); offDaily(); if (updateBox.cleanup) updateBox.cleanup(); };
+  return () => { off(); offChat(); offShop(); offDaily(); if (updateBox.cleanup) updateBox.cleanup(); };
 }
 
 // الرئيسية تُرسم من جديد بعد كل بيع: حساب «يخلص قريبًا» (حركات 30 يومًا) يكفي مرة في الدقيقة وهي مفتوحة

@@ -24,6 +24,10 @@ export const printer = {
     const { model, logoUrl } = await loadInvoiceData(invoiceId);
     return printCanvas(await renderInvoiceCanvas(model, logoUrl));
   },
+  /** يطبع أي نموذج بشكل الفاتورة (سند القبض مثلًا). */
+  async printModel(model, logoUrl = null) {
+    return printCanvas(await renderInvoiceCanvas(model, logoUrl));
+  },
   async test() {
     const c = document.createElement('canvas');
     c.width = 720; c.height = 300;
