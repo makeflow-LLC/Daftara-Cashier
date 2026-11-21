@@ -66,7 +66,8 @@ export function renderSale(el, params = {}) {
     quickWrap, custEl, cartEl,
     h('div', { class: 'paybar paybar-2' },
       h('div', { class: 'paybar-tools' },
-        labeled('coins', 'مبلغ', 'مبلغ بلا صنف', openCustom, 'pill', 'F7'),
+        // مبلغ حر = سعر يكتبه البائع: لمن يملك صلاحية «يعطي خصمًا ويغيّر السعر» (وصاحب المحل والمحل بلا موظفين)
+        app.can('discount') ? labeled('coins', 'مبلغ', 'مبلغ بلا صنف', openCustom, 'pill', 'F7') : null,
         app.can('discount') ? labeled('tag', 'خصم', 'خصم على الفاتورة', openDiscount, 'pill', 'F4') : null,
         labeled('user', 'زبون', 'الزبون', chooseCustomer, 'pill', 'F6'),
         labeled('clipboard', 'علّق', 'علّق السلة', holdCart, 'pill', 'F8')),
@@ -487,7 +488,7 @@ export function renderSale(el, params = {}) {
     { key: 'F10', label: 'ادفع', run: pay },
     ...(app.can('discount') ? [{ key: 'F4', label: 'خصم على الفاتورة', run: openDiscount }] : []),
     { key: 'F6', label: 'اختر الزبون', run: chooseCustomer },
-    { key: 'F7', label: 'مبلغ بلا صنف', run: openCustom },
+    ...(app.can('discount') ? [{ key: 'F7', label: 'مبلغ بلا صنف', run: openCustom }] : []),
     { key: 'F8', label: 'علّق السلة', run: holdCart },
     { key: 'F9', label: 'السلال المعلّقة', run: openHeld },
     { key: 'Escape', run: () => { if (search.value) { search.value = ''; search.dispatchEvent(new Event('input')); } search.focus(); } },
