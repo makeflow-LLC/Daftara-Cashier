@@ -32,6 +32,19 @@ export function makeLine(product, { pack = null, qty = QTY_SCALE, avgCost = null
   };
 }
 
+export const CUSTOM_NAME = 'مبيعات متنوعة';
+
+/**
+ * سطر «مبلغ بلا صنف»: بيع فوري لخدمة أو شيء غير مسجّل (طباعة ورق بـ 5 شيكل) دون إضافة صنف.
+ * لا صنف له فلا يمسّ المخزون، وتكلفته صفر. key فريد: كل مبلغ سطر مستقل.
+ */
+export function makeCustomLine({ name = '', amount, key }) {
+  assertInt(amount, 'amount');
+  if (amount <= 0) throw new RangeError('amount must be > 0');
+  const n = String(name || '').trim().replace(/\s+/g, ' ').slice(0, 60) || CUSTOM_NAME;
+  return { key: `custom:${key}`, product_id: null, unit_id: null, name: n, unit: 'piece', factor: QTY_SCALE, qty: QTY_SCALE, unit_price: amount, unit_cost: 0, discount: 0 };
+}
+
 /** إجمالي السطر بعد خصمه (لا يقل عن صفر). */
 export function lineTotal(l) {
   return Math.max(0, lineAmount(l.unit_price, l.qty) - (l.discount || 0));
@@ -151,7 +164,8 @@ export function buildSale({ lines, discount = null, payments, customerId = null,
       created_at: env.now,
     };
   }).filter((p) => p.amount > 0);
-  const movements = lines.map((l) => ({
+  // سطر بلا صنف (مبلغ فوري) لا حركة مخزون له
+  const movements = lines.filter((l) => l.product_id).map((l) => ({
     id: env.newId(), product_id: l.product_id, type: 'sale', qty: signedQty('sale', packToBase(l.qty, l.factor)),
     unit_cost: divRound(l.unit_cost * QTY_SCALE, l.factor), ref_type: 'invoice', ref_id: invoiceId, created_at: env.now,
   }));
@@ -165,7 +179,8 @@ export function buildSale({ lines, discount = null, payments, customerId = null,
 // ---------- المرتجع ----------
 /** ما بيع وما رُجع من كل سطر: Map(lineKey → {line, sold, returned, returnable}). */
 export function returnableLines(originalLines, previousReturnLines = []) {
-  const key = (l) => `${l.product_id}:${l.unit_id || ''}`;
+  // سطر بلا صنف يُعرف باسمه وسعره
+  const key = (l) => (l.product_id ? `${l.product_id}:${l.unit_id || ''}` : `custom:${l.name}:${l.unit_price}`);
   const returned = new Map();
   for (const r of previousReturnLines) returned.set(key(r), (returned.get(key(r)) || 0) + r.qty);
   const out = [];
@@ -213,7 +228,7 @@ export function buildReturn(original, originalLines, picks, refund, env) {
     subtotal: total, discount: 0, total, cost_total: cost, fee_total: 0, paid: refund === 'cash' ? total : 0,
     note: `مرتجع من ${original.number}`, device_id: env.deviceId ?? null, created_at: env.now,
   };
-  const movements = lines.map((l) => ({
+  const movements = lines.filter((l) => l.product_id).map((l) => ({
     id: env.newId(), product_id: l.product_id, type: 'sale_return', qty: signedQty('sale_return', packToBase(l.qty, l.unit_factor)),
     unit_cost: divRound(l.unit_cost * QTY_SCALE, l.unit_factor), ref_type: 'invoice', ref_id: invoiceId, created_at: env.now,
   }));

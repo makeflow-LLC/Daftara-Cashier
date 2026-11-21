@@ -8,7 +8,8 @@ import { feedback } from '../../ui/feedback.js';
 import { startInlineScanner } from '../../ui/scanner.js';
 import { listenKeyScanner, isDesktop } from '../../ui/keyscan.js';
 import { pageShortcuts, kbd } from '../../ui/shortcuts.js';
-import { makeLine, addLine, lineTotal, cartTotals } from '../../domain/cart.js';
+import { makeLine, makeCustomLine, addLine, lineTotal, cartTotals } from '../../domain/cart.js';
+import { uuid } from '../../core/ids.js';
 import { applyOffers, localDay } from '../../domain/offers.js';
 import { searchProducts, normalizeBarcode } from '../../domain/product.js';
 import { formatQty, parseQty, unit as unitOf, QTY_SCALE } from '../../domain/units.js';
@@ -65,6 +66,8 @@ export function renderSale(el, params = {}) {
     quickWrap, custEl, cartEl,
     h('div', { class: 'paybar paybar-2' },
       h('div', { class: 'paybar-tools' },
+        // مبلغ حر = سعر يكتبه البائع: لمن يملك صلاحية «يعطي خصمًا ويغيّر السعر» (وصاحب المحل والمحل بلا موظفين)
+        app.can('discount') ? labeled('coins', 'مبلغ', 'مبلغ بلا صنف', openCustom, 'pill', 'F7') : null,
         app.can('discount') ? labeled('tag', 'خصم', 'خصم على الفاتورة', openDiscount, 'pill', 'F4') : null,
         labeled('user', 'زبون', 'الزبون', chooseCustomer, 'pill', 'F6'),
         labeled('clipboard', 'علّق', 'علّق السلة', holdCart, 'pill', 'F8')),
@@ -317,6 +320,35 @@ export function renderSale(el, params = {}) {
     if (cameraOn) startCam(); else { stopCam(); camStatus.textContent = ''; }
   }
 
+  // ---------- مبلغ بلا صنف ----------
+  // بيع فوري لخدمة أو شيء غير مسجّل (طباعة، تصوير، تغليف…): المبلغ ثم Enter. الوصف اختياري،
+  // وآخر ما كُتب يبقى أزرارًا على هذا الجهاز لضغطة واحدة في المرة القادمة.
+  async function openCustom() {
+    const recent = (await app.meta.get('sale:customNames', [])) || [];
+    const amt = input({ dir: 'ltr', inputmode: 'decimal', class: 'input input-xl', placeholder: '0' });
+    const name = input({ maxlength: 60, placeholder: 'مثال: طباعة ورق (اختياري)' });
+    if (scanner) scanner.pause();
+    openSheet((close) => h('form', {
+      onsubmit: async (e) => {
+        e.preventDefault();
+        const v = parseMoney(amt.value || '', base);
+        if (!v || v <= 0) { feedback.error(); toast('اكتب المبلغ', { kind: 'error' }); amt.focus(); return; }
+        const line = makeCustomLine({ name: name.value, amount: v, key: uuid() });
+        cart.lines = [...cart.lines, line];
+        const typed = name.value.trim();
+        if (typed) await app.meta.set('sale:customNames', [typed, ...recent.filter((x) => x !== typed)].slice(0, 6));
+        feedback.ok(); close(); changed();
+      },
+    },
+      field('المبلغ', amt),
+      field('ما هو؟', name, 'يظهر في الفاتورة والتقارير. بلا وصف يُكتب «مبيعات متنوعة».'),
+      recent.length ? h('div', { class: 'chips pay-quick' }, ...recent.map((n) => h('button', { class: 'chip', type: 'button', onclick: () => { name.value = n; amt.focus(); } }, n))) : null,
+      button('أضف إلى الفاتورة', { type: 'submit', block: true, size: 'lg', icon: 'check' }),
+      h('p', { class: 'muted small' }, 'لا يغيّر المخزون. شيء تبيعه كثيرًا بسعر ثابت؟ اجعله زرًّا من «زر جديد» فتبيعه بضغطة.'),
+    ), { title: 'مبلغ بلا صنف', onClose: () => { if (scanner) scanner.resume(); } });
+    setTimeout(() => amt.focus(), 150);
+  }
+
   // ---------- الخصم والزبون والتعليق ----------
   function openDiscount() {
     const t = cartTotals(cart.lines);
@@ -456,6 +488,7 @@ export function renderSale(el, params = {}) {
     { key: 'F10', label: 'ادفع', run: pay },
     ...(app.can('discount') ? [{ key: 'F4', label: 'خصم على الفاتورة', run: openDiscount }] : []),
     { key: 'F6', label: 'اختر الزبون', run: chooseCustomer },
+    ...(app.can('discount') ? [{ key: 'F7', label: 'مبلغ بلا صنف', run: openCustom }] : []),
     { key: 'F8', label: 'علّق السلة', run: holdCart },
     { key: 'F9', label: 'السلال المعلّقة', run: openHeld },
     { key: 'Escape', run: () => { if (search.value) { search.value = ''; search.dispatchEvent(new Event('input')); } search.focus(); } },

@@ -458,3 +458,28 @@ test('sync: a server that was not updated yet does not block uploads (unknown co
   assert.equal(await db.outbox.count(), 0);
   assert.equal(server.tables.get('cashier_messages').size, 1);
 });
+
+// ---------- مبلغ بلا صنف ----------
+test('custom amount: an instant sale with no product — no stock movement, shows in reports, can be returned', async () => {
+  const { makeCustomLine, CUSTOM_NAME, buildSale: _b } = await import('../src/domain/cart.js');
+  assert.equal(makeCustomLine({ amount: 500, key: 'k' }).name, CUSTOM_NAME);
+  assert.throws(() => makeCustomLine({ amount: 0, key: 'k' }));
+  const t = await setup();
+  const { product } = await t.products.save({ name: 'دفتر', sell_price: 800, cost_price: 500 }, { qty: 5000 });
+  const lines = [makeCustomLine({ name: ' طباعة   ورق ', amount: 500, key: 'a' }), makeCustomLine({ amount: 300, key: 'b' }), makeLine(product, { avgCost: 500 })];
+  assert.equal(lines[0].name, 'طباعة ورق');
+  const r = await t.sales.checkout({ lines, payments: [{ kind: 'cash', method_id: t.cashMethod.id, amount: 1600 }] });
+  assert.deepEqual([r.invoice.total, r.invoice.cost_total, r.profit], [1600, 500, 1100]);
+  assert.equal((await t.db.movements.toArray()).filter((m) => m.type === 'sale').length, 1, 'only the real product moves stock');
+  const saved = (await t.sales.invoice(r.invoice.id)).lines;
+  assert.deepEqual(saved.map((l) => [l.name, l.product_id ? 'p' : null, l.total]), [['طباعة ورق', null, 500], [CUSTOM_NAME, null, 300], ['دفتر', 'p', 800]]);
+  assert.equal((await t.cash.summary()).cashIn, 1600);
+  const rep = buildReport({ invoices: await t.db.invoices.toArray(), lines: await t.db.invoice_lines.toArray(), payments: [], products: await t.db.products.toArray(), from: '2000', to: '2999' });
+  assert.deepEqual(rep.best.map((x) => [x.name, x.amount, x.profit]), [['دفتر', 800, 300], ['طباعة ورق', 500, 500], [CUSTOM_NAME, 300, 300]]);
+  // مرتجع المبلغ: يُرد المال ولا حركة مخزون، ولا يُرجع مرتين
+  const rows = (await t.sales.returnable(r.invoice.id)).rows;
+  await t.sales.processReturn(r.invoice.id, [{ line: rows[0].line, qty: 1000 }], 'cash');
+  assert.equal((await t.db.movements.toArray()).filter((m) => m.type === 'sale_return').length, 0);
+  const again = (await t.sales.returnable(r.invoice.id)).rows;
+  assert.deepEqual(again.map((x) => x.returnable), [0, 1000, 1000]);
+});
