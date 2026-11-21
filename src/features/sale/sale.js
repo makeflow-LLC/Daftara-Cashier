@@ -7,6 +7,7 @@ import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
 import { startInlineScanner } from '../../ui/scanner.js';
 import { listenKeyScanner, isDesktop } from '../../ui/keyscan.js';
+import { pageShortcuts, kbd } from '../../ui/shortcuts.js';
 import { makeLine, addLine, lineTotal, cartTotals } from '../../domain/cart.js';
 import { applyOffers, localDay } from '../../domain/offers.js';
 import { searchProducts, normalizeBarcode } from '../../domain/product.js';
@@ -50,12 +51,12 @@ export function renderSale(el, params = {}) {
   const cartEl = h('div', { class: 'cart' });
   const totalEl = h('div', { class: 'paybar-total' });
   // أزرار بأيقونة واسم ظاهر: لا تخمين
-  const labeled = (ic, short, aria, fn, cls = '') => h('button', { class: `lbl-btn ${cls}`.trim(), type: 'button', 'aria-label': aria, onclick: fn }, icon(ic, 22), h('span', null, short));
-  const heldBtn = labeled('cart', 'معلّقة', 'السلال المعلّقة', openHeld);
+  const labeled = (ic, short, aria, fn, cls = '', key = null) => h('button', { class: `lbl-btn ${cls}`.trim(), type: 'button', 'aria-label': aria, onclick: fn }, icon(ic, 22), h('span', null, short), key ? kbd(key) : null);
+  const heldBtn = labeled('cart', 'معلّقة', 'السلال المعلّقة', openHeld, '', 'F9');
   const camBtn = labeled('scan', 'الكاميرا', 'الكاميرا', toggleCamera);
   const torchBtn = labeled('flash', 'فلاش', 'الفلاش', () => scanner && scanner.toggleTorch());
   torchBtn.hidden = true;
-  const payBtn = h('button', { class: 'btn btn-primary btn-lg paybtn', type: 'button', onclick: pay }, icon('check', 22), h('span', null, 'ادفع'));
+  const payBtn = h('button', { class: 'btn btn-primary btn-lg paybtn', type: 'button', onclick: pay }, icon('check', 22), h('span', null, 'ادفع'), kbd('F10'));
 
   el.append(h('div', { class: 'sale' },
     header('بيع', { back: true, actions: [torchBtn, camBtn, heldBtn, app.can('returns') ? labeled('undo', 'مرتجع', 'مرتجع', () => navigate('/sale/returns')) : null].filter(Boolean) }),
@@ -64,9 +65,9 @@ export function renderSale(el, params = {}) {
     quickWrap, custEl, cartEl,
     h('div', { class: 'paybar paybar-2' },
       h('div', { class: 'paybar-tools' },
-        app.can('discount') ? labeled('tag', 'خصم', 'خصم على الفاتورة', openDiscount, 'pill') : null,
-        labeled('user', 'زبون', 'الزبون', chooseCustomer, 'pill'),
-        labeled('clipboard', 'علّق', 'علّق السلة', holdCart, 'pill')),
+        app.can('discount') ? labeled('tag', 'خصم', 'خصم على الفاتورة', openDiscount, 'pill', 'F4') : null,
+        labeled('user', 'زبون', 'الزبون', chooseCustomer, 'pill', 'F6'),
+        labeled('clipboard', 'علّق', 'علّق السلة', holdCart, 'pill', 'F8')),
       h('div', { class: 'paybar-main' }, totalEl, payBtn)),
   ));
 
@@ -441,14 +442,27 @@ export function renderSale(el, params = {}) {
     if (params.exchange || params.customer) { history.replaceState(null, '', '#/sale'); app.sales.saveCurrent(serialize()); }
     paint();
   });
-  setTimeout(loadProducts, 0);
+  setTimeout(async () => {
+    await loadProducts();
+    // قادم من مسح القارئ في شاشة أخرى («بِعه الآن»): الصنف يدخل السلة مباشرة
+    if (params.scan) { history.replaceState(null, '', '#/sale'); onCode(params.scan); }
+  }, 0);
   // الحاسوب: قارئ باركود USB بدل الكاميرا، والمؤشر في البحث جاهز للكتابة
   if (isDesktop()) { cameraOn = false; camBtn.hidden = true; setTimeout(() => search.focus(), 50); }
   if (cameraOn) startCam(); else scanBox.hidden = true;
   const offKeys = listenKeyScanner(onCode);
+  // لوحة المفاتيح (الحاسوب): البيع كله بلا فأرة
+  const offShortcuts = pageShortcuts([
+    { key: 'F10', label: 'ادفع', run: pay },
+    ...(app.can('discount') ? [{ key: 'F4', label: 'خصم على الفاتورة', run: openDiscount }] : []),
+    { key: 'F6', label: 'اختر الزبون', run: chooseCustomer },
+    { key: 'F8', label: 'علّق السلة', run: holdCart },
+    { key: 'F9', label: 'السلال المعلّقة', run: openHeld },
+    { key: 'Escape', run: () => { if (search.value) { search.value = ''; search.dispatchEvent(new Event('input')); } search.focus(); } },
+  ]);
   const off = bus.on('data', (e) => { if (e.tables.includes('products') || e.tables.includes('movements')) loadProducts(); });
   el.dataset.openMs = String(Math.round(performance.now() - t0));
-  return () => { off(); offKeys(); stopCam(); clearTimeout(saveTimer); app.sales.saveCurrent(serialize()); };
+  return () => { off(); offKeys(); offShortcuts(); stopCam(); clearTimeout(saveTimer); app.sales.saveCurrent(serialize()); };
 }
 
 function readPref() {

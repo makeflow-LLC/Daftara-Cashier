@@ -1,6 +1,7 @@
 // شراء بضاعة: امسح أو ابحث ← الكمية والتكلفة ← «دفعت نقدًا» أو «على الحساب». المخزون ومتوسط التكلفة يتحدّثان وحدهما.
 // باركود جديد أثناء الشراء يُضاف كصنف بسطرين ويدخل الفاتورة مباشرة. المسودة تُحفظ لو أُغلق التطبيق.
 import { listenKeyScanner, isDesktop } from '../../ui/keyscan.js';
+import { pageShortcuts, kbd } from '../../ui/shortcuts.js';
 import { h, fill, num } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { header, iconButton, money, emptyState, input, button, field } from '../../ui/components.js';
@@ -40,7 +41,7 @@ export async function renderPurchase(el, params) {
   const supEl = h('div');
   const listEl = h('div', { class: 'cart' });
   const totalEl = h('div', { class: 'paybar-total' });
-  const saveBtn = h('button', { class: 'btn btn-primary btn-lg paybtn', type: 'button', onclick: finish }, icon('check', 22), h('span', null, 'حفظ'));
+  const saveBtn = h('button', { class: 'btn btn-primary btn-lg paybtn', type: 'button', onclick: finish }, icon('check', 22), h('span', null, 'حفظ'), kbd('F10'));
   const photoBtn = iconButton('camera', 'صورة فاتورة التاجر', takePhoto, 'pb-icon');
 
   el.append(h('div', { class: 'sale' },
@@ -228,5 +229,6 @@ export async function renderPurchase(el, params) {
   paint();
   if (isDesktop()) setTimeout(() => search.focus(), 50); else startCam();
   const offKeys = listenKeyScanner(onCode);
-  return () => { offKeys(); if (scanner) scanner.stop(); };
+  const offShortcuts = pageShortcuts([{ key: 'F10', label: 'احفظ الشراء', run: () => { if (!saveBtn.disabled) finish(); } }]);
+  return () => { offKeys(); offShortcuts(); if (scanner) scanner.stop(); };
 }

@@ -2,7 +2,8 @@
 // الشاشات: قائمة المخازن وسجل النقل، صفحة المخزن (أصنافه وكمياتها)، وشاشة النقل (مخزن ← محل أو العكس).
 import { h, fill, num } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
-import { header, emptyState, button, input, field, money, iconButton } from '../../ui/components.js';
+import { header, emptyState, button, input, field, money, iconButton, helpButton } from '../../ui/components.js';
+import { listenKeyScanner } from '../../ui/keyscan.js';
 import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
 import { scanOnce } from '../../ui/scanner.js';
@@ -99,7 +100,7 @@ export async function renderWarehouse(el, params) {
     h('header', { class: 'topbar' },
       h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'رجوع', onclick: () => history.back() }, icon('back')),
       h('div', { class: 'topbar-title' }, titleEl),
-      h('div', { class: 'topbar-actions' }, iconButton('edit', 'تعديل المخزن', () => warehouseSheet(w, load)))),
+      h('div', { class: 'topbar-actions' }, iconButton('edit', 'تعديل المخزن', () => warehouseSheet(w, load)), helpButton())),
     h('div', { class: 'page' }, top, h('div', { class: 'search-row' }, icon('search', 20), search), list));
 
   function setQty(p) {
@@ -213,7 +214,10 @@ export async function renderTransfer(el, params) {
 
   async function scan() {
     const code = await scanOnce('امسح الصنف لتنقله');
-    if (!code) return;
+    if (code) addByCode(code);
+  }
+
+  async function addByCode(code) {
     const hit = await app.products.findByCode(code);
     const p = hit && source.find((x) => x.id === hit.product.id);
     if (p) add(p); else { feedback.error(); toast(hit ? `«${hit.product.name}» غير موجود في ${nameOf(from)}` : 'باركود غير مسجّل', { kind: 'error' }); }
@@ -235,5 +239,5 @@ export async function renderTransfer(el, params) {
     paintHead(); paintResults(); paintLines();
   }
   await loadSource();
-  return undefined;
+  return listenKeyScanner(addByCode); // القارئ الخارجي يضيف الصنف لقائمة النقل
 }

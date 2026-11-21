@@ -1,8 +1,10 @@
 // قائمة الأصناف: بحث فوري بالعربية أو بالباركود، تصفية بالتصنيف، المخزون والسعر، والإضافة السريعة بالمسح.
 // تُرسم على دفعات (50 صنفًا) حتى تبقى سريعة مع مئات الأصناف على جوال رخيص.
-import { h, fill } from '../../ui/dom.js';
+import { h, fill, num } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
-import { header, iconButton, emptyState, syncBadge, button, money } from '../../ui/components.js';
+import { header, iconButton, emptyState, syncBadge, button, money, dataTable } from '../../ui/components.js';
+import { isWide } from '../../ui/wide.js';
+import { listenKeyScanner } from '../../ui/keyscan.js';
 import { toast } from '../../ui/overlay.js';
 import { scanOnce } from '../../ui/scanner.js';
 import { searchProducts } from '../../domain/product.js';
@@ -73,8 +75,28 @@ export function renderProducts(el) {
       return;
     }
     count.textContent = `${filtered.length} صنف`;
+    if (isWide()) { fill(body, count, table()); return; }
     fill(body, count, list, sentinel);
     more();
+  }
+
+  // الحاسوب: جدول بأعمدة يُرتَّب بالضغط على رأس العمود
+  function table() {
+    const catName = new Map(cats.map((c) => [c.id, c.name]));
+    const low = (p) => stockLevel(p.qty, p.low_stock ?? DEFAULT_LOW_STOCK_THRESHOLD * QTY_SCALE);
+    const seeCost = app.can('see_profit');
+    return dataTable({
+      rows: filtered,
+      onRow: (p) => navigate(`/products/edit?id=${p.id}`),
+      columns: [
+        { key: 'name', label: 'الصنف', grow: true, by: (p) => p.name, cell: (p) => h('span', { class: 'dt-name' }, productThumb(p, 36), h('span', null, p.name)) },
+        { key: 'barcode', label: 'الباركود', by: (p) => p.barcode || '', cell: (p) => (p.barcode ? num(p.barcode) : h('span', { class: 'muted' }, '—')) },
+        { key: 'cat', label: 'التصنيف', by: (p) => catName.get(p.category_id) || '', cell: (p) => catName.get(p.category_id) || h('span', { class: 'muted' }, '—') },
+        { key: 'sell', label: 'سعر البيع', num: true, by: (p) => p.sell_price, cell: (p) => money(p.sell_price, p.currency) },
+        seeCost ? { key: 'cost', label: 'التكلفة', num: true, by: (p) => p.cost_price, cell: (p) => (p.cost_price ? money(p.cost_price, p.currency) : h('span', { class: 'muted' }, '—')) } : null,
+        { key: 'qty', label: 'الموجود', num: true, by: (p) => p.qty, cell: (p) => h('span', { class: `stock-badge ${low(p) ? `stock-${low(p)}` : ''}` }, h('span', { class: 'num' }, formatQty(p.qty)), h('small', null, unit(p.unit).short)) },
+      ].filter(Boolean),
+    });
   }
 
   function more() {
@@ -107,7 +129,10 @@ export function renderProducts(el) {
 
   async function findByScan() {
     const code = await scanOnce('امسح لتجد الصنف');
-    if (!code) return;
+    if (code) openByCode(code);
+  }
+
+  async function openByCode(code) {
     const hit = await app.products.resolveScan(code, app.shop?.settings?.scale);
     if (hit && hit.product) navigate(`/products/edit?id=${hit.product.id}`);
     else if (hit && hit.scale) toast(`ملصق ميزان: لا صنف برقم ${hit.scale.code} — اكتبه في «رقم الصنف في الميزان»`, { kind: 'info', ms: 4000 });
@@ -124,5 +149,6 @@ export function renderProducts(el) {
   const off = bus.on('data', (e) => {
     if (e.tables.some((t) => ['products', 'movements', 'categories', 'product_images'].includes(t))) load();
   });
-  return () => { off(); if (io) io.disconnect(); };
+  const offKeys = listenKeyScanner(openByCode); // القارئ الخارجي: يفتح بطاقة الصنف، أو يضيفه إن لم يكن مسجّلًا
+  return () => { off(); offKeys(); if (io) io.disconnect(); };
 }

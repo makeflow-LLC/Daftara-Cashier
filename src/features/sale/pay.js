@@ -1,6 +1,7 @@
 // ورقة الدفع: ضغطة واحدة على طريقة الدفع = تم الدفع. لا مبلغ مستلم ولا خيارات (المحلات تعتمد على السرعة).
 // آجل: على زبون. وتقسيم الدفع بين عدة طرق إن فُعّلت ميزته.
 import { h, fill } from '../../ui/dom.js';
+import { kbd } from '../../ui/shortcuts.js';
 import { icon } from '../../ui/icons.js';
 import { button, money, input } from '../../ui/components.js';
 import { openSheet, toast } from '../../ui/overlay.js';
@@ -25,6 +26,7 @@ export function openPay({ total, customer, credit = 0, onConfirm, onClose = null
   let split = false;
   let rows = [];          // للتقسيم: [{name, p}]
   let busy = false;
+  let offDigit = () => {};
   const body = h('div', { class: 'pay' });
 
   const sheet = openSheet((close) => {
@@ -59,9 +61,9 @@ export function openPay({ total, customer, credit = 0, onConfirm, onClose = null
           h('button', { class: 'link-btn', type: 'button', onclick: () => { cust = null; paintMain(); } }, 'إزالة')) : null,
         credit && !due
           ? button('تم التبديل', { block: true, size: 'lg', icon: 'check', onclick: () => { const m = methods.find((x) => x.kind === 'cash') || methods[0]; if (m) confirm(build(m)); } })
-          : h('div', { class: 'pay-methods' }, ...methods.map((m) => h('button', {
+          : h('div', { class: 'pay-methods' }, ...methods.map((m, i) => h('button', {
             class: `pay-method pay-${m.kind}`, type: 'button', onclick: () => confirm(build(m)),
-          }, icon(KIND_ICON[m.kind], 26), h('span', null, m.name)))),
+          }, i < 9 ? kbd(String(i + 1)) : null, icon(KIND_ICON[m.kind], 26), h('span', null, m.name)))),
         app.feature('splitPayment') && !credit ? button('تقسيم الدفع على أكثر من طريقة', { kind: 'text', onclick: () => { split = true; rows = []; paintSplit(); } }) : null,
       );
     }
@@ -97,7 +99,18 @@ export function openPay({ total, customer, credit = 0, onConfirm, onClose = null
     // البيع بالآجل لمن يملك صلاحيته فقط
     app.sales.paymentMethods().then((m) => { methods = m.filter((x) => x.kind !== 'credit' || app.can('credit')); if (!split) paintMain(); });
     paintMain();
+    // الحاسوب: رقم طريقة الدفع على لوحة المفاتيح (1 = الأولى…) والمؤشر ليس في حقل
+    const onDigit = (e) => {
+      if (split || e.ctrlKey || e.altKey || e.metaKey || !/^[1-9]$/.test(e.key)) return;
+      const t = document.activeElement;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+      if (document.querySelectorAll('.sheet').length > 1) return; // فوقها نافذة أخرى (اختيار الزبون)
+      const btn = body.querySelectorAll('.pay-methods .pay-method')[Number(e.key) - 1];
+      if (btn) { e.preventDefault(); btn.click(); }
+    };
+    document.addEventListener('keydown', onDigit);
+    offDigit = () => document.removeEventListener('keydown', onDigit);
     return body;
-  }, { title: 'الدفع', onClose });
+  }, { title: 'الدفع', onClose: () => { offDigit(); if (onClose) onClose(); } });
   return sheet;
 }

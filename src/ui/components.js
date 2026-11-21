@@ -116,3 +116,63 @@ export function syncBadge() {
   requestAnimationFrame(() => { el.dataset.seen = '1'; });
   return el;
 }
+
+/**
+ * جدول بأعمدة للشاشة العريضة (الحاسوب): ترتيب بالضغط على رأس العمود، وتنقّل بالأسهم و Enter.
+ * columns: [{ key, label, cell: (row) => عنصر أو نص, by: (row) => قيمة الترتيب (اختياري), num: true لعمود أرقام, grow: true للعمود الرئيسي }]
+ * rows تُعرض بترتيبها حتى يختار المستخدم عمودًا. onRow(row) عند الضغط أو Enter.
+ */
+export function dataTable({ columns, rows, onRow = null, pageSize = 100, rowClass = null, sort = null }) {
+  let state = sort; // { key, dir: 1 | -1 }
+  let shown = pageSize;
+  const head = h('tr');
+  const tbody = h('tbody');
+  const more = h('button', { class: 'btn btn-outline dt-more', type: 'button', onclick: () => { shown += pageSize * 2; paintBody(); } });
+  const wrap = h('div', { class: 'dt-wrap' }, h('table', { class: 'dt' }, h('thead', null, head), tbody), more);
+
+  function ordered() {
+    const col = state && columns.find((c) => c.key === state.key);
+    if (!col || !col.by) return rows;
+    const val = (r) => { const v = col.by(r); return v === null || v === undefined ? '' : v; };
+    return rows.slice().sort((a, b) => {
+      const x = val(a), y = val(b);
+      const d = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'ar', { numeric: true });
+      return d * state.dir;
+    });
+  }
+
+  function paintHead() {
+    fill(head, ...columns.map((c) => {
+      const on = state && state.key === c.key;
+      const cls = `${c.num ? 'dt-num' : ''} ${c.grow ? 'dt-grow' : ''}`.trim();
+      if (!c.by) return h('th', { class: `dt-plain ${cls}`.trim(), scope: 'col' }, c.label);
+      return h('th', { class: cls, scope: 'col', 'aria-sort': on ? (state.dir > 0 ? 'ascending' : 'descending') : 'none' },
+        h('button', { class: `dt-sort ${on ? 'on' : ''}`, type: 'button', title: 'رتّب حسب هذا العمود',
+          onclick: () => { state = on ? (state.dir > 0 ? { key: c.key, dir: -1 } : null) : { key: c.key, dir: 1 }; paintHead(); paintBody(); } },
+        c.label, h('span', { class: 'dt-arrow', 'aria-hidden': 'true' }, on ? (state.dir > 0 ? '▲' : '▼') : '↕')));
+    }));
+  }
+
+  function paintBody() {
+    const list = ordered();
+    fill(tbody, ...list.slice(0, shown).map((r) => {
+      const tr = h('tr', { class: `${onRow ? 'dt-tap' : ''} ${rowClass ? rowClass(r) || '' : ''}`.trim(), tabindex: onRow ? '0' : null },
+        ...columns.map((c) => h('td', { class: `${c.num ? 'dt-num' : ''} ${c.grow ? 'dt-grow' : ''}`.trim() }, c.cell(r))));
+      if (onRow) {
+        tr.addEventListener('click', () => onRow(r));
+        tr.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') { e.preventDefault(); onRow(r); }
+          const to = e.key === 'ArrowDown' ? tr.nextElementSibling : e.key === 'ArrowUp' ? tr.previousElementSibling : null;
+          if (to) { e.preventDefault(); to.focus(); }
+        });
+      }
+      return tr;
+    }));
+    more.hidden = list.length <= shown;
+    more.textContent = `اعرض المزيد (${Math.max(0, list.length - shown)})`;
+  }
+
+  paintHead();
+  paintBody();
+  return wrap;
+}

@@ -145,6 +145,20 @@ Nothing else needs to change.
 - A new route must be listed in a topic's `routes`: `tests/guide.test.mjs` fails otherwise, and also checks that
   every image, FAQ link and «open» button points at something that exists.
 
+## Desktop layout, keyboard and external scanner
+
+- Wide screens (`min-width:1000px`, `src/ui/wide.js` + the matching media query at the end of `styles/app.css`): a fixed
+  sidebar (`src/domain/nav.js`, drawn by `features/shell/shell.js`) replaces the tab bar, sheets open as centered
+  dialogs, and products / invoices / customers / suppliers render `dataTable()` (`ui/components.js`: sortable columns,
+  arrow keys + Enter) instead of the phone list. Crossing the breakpoint re-renders the current route.
+- `src/ui/shortcuts.js` — global shortcuts (set by the shell: F1 help, F2 sale, F3 search, Alt+digit sidebar) and
+  per-screen ones (`pageShortcuts([...])`, returned function goes in the screen cleanup). `kbd('F4')` puts the key hint
+  on a button (visible on wide screens only). The help sheet lists whatever is active.
+- `src/ui/keyscan.js` — one document listener for USB/Bluetooth scanners. A screen that knows what to do with a
+  barcode calls `listenKeyScanner(fn)`; everywhere else the code goes to `features/shell/scan.js` (price/stock card,
+  «sell now» → `/sale?scan=…`, or «add as a new product»).
+- `SHOTS_VIEW=1366x768 SHOTS_RAW=1 SHOTS_DIR=… npm run guide:shots` screenshots the desktop layout for review.
+
 ## Licensing (milestone 9)
 
 30-day free trial from install, then 30 ₪/month or 300 ₪/year. After expiry (plus 3 grace days for paid

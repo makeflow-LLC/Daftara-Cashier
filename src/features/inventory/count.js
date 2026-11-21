@@ -6,6 +6,7 @@ import { header, emptyState, button, input, field, money } from '../../ui/compon
 import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
 import { openScanner } from '../../ui/scanner.js';
+import { listenKeyScanner } from '../../ui/keyscan.js';
 import { countSummary } from '../../domain/inventory.js';
 import { formatQty, parseQty, unit as unitOf } from '../../domain/units.js';
 import { formatMoney } from '../../domain/currency.js';
@@ -60,15 +61,14 @@ export async function renderCount(el) {
     });
   }
 
+  async function countCode(code) {
+    const hit = await app.products.findByCode(code);
+    if (!hit) { feedback.error(); toast('باركود غير مسجّل', { kind: 'error' }); return undefined; }
+    return ask(hit.product);
+  }
+
   function scan() {
-    openScanner({
-      title: 'جرد: امسح الصنف',
-      onCode: async (code) => {
-        const hit = await app.products.findByCode(code);
-        if (!hit) { feedback.error(); toast('باركود غير مسجّل', { kind: 'error' }); return undefined; }
-        return ask(hit.product);
-      },
-    });
+    openScanner({ title: 'جرد: امسح الصنف', onCode: countCode });
   }
 
   async function apply() {
@@ -79,4 +79,5 @@ export async function renderCount(el) {
     toast(r.changed ? `اعتُمد الجرد: ${r.changed} صنف عُدّل — ${r.diffValue < 0 ? 'نقص' : 'زيادة'} ${formatMoney(Math.abs(r.diffValue), cur)}` : 'اعتُمد الجرد: المخزون مطابق تمامًا', { kind: 'ok', ms: 5000 });
   }
   paint();
+  return listenKeyScanner(countCode); // القارئ الخارجي: امسح فتُفتح خانة العدد مباشرة
 }
