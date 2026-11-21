@@ -18,18 +18,19 @@ export function displayPhone(phone) {
 }
 
 // متى نطلب الحساب: صاحب المحل يجرّب بحرية أولًا، ثم نذكّره بلطف بعد أن يرى قيمة التطبيق،
-// ولا نُلزمه إلا حين يصبح لديه عمل يستحق الحماية.
+// ولا نُلزمه إلا حين يصبح لديه عمل يستحق الحماية. الوقت وحده لا يُلزم أحدًا: من ثبّت التطبيق
+// ثم رجع إليه بعد أسبوع ولم يبع شيئًا ما زال يستكشف، ولا يُستقبل بشاشة «أنشئ حسابك».
 export const NUDGE_SALES = 3;     // بعد 3 فواتير بيع: نافذة لطيفة مرة واحدة مع «لاحقًا»
 export const REQUIRE_SALES = 20;  // بعد 20 فاتورة…
-export const GRACE_DAYS = 3;      // …أو 3 أيام من إنشاء المحل: الحساب مطلوب
+export const GRACE_DAYS = 3;      // …أو 3 أيام من إنشاء المحل وقد بدأ البيع فعلًا (3 فواتير): الحساب مطلوب
 
 /** 'explore' (يتجول بحرية) | 'nudge' (تذكير لطيف) | 'required' (الحساب مطلوب). */
 export function accountStage({ sales = 0, createdAt = null, now = Date.now() } = {}) {
   const t = createdAt ? Date.parse(createdAt) : NaN;
   const days = Number.isFinite(t) ? (now - t) / 86400000 : 0;
-  if (sales >= REQUIRE_SALES || days >= GRACE_DAYS) return 'required';
-  if (sales >= NUDGE_SALES) return 'nudge';
-  return 'explore';
+  if (sales >= REQUIRE_SALES) return 'required';
+  if (sales < NUDGE_SALES) return 'explore';
+  return days >= GRACE_DAYS ? 'required' : 'nudge';
 }
 
 /** رسالة خطأ بالعربية أو null. */

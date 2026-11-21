@@ -116,15 +116,94 @@ test('explore first, then a gentle nudge, then the account is required (one-sess
   await a.account.init();
   assert.equal(a.account.required, false, 'stays satisfied after restart');
   // نسخة بلا خادم: لا حساب ولا إلزام
-  // محل عمره 3 أيام بلا فواتير: الحساب مطلوب أيضًا
+  // محل عمره أيام ولم يبع شيئًا: ما زال يستكشف (الوقت وحده لا يُلزم). بعد 3 فواتير يصير الحساب مطلوبًا
   const old = await device(server, uuid());
   old.config = { syncEnabled: true };
   await old.store.put('shops', { id: old.ctx.shopId, name: 'قديم', created_at: new Date(Date.now() - 3 * 86400000 - 1000).toISOString() });
   await old.account.init();
+  assert.equal(old.account.required, false, 'opened days later without selling: no account wall');
+  for (let i = 0; i < 3; i++) await old.store.put('invoices', { type: 'sale', number: `A-${i}` });
+  assert.equal(await old.account.check(), 'required');
   assert.equal(old.account.required, true);
   const b = await device(server, uuid());
   b.config = { syncEnabled: false };
   await b.account.init();
   assert.equal(b.account.required, false);
   await assert.rejects(a.account.protect('12', 'secret1', 'secret1'), (e) => e.kind === 'input');
+});
+
+test('"I have an account" on a device that already has a trial shop: the account shop replaces it', async () => {
+  const server = createFakeServer();
+  const shopId = uuid();
+  const a = await device(server, shopId);
+  await a.store.put('shops', { id: shopId, name: 'مكتبة المبدع', shop_type: 'stationery' });
+  const real = await a.store.put('products', { name: 'دفتر', sell_price: 800 });
+  await a.store.append('movements', { product_id: real.id, type: 'opening', qty: 5000 });
+  await a.account.protect('0599123456', 'secret1', 'secret1');
+
+  // الحاسوب: جرّب عليه التطبيق من قبل فعليه محل تجريبي بأصنافه وطابور رفعه وسلة معلّقة
+  const b = await device(server, uuid());
+  const trial = b.ctx.shopId;
+  await b.store.put('shops', { id: trial, name: 'تجربة', shop_type: 'grocery' });
+  const junk = await b.store.put('products', { name: 'صنف تجريبي', sell_price: 100 });
+  await b.store.append('movements', { product_id: junk.id, type: 'opening', qty: 9000 });
+  await b.meta.set('shopId', trial);
+  await b.meta.set('deviceId', b.ctx.deviceId);
+  await b.meta.set('installedAt', '2026-11-01T00:00:00.000Z');
+  await b.meta.set('seq:sale', 7);
+  await b.meta.set('cart:current', { lines: [{ name: 'x' }] });
+  await b.db.held.put({ id: 'h1', created_at: '2026-11-20T10:00:00.000Z', cart: {} });
+  assert.deepEqual(await b.account.localShop(), { name: 'تجربة', products: 1, sales: 0 });
+
+  // كلمة سر خاطئة: لا يُمسّ شيء على الجهاز
+  await assert.rejects(b.account.login('0599123456', 'wrong'), /غير صحيحة/);
+  assert.equal(b.ctx.shopId, trial);
+  assert.equal((await b.db.products.get(junk.id)).name, 'صنف تجريبي');
+
+  // انقطع الإنترنت بعد قبول كلمة السر وقبل نزول البيانات: يرجع الجهاز كما كان تمامًا
+  const realSync = b.sync;
+  const { HttpError } = await import('../src/sync/supabase.js');
+  b.sync = { run: async () => ({ error: new HttpError(0, 'offline', 'x') }) };
+  await assert.rejects(b.account.login('0599123456', 'secret1'), /إنترنت/);
+  assert.equal(b.ctx.shopId, trial);
+  assert.equal(await b.meta.get('shopId'), trial);
+  assert.equal(await b.meta.get('seq:sale'), 7);
+  assert.equal((await b.db.products.get(junk.id)).name, 'صنف تجريبي');
+  assert.equal((await b.db.stock.get(junk.id)).qty, 9000);
+  assert.equal(await b.db.held.count(), 1);
+  assert.ok(await b.db.outbox.count() > 0, 'pending uploads of the trial shop are kept');
+  b.sync = realSync;
+
+  // الدخول ينجح: محل الحساب مكان التجريبي، ولا يختلط شيء
+  const r = await b.account.login('0599123456', 'secret1');
+  assert.deepEqual([r.shopId, r.name, r.replaced], [shopId, 'مكتبة المبدع', true]);
+  assert.equal(b.ctx.shopId, shopId);
+  assert.equal(await b.meta.get('shopId'), shopId);
+  assert.deepEqual((await b.db.products.toArray()).map((p) => p.name), ['دفتر']);
+  assert.deepEqual((await b.db.shops.toArray()).map((x) => x.name), ['مكتبة المبدع']);
+  assert.equal((await b.db.stock.get(real.id)).qty, 5000);
+  assert.equal(await b.db.stock.get(junk.id), undefined);
+  assert.equal(await b.db.outbox.count(), 0, 'nothing of the trial shop is uploaded into the account');
+  assert.equal(await b.db.held.count(), 0);
+  assert.equal(await b.meta.get('seq:sale'), null);
+  assert.equal(await b.meta.get('cart:current'), null);
+  // هوية الجهاز وتاريخ تثبيته (التجربة والترخيص) باقيان، وله حرف فواتيره في المحل
+  assert.equal(await b.meta.get('deviceId'), b.ctx.deviceId);
+  assert.equal(await b.meta.get('installedAt'), '2026-11-01T00:00:00.000Z');
+  assert.equal(await b.meta.get('devicePrefix'), 'B');
+  assert.equal(await b.account.phone(), '970599123456');
+  // والبيع من الحاسوب يصل الجوال
+  await b.store.append('movements', { product_id: real.id, type: 'sale', qty: -1000 });
+  await b.sync.run(); await a.sync.run();
+  assert.equal((await a.db.stock.get(real.id)).qty, 4000);
+});
+
+test('creating an account with a phone that already has one says so (kind "taken")', async () => {
+  const server = createFakeServer();
+  const a = await device(server, uuid());
+  await a.store.put('shops', { id: a.ctx.shopId, name: 'محلي' });
+  await a.account.protect('0599123456', 'secret1', 'secret1');
+  const b = await device(server, uuid());
+  await b.store.put('shops', { id: b.ctx.shopId, name: 'تجربة' });
+  await assert.rejects(b.account.protect('0599123456', 'abcdef', 'abcdef'), (e) => e.kind === 'taken' && /عندي حساب/.test(e.message));
 });
