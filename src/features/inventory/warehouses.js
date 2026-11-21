@@ -2,7 +2,9 @@
 // الشاشات: قائمة المخازن وسجل النقل، صفحة المخزن (أصنافه وكمياتها)، وشاشة النقل (مخزن ← محل أو العكس).
 import { h, fill, num } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
-import { header, emptyState, button, input, field, money, iconButton } from '../../ui/components.js';
+import { header, emptyState, button, input, field, money, iconButton, helpButton, dataTable } from '../../ui/components.js';
+import { isWide } from '../../ui/wide.js';
+import { listenKeyScanner } from '../../ui/keyscan.js';
 import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
 import { scanOnce } from '../../ui/scanner.js';
@@ -99,7 +101,7 @@ export async function renderWarehouse(el, params) {
     h('header', { class: 'topbar' },
       h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'رجوع', onclick: () => history.back() }, icon('back')),
       h('div', { class: 'topbar-title' }, titleEl),
-      h('div', { class: 'topbar-actions' }, iconButton('edit', 'تعديل المخزن', () => warehouseSheet(w, load)))),
+      h('div', { class: 'topbar-actions' }, iconButton('edit', 'تعديل المخزن', () => warehouseSheet(w, load)), helpButton())),
     h('div', { class: 'page' }, top, h('div', { class: 'search-row' }, icon('search', 20), search), list));
 
   function setQty(p) {
@@ -112,7 +114,15 @@ export async function renderWarehouse(el, params) {
   function paintList() {
     const has = items.filter((p) => p.qty !== 0);
     const shown = searchProducts(has, query, 200);
-    fill(list, shown.length ? h('div', { class: 'list' }, ...shown.map((p) => h('button', { class: 'row row-tap', type: 'button', onclick: () => setQty(p) },
+    fill(list, shown.length && isWide() ? dataTable({
+      rows: shown,
+      onRow: (p) => setQty(p),
+      columns: [
+        { key: 'name', label: 'الصنف', grow: true, by: (p) => p.name, cell: (p) => h('span', { class: 'dt-name' }, productThumb(p, 36), h('span', null, p.name)) },
+        { key: 'barcode', label: 'الباركود', by: (p) => p.barcode || '', cell: (p) => (p.barcode ? h('span', { class: 'num' }, p.barcode) : h('span', { class: 'muted' }, '—')) },
+        { key: 'qty', label: 'في المخزن', num: true, by: (p) => p.qty, cell: (p) => h('span', { class: 'stock-badge' }, h('span', { class: 'num' }, formatQty(p.qty)), h('small', null, unitOf(p.unit).short)) },
+      ],
+    }) : shown.length ? h('div', { class: 'list' }, ...shown.map((p) => h('button', { class: 'row row-tap', type: 'button', onclick: () => setQty(p) },
       productThumb(p, 40),
       h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, p.name)),
       h('span', { class: 'stock-badge' }, h('span', { class: 'num' }, formatQty(p.qty)), h('small', null, unitOf(p.unit).short)))))
@@ -213,7 +223,10 @@ export async function renderTransfer(el, params) {
 
   async function scan() {
     const code = await scanOnce('امسح الصنف لتنقله');
-    if (!code) return;
+    if (code) addByCode(code);
+  }
+
+  async function addByCode(code) {
     const hit = await app.products.findByCode(code);
     const p = hit && source.find((x) => x.id === hit.product.id);
     if (p) add(p); else { feedback.error(); toast(hit ? `«${hit.product.name}» غير موجود في ${nameOf(from)}` : 'باركود غير مسجّل', { kind: 'error' }); }
@@ -235,5 +248,5 @@ export async function renderTransfer(el, params) {
     paintHead(); paintResults(); paintLines();
   }
   await loadSource();
-  return undefined;
+  return listenKeyScanner(addByCode); // القارئ الخارجي يضيف الصنف لقائمة النقل
 }

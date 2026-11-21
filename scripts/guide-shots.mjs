@@ -54,7 +54,12 @@ await new Promise((r) => setTimeout(r, 700));
 
 const { chromium } = createRequire(import.meta.url)('playwright');
 const browser = await chromium.launch();
-const context = await browser.newContext({ viewport: { width: 390, height: 800 }, deviceScaleFactor: 2, locale: 'ar', timezoneId: 'Asia/Gaza', hasTouch: true, isMobile: true });
+// SHOTS_VIEW=1366x768 يصوّر بمقاس شاشة حاسوب (للمراجعة، مع SHOTS_RAW=1 و SHOTS_DIR)؛ الافتراضي جوال
+const view = (process.env.SHOTS_VIEW || '').split('x').map(Number);
+const desktop = view.length === 2 && view[0] > 0 && view[1] > 0;
+const context = await browser.newContext(desktop
+  ? { viewport: { width: view[0], height: view[1] }, deviceScaleFactor: 1, locale: 'ar', timezoneId: 'Asia/Gaza' }
+  : { viewport: { width: 390, height: 800 }, deviceScaleFactor: 2, locale: 'ar', timezoneId: 'Asia/Gaza', hasTouch: true, isMobile: true });
 const page = await context.newPage();
 page.on('pageerror', (e) => console.error('page error:', e.message));
 const base = `http://localhost:${PORT}/`;
@@ -70,11 +75,13 @@ try {
   if (!only.length || only.includes('setup')) await shoot('setup');
   await page.click('button[type=submit]');
   await page.click('[data-type=grocery]');
-  await page.waitForSelector('.tabbar');
+  await page.waitForSelector('.tabbar', { state: 'attached' });
   ids = await page.evaluate(seed);
   await page.reload();
-  await page.waitForSelector('.tabbar');
+  await page.waitForSelector('.tabbar', { state: 'attached' });
 
+  // SHOTS_HOOK=ملف.mjs: فحص آلي على نفس البيانات التجريبية بدل التصوير (export default async (page, ids) => …)
+  if (process.env.SHOTS_HOOK) { await (await import(resolve(process.env.SHOTS_HOOK))).default(page, ids); SHOTS.length = 0; }
   for (const s of SHOTS) {
     if (only.length && !only.includes(s.name)) continue;
     if (s.before) await page.evaluate(s.before);
@@ -90,6 +97,7 @@ try {
     }
     await page.evaluate(() => { const t = document.querySelector('.toast'); if (t) t.classList.remove('show'); document.activeElement && document.activeElement.blur && document.activeElement.blur(); });
     await idle(200);
+    if (process.env.SHOTS_EVAL) console.log(s.name, JSON.stringify(await page.evaluate(process.env.SHOTS_EVAL)));
     await shoot(s.name);
     // نغلق أي ورقة أو سلة مفتوحة قبل الصورة التالية
     await page.evaluate(async () => { const { closeAllSheets } = await import('/src/ui/overlay.js'); closeAllSheets(); });

@@ -1,6 +1,7 @@
 // الفاتورة كما يراها الزبون: تظهر مباشرة بعد كل بيع، وتُفتح من سجل الفواتير وكشوف الحساب.
 // لا تكلفة ولا ربح هنا أبدًا (الشاشة قد يراها الزبون). تحتها: «أرسل واتساب» بضغطة (اختياري)، ثم الزر الرئيسي.
 import { h, num } from '../../ui/dom.js';
+import { isWide } from '../../ui/wide.js';
 import { icon } from '../../ui/icons.js';
 import { button } from '../../ui/components.js';
 import { openSheet } from '../../ui/overlay.js';
@@ -39,12 +40,13 @@ export async function showReceipt(invoiceId, { doneLabel = 'بيع جديد', do
   const { model, logoUrl } = await loadInvoiceData(invoiceId);
   // زر الطباعة: يظهر حين تكون الطابعة جاهزة (بلوتوث مختارة، أو حاسوب/متصفح)
   const printBtn = (await printer.ready()) ? h('button', { class: 'btn btn-outline rc-more', type: 'button', 'aria-label': 'اطبع', onclick: () => printReceipt(invoiceId) }, icon('printer', 22)) : null;
+  const done = (close) => { const b = button(doneLabel, { block: true, size: 'lg', icon: doneIcon, onclick: close }); if (isWide()) setTimeout(() => b.focus(), 220); return b; }; // الحاسوب: Enter يكمل
   return openSheet((close) => h('div', null, receiptElement(model, logoUrl),
     h('div', { class: 'rc-actions' },
       h('div', { class: 'rc-share' },
         h('button', { class: 'btn btn-wa', type: 'button', onclick: () => sendInvoice(invoiceId, 'image') }, icon('receipt', 22), h('span', null, 'أرسل واتساب')),
         printBtn,
         h('button', { class: 'btn btn-outline rc-more', type: 'button', 'aria-label': 'خيارات الإرسال', onclick: () => moreShareOptions(invoiceId) }, icon('more', 22))),
-      button(doneLabel, { block: true, size: 'lg', icon: doneIcon, onclick: close })),
+      done(close)),
   ), { title: null, onClose });
 }

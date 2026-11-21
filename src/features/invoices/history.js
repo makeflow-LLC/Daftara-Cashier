@@ -1,7 +1,8 @@
 // سجل الفواتير: بحث برقم الفاتورة أو اسم الزبون/المورّد أو اسم صنف، وتصفية بالنوع والتاريخ. الضغط يفتح الفاتورة.
 import { h, fill, num } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
-import { header, emptyState, input, money } from '../../ui/components.js';
+import { header, emptyState, input, money, dataTable } from '../../ui/components.js';
+import { isWide } from '../../ui/wide.js';
 import { filterInvoices, INVOICE_TITLES, dateTimeText } from '../../domain/invoice.js';
 import { normalizeArabic } from '../../domain/product.js';
 import { app } from '../../core/app.js';
@@ -50,7 +51,7 @@ export function renderInvoices(el, params) {
     const total = items.filter((i) => i.type === 'sale').reduce((a, i) => a + i.total, 0);
     fill(body, items.length ? h('div', null,
       h('div', { class: 'list-count muted small' }, `${items.length} فاتورة`, type === 'sale' || !type ? [' — مبيعات ', money(total)] : null),
-      h('div', { class: 'list' }, ...items.slice(0, 150).map((i) => {
+      isWide() ? invoiceTable(items) : h('div', { class: 'list' }, ...items.slice(0, 150).map((i) => {
         const party = names.customerNames.get(i.customer_id) || names.supplierNames.get(i.supplier_id);
         return h('button', { class: 'row row-tap', type: 'button', onclick: () => showReceipt(i.id, { doneLabel: 'إغلاق', doneIcon: 'x' }) },
           h('span', { class: `row-ic ${i.type === 'sale' ? '' : 'ic-debt'}` }, icon(ICON[i.type], 20)),
@@ -59,8 +60,24 @@ export function renderInvoices(el, params) {
             h('span', { class: 'row-sub' }, num(dateTimeText(i.created_at)), i.type === 'sale' && i.paid < i.total ? ' · آجل' : '')),
           money(i.total, i.currency));
       })),
-      items.length > 150 ? h('p', { class: 'muted small' }, 'تظهر أحدث 150 فاتورة — ضيّق البحث لرؤية الأقدم.') : null)
+      !isWide() && items.length > 150 ? h('p', { class: 'muted small' }, 'تظهر أحدث 150 فاتورة — ضيّق البحث لرؤية الأقدم.') : null)
       : emptyState('receipt', 'لا فواتير', query ? `لا فاتورة تطابق «${query}»` : 'لا فواتير في هذه المدة — جرّب «كل الوقت».'));
+  }
+
+  function invoiceTable(items) {
+    const partyOf = (i) => names.customerNames.get(i.customer_id) || names.supplierNames.get(i.supplier_id) || '';
+    return dataTable({
+      rows: items,
+      onRow: (i) => showReceipt(i.id, { doneLabel: 'إغلاق', doneIcon: 'x' }),
+      columns: [
+        { key: 'number', label: 'الرقم', by: (i) => i.created_at, cell: (i) => h('strong', null, num(i.number)) },
+        { key: 'type', label: 'النوع', by: (i) => i.type, cell: (i) => h('span', { class: `dt-tag ${i.type === 'sale' ? '' : 'alt'}` }, INVOICE_TITLES[i.type].replace('فاتورة ', '')) },
+        { key: 'party', label: 'الزبون / التاجر', grow: true, by: partyOf, cell: (i) => partyOf(i) || h('span', { class: 'muted' }, '—') },
+        { key: 'date', label: 'التاريخ', by: (i) => i.created_at, cell: (i) => num(dateTimeText(i.created_at)) },
+        { key: 'pay', label: 'الدفع', by: (i) => (i.paid < i.total ? 1 : 0), cell: (i) => (i.paid < i.total ? h('span', { class: 'dt-tag warn' }, i.type === 'purchase' ? 'على الحساب' : 'آجل') : 'مدفوعة') },
+        { key: 'total', label: 'الإجمالي', num: true, by: (i) => i.total, cell: (i) => money(i.total, i.currency) },
+      ],
+    });
   }
 
   // سندات القبض: دفعات الزبائن من ديونهم (ليست فواتير، لكن صاحب المحل يبحث عنها هنا)

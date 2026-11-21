@@ -2,7 +2,8 @@
 // المدفوع نقدًا يخرج من الدرج. ومجموع المصاريف يُطرح من ربح البضاعة في التقارير ← صافي الربح.
 import { h, fill, num } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
-import { header, emptyState, button, input, field, money } from '../../ui/components.js';
+import { header, emptyState, button, input, field, money, dataTable } from '../../ui/components.js';
+import { isWide } from '../../ui/wide.js';
 import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
 import { parseMoney, formatMoney, CURRENCIES } from '../../domain/currency.js';
@@ -114,7 +115,7 @@ export function renderExpenses(el) {
   // الرواتب شأن صاحب المحل: غيره لا يراها في القائمة ولا في المجموع
   const seeSalaries = app.payroll.allowed();
 
-  el.append(header('المصاريف', { back: true }), h('div', { class: 'page' }, top, list));
+  el.append(header('المصاريف', { back: true }), h('div', { class: 'page split' }, top, list));
 
   async function load() {
     const { from, to } = periodBounds(period);
@@ -141,7 +142,17 @@ export function renderExpenses(el) {
           h('span', { class: 'row-end strong' }, money(c.total)))))) : null,
     );
     fill(list, shown.length ? h('div', { class: 'section' }, h('h2', { class: 'section-title' }, 'كل المصاريف'),
-      h('div', { class: 'list' }, ...shown.map((e) => h('button', { class: 'row row-tap', type: 'button', onclick: () => expenseSheet(e) },
+      isWide() ? dataTable({
+        rows: shown,
+        onRow: (e) => expenseSheet(e),
+        columns: [
+          { key: 'date', label: 'التاريخ', by: (e) => e.spent_at, cell: (e) => num(dayText(e.spent_at)) },
+          { key: 'cat', label: 'البند', by: (e) => categoryName(e.category), cell: (e) => h('span', { class: 'dt-name' }, h('span', { class: 'row-ic ic-debt' }, icon(categoryIcon(e.category), 18)), h('span', null, categoryName(e.category))) },
+          { key: 'note', label: 'ملاحظة', grow: true, cell: (e) => e.note || '' },
+          { key: 'method', label: 'دُفع من', by: (e) => (e.method_id ? (mName.get(e.method_id) || 'تحويل') : 'خارج'), cell: (e) => (e.method_id ? (mName.get(e.method_id) || 'تحويل') : h('span', { class: 'muted' }, 'من خارج الصندوق')) },
+          { key: 'amount', label: 'المبلغ', num: true, by: (e) => e.amount, cell: (e) => h('span', { class: 'owed' }, money(e.amount)) },
+        ],
+      }) : h('div', { class: 'list' }, ...shown.map((e) => h('button', { class: 'row row-tap', type: 'button', onclick: () => expenseSheet(e) },
         h('span', { class: 'row-ic ic-debt' }, icon(categoryIcon(e.category), 20)),
         h('span', { class: 'row-main' },
           h('span', { class: 'row-title' }, categoryName(e.category), e.note ? h('span', { class: 'muted' }, ` · ${e.note}`) : null),

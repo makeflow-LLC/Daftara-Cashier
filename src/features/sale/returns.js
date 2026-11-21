@@ -2,7 +2,8 @@
 // أو يُخصم من دين الزبون. لا يمكن إرجاع أكثر مما بيع (حتى مع مرتجعات سابقة).
 import { h, fill, num } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
-import { header, money, emptyState, input, button } from '../../ui/components.js';
+import { header, money, emptyState, input, button, dataTable } from '../../ui/components.js';
+import { isWide } from '../../ui/wide.js';
 import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
 import { formatQty, unit as unitOf, QTY_SCALE } from '../../domain/units.js';
@@ -27,7 +28,16 @@ export function renderReturns(el) {
   function paint() {
     const v = q.value.trim();
     const items = (v ? sales.filter((s) => matchesInvoiceNumber(s.number, v)) : sales).slice(0, 60);
-    fill(list, items.length ? h('div', { class: 'list' }, ...items.map((s) => h('button', { class: 'row row-tap', type: 'button', onclick: () => openInvoice(s.id) },
+    fill(list, items.length ? isWide() ? dataTable({
+      rows: items,
+      onRow: (s) => openInvoice(s.id),
+      columns: [
+        { key: 'number', label: 'رقم الفاتورة', by: (s) => s.created_at, cell: (s) => h('strong', null, num(s.number)) },
+        { key: 'date', label: 'التاريخ', by: (s) => s.created_at, cell: (s) => num(new Date(s.created_at).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })) },
+        { key: 'cust', label: 'الزبون', grow: true, by: (s) => customers.get(s.customer_id)?.name || '', cell: (s) => customers.get(s.customer_id)?.name || h('span', { class: 'muted' }, '—') },
+        { key: 'total', label: 'الإجمالي', num: true, by: (s) => s.total, cell: (s) => money(s.total, s.currency) },
+      ],
+    }) : h('div', { class: 'list' }, ...items.map((s) => h('button', { class: 'row row-tap', type: 'button', onclick: () => openInvoice(s.id) },
       h('span', { class: 'row-ic' }, icon('receipt', 20)),
       h('span', { class: 'row-main' },
         h('span', { class: 'row-title num' }, s.number),

@@ -8,14 +8,20 @@ import { app } from '../../core/app.js';
 import { navigate } from '../../core/router.js';
 import { topicContent } from './topic.js';
 import { askSupport } from './feedback.js';
+import { activeShortcuts } from '../../ui/shortcuts.js';
+import { isWide } from '../../ui/wide.js';
 
 const here = () => (location.hash || '#/').slice(1) || '/';
 
 export function openHelpSheet(topic) {
   // الدليل الكامل صفحة داخل التطبيق: لا تُفتح قبل إنشاء المحل ولا والجهاز مقفل
   const canBrowse = !!app.ctx.shopId && !app.locked && !app.account?.required;
+  const keys = activeShortcuts();
   return openSheet(() => h('div', { class: 'g-sheet' },
     topicContent(topic),
+    // الحاسوب: اختصارات لوحة المفاتيح التي تعمل في هذه الصفحة الآن
+    isWide() && keys.length ? h('div', { class: 'g-keys' }, h('h3', { class: 'g-h' }, icon('flash', 18), 'اختصارات لوحة المفاتيح'),
+      h('div', { class: 'g-keys-list' }, ...keys.map((k) => h('div', { class: 'g-key' }, h('kbd', { class: 'kbd on' }, k.key), h('span', null, k.label))))) : null,
     h('div', { class: 'g-actions' },
       canBrowse && topic.id !== 'help' ? h('button', { class: 'btn btn-outline', type: 'button', onclick: () => navigate('/help') }, icon('help', 20), h('span', null, 'الدليل الكامل')) : null,
       h('button', { class: 'btn btn-wa', type: 'button', onclick: () => askSupport(topic.title) }, icon('chat', 20), h('span', null, 'اسألنا على واتساب')))),

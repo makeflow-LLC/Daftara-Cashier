@@ -3,7 +3,8 @@
 // مرآة قسم الزبائن: هناك «لك»، وهنا «عليك». الدين اليدوي لا يمسّ المخزون؛ «شراء بفاتورة» يدخل الأصناف.
 import { h, fill, num } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
-import { header, iconButton, emptyState, syncBadge, button, money, input, field } from '../../ui/components.js';
+import { header, iconButton, emptyState, syncBadge, button, money, input, field, dataTable, helpButton } from '../../ui/components.js';
+import { isWide } from '../../ui/wide.js';
 import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
 import { parseMoney, formatMoney, CURRENCIES } from '../../domain/currency.js';
@@ -116,6 +117,20 @@ export function renderSuppliers(el) {
     // الأقرب موعدًا أولًا، ثم الأكبر رصيدًا
     const dueOf = (s) => (s.balance > 0 && app.dues.get(s.id) ? app.dues.get(s.id).date : '9999');
     const items = app.inventory.searchSuppliers(all, query).slice().sort((a, b) => (dueOf(a) < dueOf(b) ? -1 : dueOf(a) > dueOf(b) ? 1 : 0));
+    if (isWide() && items.length) {
+      fill(body, dataTable({
+        rows: items,
+        onRow: (s) => navigate(`/suppliers/view?id=${s.id}`),
+        columns: [
+          { key: 'name', label: 'التاجر', grow: true, by: (s) => s.name, cell: (s) => h('span', { class: 'dt-name' }, h('span', { class: `avatar ${s.balance > 0 ? 'owed' : ''}` }, s.name.trim().charAt(0)), h('span', null, s.name)) },
+          { key: 'phone', label: 'الجوال', by: (s) => s.phone || '', cell: (s) => (s.phone ? num(s.phone) : h('span', { class: 'muted' }, '—')) },
+          { key: 'due', label: 'موعد الدفع', by: dueOf, cell: (s) => (s.balance > 0 ? dueBadge(s.id) : null) || h('span', { class: 'muted' }, '—') },
+          { key: 'age', label: 'أقدم دين', by: (s) => (s.balance > 0 ? daysSince(s.oldestUnpaidAt) : 0), cell: (s) => (s.balance > 0 && daysSince(s.oldestUnpaidAt) >= 1 ? ageText(daysSince(s.oldestUnpaidAt)) : h('span', { class: 'muted' }, '—')) },
+          { key: 'balance', label: 'عليك له', num: true, by: (s) => s.balance, cell: (s) => (s.balance > 0 ? h('span', { class: 'owed' }, money(s.balance)) : s.balance < 0 ? h('span', { class: 'credit' }, 'لك ', money(-s.balance)) : h('span', { class: 'muted' }, 'لا شيء')) },
+        ],
+      }));
+      return;
+    }
     fill(body, items.length ? h('div', { class: 'list' }, ...items.slice(0, 200).map((s) => {
       const days = daysSince(s.oldestUnpaidAt);
       const badge = s.balance > 0 ? dueBadge(s.id) : null;
@@ -150,8 +165,8 @@ export async function renderSupplier(el, params) {
       h('div', { class: 'topbar-actions' }, iconButton('edit', 'تعديل التاجر', () => editSupplier(s, load, !app.can('delete') ? null : async () => {
         await app.inventory.removeSupplier(s.id); history.back();
         toast(`حُذف «${s.name}»`, { undo: () => app.inventory.restoreSupplier(s.id) });
-      })))),
-    h('div', { class: 'page' }, top, list));
+      })), helpButton())),
+    h('div', { class: 'page split' }, top, list));
 
   const miniBtn = (ic, label, onclick, disabled) => h('button', { class: 'mini-btn', type: 'button', onclick, disabled: !!disabled }, icon(ic, 20), h('span', null, label));
 
@@ -175,6 +190,23 @@ export async function renderSupplier(el, params) {
         miniBtn('receipt', 'كشف واتساب', sendStatement, !s.entries.length),
         miniBtn('phone', 'اتصال', () => openLink(`tel:+${phone}`), !phone),
         miniBtn('clipboard', 'طلبية', () => navigate('/inventory?reorder=1'))));
+    if (isWide() && s.entries.length) {
+      const amt = (v) => num(formatMoney(v, cur(), { symbol: false }));
+      const tapOf = (e) => (e.cancelled ? null : e.invoice_id ? (e.type === 'purchase' ? () => showReceipt(e.invoice_id, { doneLabel: 'إغلاق', doneIcon: 'x' }) : null) : editableEntry(e) && app.can('delete') ? () => entrySheet(e) : null);
+      fill(list, h('div', { class: 'section' }, h('h2', { class: 'section-title' }, 'كشف الحساب'), dataTable({
+        rows: s.entries,
+        onRow: (e) => { const t = tapOf(e); if (t) t(); },
+        rowClass: (e) => (e.cancelled ? 'dt-cancelled' : ''),
+        columns: [
+          { key: 'date', label: 'التاريخ', by: (e) => e.created_at, cell: (e) => num(dateText(e.created_at)) },
+          { key: 'what', label: 'البيان', grow: true, cell: (e) => [SUPPLIER_ENTRY_LABELS[e.type] || '', e.cancelled ? [' ', h('span', { class: 'tag-cancelled' }, 'ملغاة')] : null, e.note ? h('span', { class: 'muted' }, ` · ${e.note}`) : null] },
+          { key: 'debit', label: 'له (دين)', num: true, by: (e) => Math.max(0, e.amount), cell: (e) => (e.amount > 0 ? h('span', { class: e.cancelled ? '' : 'owed' }, amt(e.amount)) : '') },
+          { key: 'credit', label: 'دفعت', num: true, by: (e) => Math.max(0, -e.amount), cell: (e) => (e.amount < 0 ? h('span', { class: e.cancelled ? '' : 'credit' }, amt(-e.amount)) : '') },
+          { key: 'balance', label: 'الباقي له', num: true, cell: (e) => (e.cancelled ? '' : amt(e.balance)) },
+        ],
+      })));
+      return;
+    }
     fill(list, s.entries.length ? h('div', { class: 'section' }, h('h2', { class: 'section-title' }, 'كشف الحساب'),
       h('div', { class: 'list' }, ...s.entries.map((e) => {
         const label = SUPPLIER_ENTRY_LABELS[e.type] || '';

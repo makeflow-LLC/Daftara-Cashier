@@ -2,7 +2,8 @@
 // تذكير وكشف عبر واتساب، والاستيراد من دفترة.
 import { h, fill, num } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
-import { header, iconButton, emptyState, syncBadge, button, money, input, field } from '../../ui/components.js';
+import { header, iconButton, emptyState, syncBadge, button, money, input, field, dataTable, helpButton } from '../../ui/components.js';
+import { isWide } from '../../ui/wide.js';
 import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
 import { parseMoney, formatMoney, CURRENCIES } from '../../domain/currency.js';
@@ -62,6 +63,19 @@ export function renderCustomers(el) {
       return;
     }
     const items = app.customers.search(all, query);
+    if (isWide() && items.length) {
+      fill(body, dataTable({
+        rows: items,
+        onRow: (c) => navigate(`/customers/view?id=${c.id}`),
+        columns: [
+          { key: 'name', label: 'الزبون', grow: true, by: (c) => c.name, cell: (c) => h('span', { class: 'dt-name' }, h('span', { class: `avatar ${c.balance > 0 ? 'owed' : ''}` }, c.name.trim().charAt(0)), h('span', null, c.name)) },
+          { key: 'phone', label: 'الجوال', by: (c) => c.phone || '', cell: (c) => (c.phone ? h('span', { class: 'num' }, c.phone) : h('span', { class: 'muted' }, '—')) },
+          { key: 'note', label: 'ملاحظة', cell: (c) => c.note || '' },
+          { key: 'balance', label: 'عليه', num: true, by: (c) => c.balance, cell: (c) => (c.balance ? h('span', { class: c.balance > 0 ? 'owed' : 'credit' }, money(c.balance)) : h('span', { class: 'muted' }, 'لا دين')) },
+        ],
+      }));
+      return;
+    }
     fill(body, items.length ? h('div', { class: 'list' }, ...items.slice(0, 200).map((c) => h('button', {
       class: 'row row-tap', type: 'button', onclick: () => navigate(`/customers/view?id=${c.id}`),
     }, h('span', { class: `avatar ${c.balance > 0 ? 'owed' : ''}` }, c.name.trim().charAt(0)),
@@ -91,9 +105,9 @@ export async function renderCustomer(el, params) {
         await app.customers.remove(c.id);
         history.back();
         toast(`حُذف «${c.name}»`, { undo: () => app.customers.restore(c.id) });
-      }))),
+      })), helpButton()),
     ),
-    h('div', { class: 'page' }, top, list),
+    h('div', { class: 'page split' }, top, list),
   );
 
   function paint() {
@@ -116,13 +130,34 @@ export async function renderCustomer(el, params) {
         miniBtn('phone', 'اتصال', () => openLink(`tel:+${phone}`), !phone),
         miniBtn('chat', 'رسالة SMS', async () => openLink(smsLink(phone, await app.sms.text('reminder', c))), !phone)),
     );
+    // دفعة: الضغط يفتح سند القبض (ومنه التعديل والحذف لمن يملك الصلاحية)
+    const tapOf = (e) => {
+      if (e.cancelled) return null;
+      const canEdit = editableEntry(e) && app.can('delete');
+      return e.invoice_id ? () => showReceipt(e.invoice_id, { doneLabel: 'إغلاق', doneIcon: 'x' })
+        : e.type === 'payment' && e.payment_id ? () => showVoucher(e.payment_id, { doneLabel: 'إغلاق', onEdit: canEdit ? () => entrySheet(e) : null })
+          : canEdit ? () => entrySheet(e) : null;
+    };
+    if (isWide() && c.entries.length) {
+      // الحاسوب: كشف حساب بأعمدة (عليه / دفع / الرصيد) كدفتر الأستاذ
+      const amt = (v) => num(formatMoney(v, cur(), { symbol: false }));
+      fill(list, h('div', { class: 'section' }, h('h2', { class: 'section-title' }, 'كشف الحساب'), dataTable({
+        rows: c.entries,
+        onRow: (e) => { const t = tapOf(e); if (t) t(); },
+        rowClass: (e) => (e.cancelled ? 'dt-cancelled' : ''),
+        columns: [
+          { key: 'date', label: 'التاريخ', by: (e) => e.created_at, cell: (e) => num(dateText(e.created_at)) },
+          { key: 'what', label: 'البيان', grow: true, cell: (e) => [ENTRY_LABELS[e.type] || '', e.cancelled ? [' ', h('span', { class: 'tag-cancelled' }, 'ملغاة')] : null, e.note ? h('span', { class: 'muted' }, ` · ${e.note}`) : null] },
+          { key: 'debit', label: 'عليه', num: true, by: (e) => Math.max(0, e.amount), cell: (e) => (e.amount > 0 ? h('span', { class: e.cancelled ? '' : 'owed' }, amt(e.amount)) : '') },
+          { key: 'credit', label: 'دفع', num: true, by: (e) => Math.max(0, -e.amount), cell: (e) => (e.amount < 0 ? h('span', { class: e.cancelled ? '' : 'credit' }, amt(-e.amount)) : '') },
+          { key: 'balance', label: 'الرصيد', num: true, cell: (e) => (e.cancelled ? '' : amt(e.balance)) },
+        ],
+      })));
+      return;
+    }
     fill(list, c.entries.length ? h('div', { class: 'section' }, h('h2', { class: 'section-title' }, 'كشف الحساب'),
       h('div', { class: 'list' }, ...c.entries.map((e) => {
-        // دفعة: الضغط يفتح سند القبض (ومنه التعديل والحذف لمن يملك الصلاحية)
-        const canEdit = editableEntry(e) && app.can('delete');
-        const tap = e.invoice_id ? () => showReceipt(e.invoice_id, { doneLabel: 'إغلاق', doneIcon: 'x' })
-          : e.type === 'payment' && e.payment_id ? () => showVoucher(e.payment_id, { doneLabel: 'إغلاق', onEdit: canEdit ? () => entrySheet(e) : null })
-            : canEdit ? () => entrySheet(e) : null;
+        const tap = tapOf(e);
         if (e.cancelled) {
           return h('div', { class: 'row entry-cancelled' },
             h('span', { class: 'row-ic' }, icon('x', 20)),

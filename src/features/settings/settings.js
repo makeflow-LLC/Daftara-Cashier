@@ -21,7 +21,7 @@ export function renderSettings(el) {
   const f = app.features;
   el.append(
     header('الإعدادات', { back: true }),
-    h('div', { class: 'page' },
+    h('div', { class: 'page cols-2' },
       section('المحل', h('div', { class: 'list' },
         row({ icon: 'store', title: 'بيانات المحل والشعار', sub: app.shop?.name, onclick: go('/settings/shop') }),
         row({ icon: 'users', title: 'الموظفون والصلاحيات', sub: app.staff ? `مفعّل — ${(app.staff.members || []).filter((m) => m.active !== false).length} موظف` : 'رمز لكل موظف، والكاشير لا يرى الأرباح', onclick: go('/settings/staff') }),

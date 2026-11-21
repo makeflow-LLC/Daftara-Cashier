@@ -31,17 +31,41 @@ function typing(el) {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
 }
 
-/** يستمع للقارئ في كل الشاشة (إلا داخل الحقول، فلها تعاملها). يرجع دالة الإيقاف. */
+// مستمع واحد للتطبيق كله. الشاشة التي تعرف ماذا تفعل بالباركود (بيع، شراء، جرد، نقل…) تسجّل نفسها
+// بـ listenKeyScanner؛ وفي أي شاشة أخرى يذهب الباركود إلى المعالج العام (setDefaultScanHandler):
+// بطاقة سريعة للصنف — فالقارئ يعمل في كل مكان.
+const screens = [];
+let fallback = null;
+let installed = false;
+let buffer = null;
+
+function onKey(e) {
+  if (e.ctrlKey || e.altKey || e.metaKey || typing(document.activeElement)) return;
+  const target = screens.length ? screens[screens.length - 1] : fallback;
+  if (!target) return;
+  if (document.querySelector('.sheet-backdrop, .sheet')) return; // نافذة مفتوحة: لا نضيف للسلة من خلفها
+  const code = buffer.push(e.key, e.timeStamp || performance.now());
+  if (code) { e.preventDefault(); e.stopPropagation(); target(code); }
+}
+
+function install() {
+  if (installed) return;
+  installed = true;
+  buffer = createKeyBuffer();
+  document.addEventListener('keydown', onKey, true);
+}
+
+/** الشاشة المفتوحة تستقبل ما يمسحه القارئ (إلا داخل الحقول، فلها تعاملها). يرجع دالة الإيقاف. */
 export function listenKeyScanner(onCode) {
-  const b = createKeyBuffer();
-  const handler = (e) => {
-    if (e.ctrlKey || e.altKey || e.metaKey || typing(document.activeElement)) return;
-    if (document.querySelector('.sheet-backdrop, .sheet')) return; // نافذة مفتوحة: لا نضيف للسلة من خلفها
-    const code = b.push(e.key, e.timeStamp || performance.now());
-    if (code) { e.preventDefault(); onCode(code); }
-  };
-  document.addEventListener('keydown', handler, true);
-  return () => document.removeEventListener('keydown', handler, true);
+  install();
+  screens.push(onCode);
+  return () => { const i = screens.lastIndexOf(onCode); if (i >= 0) screens.splice(i, 1); };
+}
+
+/** ما يحدث حين يُمسح باركود في شاشة لم تسجّل نفسها. */
+export function setDefaultScanHandler(fn) {
+  install();
+  fallback = fn;
 }
 
 /** نسخة الحاسوب: لا كاميرا مسح، بل قارئ USB ولوحة مفاتيح. */
