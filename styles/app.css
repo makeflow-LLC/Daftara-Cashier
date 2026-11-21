@@ -1343,3 +1343,14 @@ body{font-weight:500}
   .rep-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 var(--space-6);align-items:start}
 }
 .dt .pill,.dt .state-chip{white-space:nowrap}
+
+/* «أنشئ حسابك»: فاصل «أو» قبل «عندي حساب» */
+.acc-or{display:flex;align-items:center;gap:var(--space-3);margin:var(--space-4) 0 var(--space-3);color:var(--color-muted);font-size:14px;font-weight:700}
+.acc-or::before,.acc-or::after{content:"";flex:1;height:2px;background:var(--color-hairline)}
+.setup-body .acc-card.acc-info + .btn{margin-bottom:var(--space-4)}
+/* الشاشات الكاملة (الإعداد الأول، أنشئ حسابك، القفل) على الحاسوب: النموذج بعرض مريح في الوسط لا ممتدًا على الشاشة كلها */
+@media (min-width:900px){
+  .setup-body{width:100%;max-width:560px;margin:0 auto}
+  .setup-hero > h1,.setup-hero > p,.setup-hero > .acc-ic,.setup-hero > .logo{max-width:560px;margin-right:auto;margin-left:auto}
+  .setup-hero > .acc-ic,.setup-hero > .logo{display:flex}
+}

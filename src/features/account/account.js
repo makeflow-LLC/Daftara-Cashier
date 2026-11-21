@@ -70,17 +70,20 @@ export function renderAccount(el) {
         field('كلمة السر', pw, 'لا تحتاجها يوميًا — فقط عند الدخول من جهاز جديد'),
         field('تأكيد كلمة السر', pw2),
         save,
-        phone ? button('إلغاء', { kind: 'text', block: true, onclick: () => paint() }) : null));
+        phone ? button('إلغاء', { kind: 'text', block: true, onclick: () => paint() })
+          : button('عندي حساب من قبل — ادخل به', { kind: 'text', block: true, onclick: () => openLogin(ph.value) })));
   }
   paint();
   app.account.refresh().then((p) => { if (p) paint(); });
 }
 
-// ---------- الدخول من جهاز جديد (من شاشة الإعداد الأول) ----------
-export function openLogin() {
-  const ph = phoneInput();
+// ---------- الدخول بحساب موجود: من شاشة الإعداد الأول، ومن «أنشئ حسابك»، ومن «حسابي» ----------
+// على جهاز فيه محل (جرّب التطبيق هنا قبل أن يدخل): نقول له بوضوح أن بيانات هذا الجهاز تُستبدل ببيانات حسابه.
+export async function openLogin(prefill = '') {
+  const local = await app.account.localShop();
+  const ph = phoneInput(prefill);
   const pw = passInput('كلمة السر');
-  const go = button('ادخل', { type: 'submit', block: true, size: 'lg', icon: 'check' });
+  const go = button(local ? 'ادخل واستبدل بيانات هذا الجهاز' : 'ادخل', { type: 'submit', block: true, size: 'lg', icon: 'check' });
   openSheet((close) => h('form', {
     onsubmit: (e) => {
       e.preventDefault();
@@ -96,12 +99,17 @@ export function openLogin() {
     },
   },
     h('p', { class: 'muted' }, 'اكتب الرقم وكلمة السر اللذين حميت بهما محلك. يلزم إنترنت لهذه الخطوة.'),
+    local ? h('div', { class: 'acc-card acc-warn' }, icon('alert', 26),
+      h('div', null, h('strong', null, 'ينزل محلك مكان ما على هذا الجهاز'),
+        h('span', null, local.products || local.sales
+          ? `على هذا الجهاز الآن «${local.name}» وفيه ${local.products} صنف و${local.sales} فاتورة بيع. بعد الدخول يُحذف من هذا الجهاز ويظهر محل حسابك بكل بياناته.`
+          : 'المحل التجريبي الذي على هذا الجهاز يُستبدل بمحل حسابك بكل بياناته.'))) : null,
     field('رقم الجوال', ph),
     field('كلمة السر', pw),
     go,
     h('button', { class: 'btn btn-text btn-block', type: 'button', onclick: () => { close(); openForgot(ph.value); } }, 'نسيت كلمة السر؟'),
   ), { title: 'عندي حساب' });
-  setTimeout(() => ph.focus(), 200);
+  setTimeout(() => (prefill ? pw : ph).focus(), 200);
 }
 
 // ---------- نسيت كلمة السر ----------
@@ -168,6 +176,12 @@ export function renderAccountRequired(el) {
     h('div', null, h('strong', null, server ? 'تعذّر إنشاء الحساب الآن' : 'لا يوجد إنترنت الآن'), h('span', null, server ? 'تابع عملك، وسنطلبه منك عند الفتح القادم. إن تكرر، راسلنا من «أرسل ملاحظة».' : 'إنشاء الحساب يحتاج إنترنت. تابع عملك، وسنطلبه منك عند الفتح القادم.'))),
   h('button', { class: 'btn btn-outline btn-block', type: 'button', onclick: () => { app.account.skipForNow(); enter('تابع عملك — أنشئ حسابك عند الفتح القادم'); } }, server ? 'تابع الآن' : 'تابع بلا إنترنت الآن'));
 
+  // الرقم له حساب من قبل (صاحب المحل يعمل على جهاز آخر): لا ننشئ حسابًا ثانيًا، ندخله بحسابه
+  const takenBox = h('div');
+  const showTaken = () => fill(takenBox, h('div', { class: 'acc-card acc-info' }, icon('user', 26),
+    h('div', null, h('strong', null, 'هذا الرقم له حساب من قبل'), h('span', null, 'إن كان حسابك، ادخل به فينزل محلك كاملًا على هذا الجهاز.'))),
+  h('button', { class: 'btn btn-primary btn-block', type: 'button', onclick: () => openLogin(ph.value) }, icon('check', 22), h('span', null, 'ادخل بهذا الرقم')));
+
   el.append(h('div', { class: 'setup' },
     h('div', { class: 'setup-hero acc-hero' }, h('span', { class: 'acc-ic' }, icon('lock', 30)),
       h('h1', null, 'أنشئ حسابك'),
@@ -177,17 +191,27 @@ export function renderAccountRequired(el) {
       onsubmit: (e) => {
         e.preventDefault();
         busy(save, async () => {
-          try { await app.account.protect(ph.value, pw.value, pw2.value); } catch (err) { if (err.kind === 'offline' || err.kind === 'server') { lastFail = err.kind; showOffline(err.kind === 'server'); el.scrollTop = 0; window.scrollTo(0, 0); } throw err; }
+          fill(takenBox);
+          try { await app.account.protect(ph.value, pw.value, pw2.value); } catch (err) {
+            if (err.kind === 'offline' || err.kind === 'server') { lastFail = err.kind; showOffline(err.kind === 'server'); el.scrollTop = 0; window.scrollTo(0, 0); }
+            if (err.kind === 'taken') { showTaken(); el.scrollTop = 0; window.scrollTo(0, 0); }
+            throw err;
+          }
           feedback.ok();
           enter('حسابك جاهز ✓ احفظ كلمة السر في مكان آمن');
         });
       },
     },
       offlineBox, // في الأعلى: ظاهر دائمًا حتى على الشاشات الصغيرة
+      takenBox,
       field('رقم جوالك', ph),
       field('كلمة السر', pw, `${MIN_PASSWORD} أحرف أو أرقام على الأقل — تحتاجها فقط عند الدخول من جهاز جديد`),
       field('تأكيد كلمة السر', pw2),
       save,
+      // من له حساب (يعمل على جوال آخر أو على الحاسوب) لا ينشئ حسابًا جديدًا: يدخل بحسابه
+      h('div', { class: 'acc-or' }, h('span', null, 'أو')),
+      h('button', { class: 'btn btn-outline btn-block btn-lg', type: 'button', onclick: () => openLogin(ph.value) }, icon('user', 22), h('span', null, 'عندي حساب — ادخل برقم الهاتف')),
+      h('button', { class: 'btn btn-text btn-block', type: 'button', onclick: () => openLink(`https://wa.me/${SUPPORT_PHONE}?text=${encodeURIComponent('مرحبًا، أحتاج مساعدة في حساب دفترة كاشير')}`) }, icon('chat', 20), h('span', null, 'تحتاج مساعدة؟ راسلنا على واتساب')),
       h('p', { class: 'muted small acc-legal' }, 'بإنشاء الحساب توافق على ',
         h('a', { href: TERMS_URL, target: '_blank', rel: 'noopener' }, 'شروط الاستخدام'), ' و',
         h('a', { href: PRIVACY_URL, target: '_blank', rel: 'noopener' }, 'سياسة الخصوصية'), '.'))));

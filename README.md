@@ -285,6 +285,13 @@ of the shop and pulls everything (`src/core/account.js`). Forgotten password: th
 derived from the current hash; MakeFlow signs `cashier-reset-v1|phone|request` with the license key on the
 codes page; the code works once.
 
+The account is asked for only once there is work worth protecting (`accountStage` in `domain/account.js`): free
+exploring below 3 sales however old the install is, a one-time nudge from 3 sales, required at 20 sales or at 3 sales
+once the shop is 3 days old. The required screen offers both "create" and "I have an account". Logging in on a device
+that already holds a (trial) shop replaces it with the account's shop: the device is snapshotted in memory, cleared
+(`clearShopData` keeps device id, session, licence state and printer), the shop is pulled, and the snapshot is
+restored if the pull fails (`core/backup.js`).
+
 ### Server setup (once)
 
 1. Supabase Studio → SQL Editor → paste `supabase/setup.sql` (all migrations in one file, built by

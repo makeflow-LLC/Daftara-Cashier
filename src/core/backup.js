@@ -47,3 +47,32 @@ export async function restoreBackup(db, data) {
     }
   });
 }
+
+// ---------- استبدال محل الجهاز بمحل آخر (الدخول بحساب موجود على جهاز فيه محل تجريبي) ----------
+const LOCAL_TABLES = ['outbox', 'stock', 'wh_stock', 'held', 'files'];
+/** يبقى على الجهاز مهما تغيّر المحل: هويته، جلسة الدخول، حالة الترخيص، وإعداد الطابعة. */
+export const DEVICE_META = ['deviceId', 'auth', 'printer', ...LICENSE_META];
+
+/** نسخة كاملة مما على الجهاز كما هو (في الذاكرة)، للرجوع إليها إن فشل الاستبدال. */
+export async function snapshotDevice(db) {
+  const snap = {};
+  for (const t of [...SYNCED, ...LOCAL_TABLES, 'meta']) snap[t] = await db.table(t).toArray();
+  return snap;
+}
+
+/** يمسح بيانات المحل من الجهاز (الجداول المتزامنة، طابور الرفع، المخزون المحسوب…) ويُبقي هوية الجهاز. */
+export async function clearShopData(db) {
+  const names = [...SYNCED, ...LOCAL_TABLES, 'meta'];
+  await db.transaction('rw', names.map((n) => db.table(n)), async () => {
+    for (const t of [...SYNCED, ...LOCAL_TABLES]) await db.table(t).clear();
+    for (const k of await db.meta.toCollection().primaryKeys()) if (!DEVICE_META.includes(k)) await db.meta.delete(k);
+  });
+}
+
+/** يعيد الجهاز كما كان في snapshotDevice. */
+export async function restoreDevice(db, snap) {
+  const names = [...SYNCED, ...LOCAL_TABLES, 'meta'];
+  await db.transaction('rw', names.map((n) => db.table(n)), async () => {
+    for (const t of names) { await db.table(t).clear(); if (snap[t] && snap[t].length) await db.table(t).bulkPut(snap[t]); }
+  });
+}

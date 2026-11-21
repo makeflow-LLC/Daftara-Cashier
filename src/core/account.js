@@ -2,8 +2,9 @@
 // الجهاز يبقى «مجهولًا» عند الخادم؛ الدخول يجعله عضوًا في المحل (cashier_account_login).
 import { HttpError } from '../sync/supabase.js';
 import { accountPhone, passwordProblem, loginProblem, extractResetCode, accountStage } from '../domain/account.js';
+import { snapshotDevice, clearShopData, restoreDevice } from './backup.js';
 
-/** kind: 'input' (خطأ في ما كتبه المستخدم) | 'offline' | 'server' (خلل لا يحلّه المستخدم الآن) */
+/** kind: 'input' (خطأ في ما كتبه المستخدم) | 'taken' (الرقم له حساب من قبل) | 'offline' | 'server' (خلل لا يحلّه المستخدم الآن) */
 export class AccountError extends Error {
   constructor(message, kind = 'input') { super(message); this.kind = kind; }
 }
@@ -18,7 +19,7 @@ function friendly(e) {
   if (e instanceof HttpError) {
     if (e.status === 0 || e.transient) return new AccountError(OFFLINE, 'offline');
     const code = e.body && e.body.code;
-    if (code === '23505') return new AccountError('هذا الرقم مسجّل لمحل آخر');
+    if (code === '23505') return new AccountError('هذا الرقم مسجّل لمحل آخر — إن كان حسابك فاضغط «عندي حساب»', 'taken');
     if (code === '42501') return new AccountError('هذا الجهاز ليس صاحب المحل', 'server');
   }
   return new AccountError('حدث خطأ، حاول مرة أخرى', 'server');
@@ -104,18 +105,42 @@ export function createAccount(app) {
       let r;
       try { r = await a.rest.rpc('cashier_account_login', { p_phone: phone, p_password: password }); } catch (e) { throw friendly(e); }
       if (!r || !r.ok) throw new AccountError(loginProblem(r));
+      // على الجهاز محل آخر (جرّب التطبيق هنا قبل أن يدخل بحسابه): يُستبدل ببيانات الحساب،
+      // فلا تختلط أصناف المحلّين. نحتفظ بنسخة في الذاكرة ونرجع إليها إن لم تنزل البيانات.
+      const prev = app.ctx.shopId || null;
+      const replacing = !!prev && prev !== r.shop_id;
+      const snap = replacing ? await snapshotDevice(app.db) : null;
+      if (replacing) await clearShopData(app.db);
       // ننزّل بيانات المحل قبل حفظه على الجهاز: إن انقطع الإنترنت لا يبقى الجهاز على محل فارغ
       app.ctx.shopId = r.shop_id;
       const s = await app.sync.run();
       const shop = await app.db.shops.get(r.shop_id);
       if ((s && s.error) || !shop) {
-        app.ctx.shopId = null;
-        for (const k of (await app.db.meta.toCollection().primaryKeys())) if (String(k).startsWith('cursor:') || k === 'remote') await app.db.meta.delete(k);
+        app.ctx.shopId = prev;
+        if (replacing) await restoreDevice(app.db, snap);
+        else for (const k of (await app.db.meta.toCollection().primaryKeys())) if (String(k).startsWith('cursor:') || k === 'remote') await app.db.meta.delete(k);
         throw s && s.error ? friendly(s.error) : new AccountError('لم تنزل بيانات المحل، حاول مرة أخرى');
       }
       await app.meta.set('shopId', r.shop_id);
+      // حرف فواتير هذا الجهاز في المحل الذي دخله (الخادم يعطيه عند التسجيل)
+      const reg = await app.meta.get('remote');
+      if (reg && reg.prefix) { await app.meta.set('devicePrefix', reg.prefix); app.ctx.prefix = reg.prefix; }
       await remember(phone);
-      return { shopId: r.shop_id, name: r.name };
+      return { shopId: r.shop_id, name: r.name, replaced: replacing };
+    },
+
+    /**
+     * ما على هذا الجهاز الآن (قبل الدخول بحساب آخر): { name, products, sales } أو null إن لم يكن عليه محل.
+     * يُعرض لصاحب المحل حتى يعرف ما الذي سيُستبدل.
+     */
+    async localShop() {
+      if (!app.ctx.shopId) return null;
+      const [shop, products, sales] = await Promise.all([
+        app.db.shops.get(app.ctx.shopId),
+        app.db.products.filter((p) => !p.deleted).count(),
+        app.db.invoices.where('type').equals('sale').count(),
+      ]);
+      return { name: shop ? shop.name : '', products, sales };
     },
 
     /** نسيت كلمة السر (1): رقم الطلب الذي يُرسل لـ MakeFlow. */
