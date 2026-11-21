@@ -1318,3 +1318,20 @@ body{font-weight:500}
 .dt-tag.warn{background:var(--amber-100);color:var(--amber-700)}
 .dt .stock-badge{min-width:0;display:inline-flex;flex-direction:row;align-items:baseline;gap:4px;padding:2px 10px}
 .dt-more{display:flex;margin:var(--space-3) auto}
+.dt-tag.bad{background:var(--danger-100);color:var(--danger-700)}
+.dt-cancelled td{color:var(--color-muted);text-decoration:line-through}
+.dt-cancelled .tag-cancelled{display:inline-block;text-decoration:none}
+.dt-name .row-ic{width:34px;height:34px}
+
+/* الشاشة العريضة: بقية الصفحات — ملخص وأزرار في عمود، والجدول بجانبه؛ نماذج بعرض مريح؛ قوائم الإعدادات بعمودين */
+@media (min-width:1000px){
+  .page.split{display:grid;grid-template-columns:minmax(300px,380px) minmax(0,1fr);gap:var(--space-6);align-items:start}
+  .page.split > :first-child{position:sticky;top:72px}
+  .page.split > :last-child > .section:first-child > .section-title{margin-top:0}
+  .page.cols-2 .list{display:grid;grid-template-columns:1fr 1fr}
+  .page.cols-2 .list > .row{border-bottom:1.5px solid var(--color-hairline)}
+  #view form.page,#view .page > form{max-width:760px}
+  #view .page > .field,#view .page > .card,#view .page > .list:not(.g-list){max-width:760px}
+  .page.cols-2 .list,.page.split .list{max-width:none !important}
+  .sticky-save{left:auto;width:min(760px,calc(100% - var(--side-w)))}
+}

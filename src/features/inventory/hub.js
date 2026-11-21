@@ -2,7 +2,8 @@
 // مع «اطلب من المورّد»: رسالة واتساب جاهزة بالأصناف والكميات.
 import { h, fill, num } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
-import { header, emptyState, button, input, field, money } from '../../ui/components.js';
+import { header, emptyState, button, input, field, money, dataTable } from '../../ui/components.js';
+import { isWide } from '../../ui/wide.js';
 import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
 import { scanOnce } from '../../ui/scanner.js';
@@ -109,7 +110,7 @@ export function renderInventory(el, params) {
     fill(body,
       items.length ? h('p', { class: 'muted small' }, t.hint) : null,
       canOrder ? button('اطلب من التاجر عبر واتساب', { icon: 'truck', block: true, onclick: () => reorder([...alerts.out, ...alerts.low]) }) : null,
-      items.length ? h('div', { class: 'list section' }, ...items.map((p) => h('button', { class: 'row row-tap', type: 'button', onclick: () => navigate(`/products/edit?id=${p.id}`) },
+      items.length && isWide() ? stockTable(items, tab) : items.length ? h('div', { class: 'list section' }, ...items.map((p) => h('button', { class: 'row row-tap', type: 'button', onclick: () => navigate(`/products/edit?id=${p.id}`) },
         productThumb(p, 40),
         h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, p.name),
           tab === 'expiring' ? h('span', { class: 'row-sub' }, 'ينتهي ', num(p.expiry_date)) : null),
@@ -118,8 +119,30 @@ export function renderInventory(el, params) {
   }
 
   // كل الأصناف بكمياتها في المحل (وما في المخازن الخارجية إن وُجد)، مع بحث
+  // الحاسوب: جدول المخزون — في المحل، في المخازن، التكلفة وقيمة الموجود (لمن يرى الأرباح)
+  function stockTable(items, kind) {
+    const seeCost = app.can('see_profit');
+    const whText = (p) => (whQty.get(p.id) || []).map((x) => `${whNames.get(x.branch_id) || 'مخزن'}: ${formatQty(x.qty)}`).join(' · ');
+    const value = (p) => Math.round((Math.max(0, p.qty) * (p.avg_cost || 0)) / 1000);
+    const lvl = (p) => (kind === 'low' ? 'low' : p.qty <= 0 ? 'out' : '');
+    return h('div', { class: 'section' }, dataTable({
+      rows: items,
+      onRow: (p) => navigate(`/products/edit?id=${p.id}`),
+      columns: [
+        { key: 'name', label: 'الصنف', grow: true, by: (p) => p.name, cell: (p) => h('span', { class: 'dt-name' }, productThumb(p, 36), h('span', null, p.name)) },
+        { key: 'barcode', label: 'الباركود', by: (p) => p.barcode || '', cell: (p) => (p.barcode ? num(p.barcode) : h('span', { class: 'muted' }, '—')) },
+        kind === 'expiring' ? { key: 'exp', label: 'ينتهي', by: (p) => p.expiry_date || '', cell: (p) => num(p.expiry_date || '') } : null,
+        whNames.size ? { key: 'wh', label: 'في المخازن', cell: (p) => whText(p) || h('span', { class: 'muted' }, '—') } : null,
+        seeCost ? { key: 'cost', label: 'التكلفة', num: true, by: (p) => p.avg_cost || 0, cell: (p) => (p.avg_cost ? money(p.avg_cost, p.currency) : h('span', { class: 'muted' }, '—')) } : null,
+        seeCost ? { key: 'value', label: 'قيمة الموجود', num: true, by: value, cell: (p) => (value(p) ? money(value(p), p.currency) : h('span', { class: 'muted' }, '—')) } : null,
+        { key: 'qty', label: 'في المحل', num: true, by: (p) => p.qty, cell: (p) => h('span', { class: `stock-badge ${lvl(p) ? `stock-${lvl(p)}` : ''}` }, h('span', { class: 'num' }, formatQty(p.qty)), h('small', null, unitOf(p.unit).short)) },
+      ].filter(Boolean),
+    }));
+  }
+
   function paintAll() {
-    const items = searchProducts(alerts.all, query, 150);
+    const items = searchProducts(alerts.all, query, isWide() ? 2000 : 150);
+    if (isWide() && items.length) { fill(body, stockTable(items, 'all')); return; }
     fill(body, items.length ? h('div', { class: 'list section' }, ...items.map((p) => {
       const inWh = whQty.get(p.id) || [];
       const lvl = p.qty <= 0 ? 'out' : '';

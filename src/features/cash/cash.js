@@ -2,7 +2,8 @@
 // «ابدأ اليوم» اختياري (نقد أول اليوم، ويُقترح ما بقي من آخر إغلاق). البيع لا يتوقف عليه.
 import { h, fill, num } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
-import { header, button, input, field, money, row } from '../../ui/components.js';
+import { header, button, input, field, money, row, dataTable } from '../../ui/components.js';
+import { isWide } from '../../ui/wide.js';
 import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
 import { parseMoney, formatMoney, CURRENCIES } from '../../domain/currency.js';
@@ -20,7 +21,7 @@ const cur = () => app.shop?.base_currency || 'ILS';
 export function renderCash(el) {
   const top = h('div');
   const hist = h('div');
-  el.append(header('الصندوق', { back: true }), h('div', { class: 'page' }, top, hist));
+  el.append(header('الصندوق', { back: true }), h('div', { class: 'page split' }, top, hist));
 
   async function load() {
     const s = await app.cash.summary();
@@ -41,7 +42,14 @@ export function renderCash(el) {
     );
     const list = await app.cash.history();
     fill(hist, list.length ? h('div', { class: 'section' }, h('h2', { class: 'section-title' }, 'الإغلاقات السابقة'),
-      h('div', { class: 'list' }, ...list.map((c) => {
+      isWide() ? dataTable({
+        rows: list,
+        columns: [
+          { key: 'date', label: 'وقت الإغلاق', grow: true, by: (c) => c.closed_at, cell: (c) => num(dateTimeText(c.closed_at)) },
+          { key: 'counted', label: 'النقد المعدود', num: true, by: (c) => c.counted?.cash ?? 0, cell: (c) => money(c.counted?.cash ?? 0) },
+          { key: 'diff', label: 'النتيجة', num: true, by: (c) => c.difference || 0, cell: (c) => { const d = c.difference || 0; return d === 0 ? h('span', { class: 'dt-tag' }, 'مطابق') : d > 0 ? h('span', { class: 'dt-tag warn' }, 'زيادة ', num(formatMoney(d, cur()))) : h('span', { class: 'dt-tag bad' }, 'عجز ', num(formatMoney(-d, cur()))); } },
+        ],
+      }) : h('div', { class: 'list' }, ...list.map((c) => {
         const d = c.difference || 0;
         return row({
           icon: d === 0 ? 'check' : 'alert', tone: d < 0 ? 'danger' : d > 0 ? 'warn' : '',

@@ -42,7 +42,7 @@ function loadXlsx() {
 // ============ القائمة ============
 export function renderTools(el) {
   const go = (p) => () => navigate(p);
-  el.append(header('أدوات', { back: true }), h('div', { class: 'page' },
+  el.append(header('أدوات', { back: true }), h('div', { class: 'page cols-2' },
     h('div', { class: 'section' }, h('h2', { class: 'section-title' }, 'الأصناف'), h('div', { class: 'list' },
       row({ icon: 'clipboard', title: 'استيراد أصناف من Excel', sub: 'ملف ‎.xlsx أو CSV — تختار أي عمود هو الاسم والسعر', onclick: go('/tools/import') }),
       row({ icon: 'tag', title: 'تحديث الأسعار', sub: 'رفع أو تخفيض بنسبة أو مبلغ، لتصنيف أو للكل', onclick: go('/tools/prices') }),
