@@ -2,7 +2,8 @@
 // تُطبَّق وحدها في شاشة البيع (domain/offers.js). تُفتح أيضًا من «المساعد» لصنف راكد: ?product=<id>
 import { h, fill, num } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
-import { header, button, input, field, emptyState, switchRow } from '../../ui/components.js';
+import { header, button, input, field, emptyState, switchRow, dataTable } from '../../ui/components.js';
+import { isWide } from '../../ui/wide.js';
 import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
 import { OFFER_TYPES, offerTitle, offerState, offerProblem, localDay } from '../../domain/offers.js';
@@ -41,6 +42,23 @@ export async function renderOffers(el, params = {}) {
     }
     const order = { active: 0, scheduled: 1, off: 2, ended: 3 };
     const sorted = [...list].sort((a, b) => order[offerState(a, today)] - order[offerState(b, today)]);
+    const periodOf = (o) => (o.from || o.to ? `${o.from ? `من ${dm(o.from)}` : ''}${o.to ? ` حتى ${dm(o.to)}` : ''}`.trim() : 'بلا موعد انتهاء');
+    if (isWide()) {
+      const on = (o) => { const n = names(o); return n.product || n.category || (o.target?.kind === 'all' ? 'كل المحل' : '—'); };
+      fill(body, dataTable({
+        rows: sorted,
+        onRow: (o) => editOffer(o),
+        rowClass: (o) => (['ended', 'off'].includes(offerState(o, today)) ? 'dt-dim' : ''),
+        columns: [
+          { key: 'title', label: 'العرض', grow: true, by: (o) => offerTitle(o, names(o), cur()), cell: (o) => h('strong', null, offerTitle(o, names(o), cur())) },
+          { key: 'type', label: 'النوع', by: (o) => o.type, cell: (o) => OFFER_TYPES[o.type]?.name || '' },
+          { key: 'on', label: 'على', by: on, cell: on },
+          { key: 'period', label: 'المدة', by: (o) => o.to || '9999', cell: periodOf },
+          { key: 'state', label: 'الحالة', by: (o) => order[offerState(o, today)], cell: (o) => { const st = offerState(o, today); return h('span', { class: `state-chip ${STATE[st][1]}` }, STATE[st][0]); } },
+        ],
+      }));
+      return;
+    }
     fill(body, h('div', { class: 'list' }, ...sorted.map((o) => {
       const st = offerState(o, today);
       const period = o.from || o.to ? `${o.from ? `من ${dm(o.from)}` : ''}${o.to ? ` حتى ${dm(o.to)}` : ''}`.trim() : 'بلا موعد انتهاء';

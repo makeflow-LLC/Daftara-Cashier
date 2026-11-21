@@ -3,7 +3,8 @@
 // زرّان للتصدير: PDF و Excel.
 import { h, fill, num } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
-import { header, emptyState, button, input, money } from '../../ui/components.js';
+import { header, emptyState, button, input, money, dataTable } from '../../ui/components.js';
+import { isWide } from '../../ui/wide.js';
 import { toast } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
 import { buildReport, periodRange, reportSections, reportSheets } from '../../domain/reports.js';
@@ -122,13 +123,30 @@ export function renderReports(el) {
     const maxDay = Math.max(1, ...barsData.map((d) => d.sales));
     const loss = r.netProfit < 0;
     const any = r.invoiceCount || r.returnCount || r.expensesTotal || r.damageTotal;
-    const table = (s) => h('div', { class: 'section' }, h('h2', { class: 'section-title' }, s.title),
+    // الحاسوب: كل قسم جدول يُرتَّب بأي عمود (الأرقام تُقرأ من نصها المنسّق)
+    const asNumber = (v) => { const t = String(v).replace(/[^0-9.\-−]/g, '').replace('−', '-'); return t && !Number.isNaN(Number(t)) ? Number(t) : String(v); };
+    const wideTable = (s) => {
+      const cols = Math.max(...s.rows.map((r) => r.length), s.head.length);
+      const head = s.head.length >= cols ? s.head : ['البند', 'القيمة', ...Array(Math.max(0, cols - 2)).fill('')];
+      return h('div', { class: 'section' }, h('h2', { class: 'section-title' }, s.title), dataTable({
+        rows: s.rows,
+        pageSize: 15,
+        columns: Array.from({ length: cols }, (_, i) => ({
+          key: `c${i}`, label: head[i] || '', grow: i === 0, num: i > 0,
+          by: cols > 2 ? (row) => (i === 0 ? String(row[0]) : asNumber(row[i] ?? '')) : null,
+          cell: (row) => (i === 0 ? h('strong', null, row[0]) : num(row[i] ?? '')),
+        })),
+      }));
+    };
+    const table = (s) => (isWide() ? wideTable(s) : narrowTable(s));
+    const narrowTable = (s) => h('div', { class: 'section' }, h('h2', { class: 'section-title' }, s.title),
       h('div', { class: 'list rep-table' },
         s.head.length > 2 ? h('div', { class: 'row rep-row rep-head' }, h('span', { class: 'row-main' }, s.head[0]), ...s.head.slice(1).map((c) => h('span', { class: 'rep-cell' }, c))) : null,
         ...s.rows.map((row) => h('div', { class: 'row rep-row' },
         h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, row[0])),
         ...row.slice(1).map((c) => h('span', { class: `rep-cell ${row.length === 2 ? 'strong' : ''}` }, num(c)))))));
     fill(body,
+      h('div', { class: 'rep-top' },
       h('div', { class: 'hero-card rep-hero' },
         h('div', { class: 'hero-label' }, `صافي المبيعات — ${rg.label}`),
         h('div', { class: 'hero-value' }, money(r.net)),
@@ -142,7 +160,7 @@ export function renderReports(el) {
         h('div', { class: 'hero-value' }, money(Math.abs(r.netProfit))),
         h('div', { class: 'hero-mini-label' }, 'ربح البضاعة ', num(formatMoney(r.profit, cur)), ' − المصاريف ', num(formatMoney(r.expensesTotal, cur)),
           r.damageTotal ? [' − تالف ', num(formatMoney(r.damageTotal, cur))] : null),
-        r.expensesTotal ? null : h('div', { class: 'hero-mini-label' }, 'لم تسجّل مصاريف في هذه المدة — اضغط لتسجيل الكهرباء والإيجار والرواتب')) : null,
+        r.expensesTotal ? null : h('div', { class: 'hero-mini-label' }, 'لم تسجّل مصاريف في هذه المدة — اضغط لتسجيل الكهرباء والإيجار والرواتب')) : null),
       h('button', { class: 'beta-banner daily-banner', type: 'button', onclick: () => navigate('/reports/daily') },
         icon('chart', 26), h('span', { class: 'row-main' }, h('strong', null, 'تقرير اليوم بالرسوم البيانية'), h('span', null, 'ملف PDF ملوّن: مقارنة بأمس والأسبوع الماضي، الساعات، الأكثر مبيعًا')), icon('chevron', 20)),
       h('div', { class: 'product-actions' },
@@ -153,7 +171,7 @@ export function renderReports(el) {
           h('div', { class: 'bar', style: { height: `${Math.max(3, Math.round((Math.max(0, d.sales) / maxDay) * 100))}%` } }),
           h('span', { class: 'bar-label num' }, d.label))))) : null,
       r.invoiceCount || r.returnCount ? null : emptyState('chart', 'لا مبيعات في هذه المدة', 'اختر مدة أخرى من الأعلى.'),
-      ...sections.filter((s) => s.title !== 'حسب اليوم' && (r.invoiceCount || (ALWAYS.has(s.title) && (any || s.title === 'الوضع الآن')))).map(table),
+      h('div', { class: 'rep-grid' }, ...sections.filter((s) => s.title !== 'حسب اليوم' && (r.invoiceCount || (ALWAYS.has(s.title) && (any || s.title === 'الوضع الآن')))).map(table)),
     );
   }
 

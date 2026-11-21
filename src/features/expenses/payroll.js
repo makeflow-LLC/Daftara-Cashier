@@ -2,7 +2,8 @@
 // (كله أو جزءًا منه). الدفعة تُسجَّل مصروفًا ببند «رواتب» فتدخل في صافي الربح. لصاحب المحل وحده.
 import { h, fill, num } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
-import { header, emptyState, button, input, field, money } from '../../ui/components.js';
+import { header, emptyState, button, input, field, money, dataTable } from '../../ui/components.js';
+import { isWide } from '../../ui/wide.js';
 import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
 import { parseMoney, formatMoney, CURRENCIES } from '../../domain/currency.js';
@@ -32,7 +33,7 @@ export function renderPayroll(el) {
   let period = periodOf(localDay());
   const top = h('div');
   const list = h('div');
-  el.append(header('رواتب الموظفين', { back: true }), h('div', { class: 'page' }, top, list));
+  el.append(header('رواتب الموظفين', { back: true }), h('div', { class: 'page split' }, top, list));
 
   async function load() {
     const sts = await app.payroll.statuses(period);
@@ -50,7 +51,18 @@ export function renderPayroll(el) {
         h('div', { class: 'hero-mini-label' }, 'مجموع الرواتب ', num(formatMoney(total, cur())), ' — دُفع ', num(formatMoney(paid, cur())))) : null,
       button('موظف جديد', { block: true, size: 'lg', icon: 'plus', onclick: () => employeeSheet(null) }),
     );
-    fill(list, sts.length ? h('div', { class: 'list section' }, ...sts.map((st) => {
+    fill(list, sts.length && isWide() ? h('div', { class: 'section' }, dataTable({
+      rows: sts,
+      onRow: (st) => openEmployee(st),
+      columns: [
+        { key: 'name', label: 'الموظف', grow: true, by: (st) => st.employee.name, cell: (st) => h('span', { class: 'dt-name' }, h('span', { class: `avatar ${st.state === 'overdue' || st.state === 'today' ? 'owed' : ''}` }, st.employee.name.trim().charAt(0)), h('span', null, st.employee.name)) },
+        { key: 'day', label: 'يوم الدفع', by: (st) => st.employee.payDay, cell: (st) => payDayText(st.employee.payDay) },
+        { key: 'salary', label: 'الراتب', num: true, by: (st) => st.employee.salary, cell: (st) => money(st.employee.salary) },
+        { key: 'paid', label: 'دُفع', num: true, by: (st) => st.paid, cell: (st) => (st.paid ? h('span', { class: 'credit' }, money(st.paid)) : h('span', { class: 'muted' }, '—')) },
+        { key: 'rest', label: 'الباقي', num: true, by: (st) => st.remaining, cell: (st) => (st.remaining > 0 ? h('span', { class: 'owed' }, money(st.remaining)) : h('span', { class: 'muted' }, '—')) },
+        { key: 'state', label: 'الحالة', by: (st) => st.state, cell: (st) => { const s = statusText(st); return h('span', { class: `pill pill-${s.tone}` }, s.text); } },
+      ],
+    })) : sts.length ? h('div', { class: 'list section' }, ...sts.map((st) => {
       const s = statusText(st);
       return h('button', { class: 'row row-tap', type: 'button', onclick: () => openEmployee(st) },
         h('span', { class: `avatar ${st.state === 'overdue' || st.state === 'today' ? 'owed' : ''}` }, st.employee.name.trim().charAt(0)),

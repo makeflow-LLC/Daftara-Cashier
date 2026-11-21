@@ -1335,3 +1335,11 @@ body{font-weight:500}
   .page.cols-2 .list,.page.split .list{max-width:none !important}
   .sticky-save{left:auto;width:min(760px,calc(100% - var(--side-w)))}
 }
+.dt-dim td{opacity:.55}
+@media (min-width:1000px){
+  .rep-top{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);align-items:stretch}
+  .rep-top > *{margin-bottom:0;height:100%}
+  .rep-top + *{margin-top:var(--space-4)}
+  .rep-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 var(--space-6);align-items:start}
+}
+.dt .pill,.dt .state-chip{white-space:nowrap}
