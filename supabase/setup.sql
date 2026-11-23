@@ -1,4 +1,4 @@
--- دفترة كاشير — إعداد الخادم كاملًا (0001_init.sql + 0002_invoice_line_position.sql + 0003_licensing.sql + 0004_accounts.sql + 0005_scale_code.sql + 0006_shop_catalog.sql + 0007_expenses_chat_warehouses.sql)
+-- دفترة كاشير — إعداد الخادم كاملًا (0001_init.sql + 0002_invoice_line_position.sql + 0003_licensing.sql + 0004_accounts.sql + 0005_scale_code.sql + 0006_shop_catalog.sql + 0007_expenses_chat_warehouses.sql + 0008_admin_panel.sql)
 -- يُبنى تلقائيًا من supabase/migrations — لا تعدّله هنا. آمن لإعادة التشغيل.
 -- Supabase Studio ← SQL Editor ← New query ← الصق كل الملف ← Run
 
@@ -1141,5 +1141,153 @@ begin
                     with check (public.cashier_can_write(shop_id))', t.tbl);
   end loop;
 end $$;
+
+-- ===== 0008_admin_panel.sql =====
+-- ================= دفترة كاشير — لوحة الإدارة الموحّدة =================
+-- يُشغَّل بعد 0001…0007. آمن لإعادة التشغيل.
+--
+-- ما هو: الدوال التي تقرأ منها وتكتب بها لوحة MakeFlow (https://makeflow.tech/apps/admin/) بدل أوامر
+-- SQL اليدوية: كل المحلات واشتراكاتها، تفعيل شهر أو سنة بضغطة مع تسجيل الدفعة، الإيقاف، تاريخ الانتهاء،
+-- وكلمة سر جديدة لمن نسيها.
+--
+-- من يدخل: حساب في Supabase Auth (بريد وكلمة سر) مذكور في جدول makeflow_admins — الجدول نفسه الذي
+-- تستعمله لوحة دفترة على هذا الخادم (daftara/supabase/admin.sql)، فالحساب واحد. أجهزة المحلات تدخل
+-- الخادم بدور authenticated أيضًا (مجهولة)، لذلك كل دالة هنا تتحقق بنفسها أن المنادي مدير وترفض غيره.
+--
+-- إعداد المدير (مرة واحدة، إن لم يُعدّ من ملف دفترة):
+--   1. Supabase Studio ← Authentication ← Users ← Add user: بريدك وكلمة سر قوية، مع «Auto Confirm User».
+--   2. insert into makeflow_admins (user_id, note) select id, 'المالك' from auth.users where email = 'you@example.com' on conflict do nothing;
+-- =====================================================================
+
+create table if not exists public.makeflow_admins (
+  user_id    uuid primary key,
+  note       text,
+  created_at timestamptz not null default now()
+);
+alter table public.makeflow_admins enable row level security;
+revoke all on public.makeflow_admins from anon, authenticated;
+
+create or replace function public.makeflow_is_admin() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.makeflow_admins where user_id = auth.uid());
+$$;
+
+create or replace function public.makeflow_need_admin() returns void
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.makeflow_is_admin() then
+    raise exception 'not an admin' using errcode = '42501';
+  end if;
+end $$;
+
+-- دفعات الاشتراك التي فُعّلت من اللوحة (الدخل). التفعيل بكود موقَّع أو من Google Play لا يمرّ من هنا.
+create table if not exists public.cashier_admin_payments (
+  id         bigserial primary key,
+  shop_id    uuid not null references public.cashier_shops(id) on delete cascade,
+  plan       text not null check (plan in ('monthly', 'yearly')),
+  amount     numeric(10, 2) not null default 0 check (amount >= 0),
+  paid_at    timestamptz not null default now(),
+  period_from timestamptz not null,
+  period_to  timestamptz not null,
+  note       text not null default '' check (length(note) <= 300),
+  created_by uuid
+);
+create index if not exists cashier_admin_payments_shop on public.cashier_admin_payments (shop_id, paid_at desc);
+alter table public.cashier_admin_payments enable row level security;
+revoke all on public.cashier_admin_payments from anon, authenticated;
+
+-- كل المحلات باشتراكاتها، والدفعات، في نداء واحد
+create or replace function public.cashier_admin_data() returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  perform makeflow_need_admin();
+  return jsonb_build_object(
+    'now', now(),
+    'shops', (select coalesce(jsonb_agg(jsonb_build_object(
+        'id', s.id, 'name', s.name, 'shop_type', s.shop_type, 'phone', s.phone, 'created_at', s.created_at,
+        'account_phone', (select a.phone from cashier_accounts a where a.shop_id = s.id),
+        'is_active', l.is_active, 'plan', l.plan, 'trial_ends_at', l.trial_ends_at, 'expires_at', l.expires_at,
+        'source', l.source, 'note', l.note, 'updated_at', l.updated_at,
+        'devices', (select count(*) from cashier_devices d where d.shop_id = s.id),
+        'last_seen', (select max(d.last_seen_at) from cashier_devices d where d.shop_id = s.id),
+        'paid', (select coalesce(sum(p.amount), 0) from cashier_admin_payments p where p.shop_id = s.id))
+        order by s.created_at desc), '[]')
+      from cashier_shops s left join cashier_licenses l on l.shop_id = s.id),
+    'payments', (select coalesce(jsonb_agg(jsonb_build_object(
+        'id', p.id, 'shop_id', p.shop_id, 'plan', p.plan, 'amount', p.amount, 'paid_at', p.paid_at,
+        'period_to', p.period_to, 'note', p.note) order by p.paid_at desc), '[]')
+      from cashier_admin_payments p));
+end $$;
+
+-- تفعيل أو تجديد: يبدأ من نهاية الاشتراك الحالي أو التجربة إن كانت سارية (فلا تضيع أيام)، ومن الآن إن
+-- انتهيا. يسجّل الدفعة ويشغّل المحل إن كان موقوفًا. يرجع تاريخ الانتهاء الجديد.
+create or replace function public.cashier_admin_activate(p_shop uuid, p_plan text, p_amount numeric, p_note text) returns timestamptz
+language plpgsql security definer set search_path = public as $$
+declare
+  l cashier_licenses%rowtype;
+  start_at timestamptz; end_at timestamptz;
+begin
+  perform makeflow_need_admin();
+  if p_plan not in ('monthly', 'yearly') then raise exception 'bad plan' using errcode = '22023'; end if;
+  if not exists (select 1 from cashier_shops where id = p_shop) then raise exception 'no shop' using errcode = '22023'; end if;
+  insert into cashier_licenses (shop_id, plan) values (p_shop, 'trial') on conflict (shop_id) do nothing;
+  select * into l from cashier_licenses where shop_id = p_shop for update;
+  start_at := greatest(now(), coalesce(l.expires_at, now()), coalesce(l.trial_ends_at, now()));
+  end_at := start_at + case when p_plan = 'yearly' then interval '1 year' else interval '1 month' end;
+  update cashier_licenses set plan = p_plan, is_active = true, expires_at = end_at, source = 'admin', updated_at = now()
+  where shop_id = p_shop;
+  insert into cashier_admin_payments (shop_id, plan, amount, period_from, period_to, note, created_by)
+  values (p_shop, p_plan, coalesce(p_amount, 0), start_at, end_at, left(coalesce(p_note, ''), 300), auth.uid());
+  return end_at;
+end $$;
+
+-- تعديل يدوي: {"is_active": false} يوقف المحل، {"expires_at": "2027-01-01"} يضع تاريخ الانتهاء
+-- (null يمحوه)، {"trial_ends_at": …} يمدّ التجربة. ما لم يُذكر لا يتغير.
+create or replace function public.cashier_admin_set(p_shop uuid, p_patch jsonb) returns boolean
+language plpgsql security definer set search_path = public as $$
+begin
+  perform makeflow_need_admin();
+  update cashier_licenses set
+    is_active = case when p_patch ? 'is_active' then (p_patch->>'is_active')::boolean else is_active end,
+    expires_at = case when p_patch ? 'expires_at' then (p_patch->>'expires_at')::timestamptz else expires_at end,
+    trial_ends_at = case when p_patch ? 'trial_ends_at' then (p_patch->>'trial_ends_at')::timestamptz else trial_ends_at end,
+    updated_at = now()
+  where shop_id = p_shop;
+  return found;
+end $$;
+
+-- دفعة سُجّلت خطأً: تُحذف من الدخل. تاريخ الاشتراك لا يتغير (عدّله من cashier_admin_set إن لزم).
+create or replace function public.cashier_admin_payment_delete(p_id bigint) returns boolean
+language plpgsql security definer set search_path = public as $$
+begin
+  perform makeflow_need_admin();
+  delete from cashier_admin_payments where id = p_id;
+  return found;
+end $$;
+
+-- صاحب محل نسي كلمة السر: كلمة سر مؤقتة لحسابه، ويُفك قفل المحاولات. (البديل بلا خادم: كود DCR.)
+create or replace function public.cashier_admin_reset_password(p_phone text, p_password text) returns boolean
+language plpgsql security definer set search_path = public, extensions as $$
+begin
+  perform makeflow_need_admin();
+  if length(coalesce(p_password, '')) < 6 then raise exception 'short password' using errcode = '22023'; end if;
+  update cashier_accounts set pass_hash = crypt(p_password, gen_salt('bf', 8)), fails = 0, locked_until = null, updated_at = now()
+  where phone = p_phone;
+  return found;
+end $$;
+
+revoke all on function public.makeflow_is_admin() from public, anon;
+revoke all on function public.makeflow_need_admin() from public, anon, authenticated;
+revoke all on function public.cashier_admin_data() from public, anon;
+revoke all on function public.cashier_admin_activate(uuid, text, numeric, text) from public, anon;
+revoke all on function public.cashier_admin_set(uuid, jsonb) from public, anon;
+revoke all on function public.cashier_admin_payment_delete(bigint) from public, anon;
+revoke all on function public.cashier_admin_reset_password(text, text) from public, anon;
+grant execute on function public.makeflow_is_admin() to authenticated;
+grant execute on function public.cashier_admin_data() to authenticated;
+grant execute on function public.cashier_admin_activate(uuid, text, numeric, text) to authenticated;
+grant execute on function public.cashier_admin_set(uuid, jsonb) to authenticated;
+grant execute on function public.cashier_admin_payment_delete(bigint) to authenticated;
+grant execute on function public.cashier_admin_reset_password(text, text) to authenticated;
 
 select 'دفترة كاشير: تم تجهيز الخادم ✓' as result;

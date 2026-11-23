@@ -252,4 +252,50 @@ select pg_temp.check(not exists (select 1 from jsonb_array_elements(public.cashi
 select pg_temp.check(exists (select 1 from jsonb_array_elements(public.cashier_shop_catalog(:S1)->'products') p where p->>'name' = 'زيت'), 'in-stock item still shown');
 reset role;
 
+-- ===== لوحة الإدارة الموحّدة (0008): للمدير المذكور في makeflow_admins وحده
+\set ADM '''dddddddd-0000-0000-0000-00000000000d'''
+insert into makeflow_admins (user_id, note) values (:ADM, 'test');
+update cashier_licenses set is_active = true, plan = 'trial', expires_at = null, trial_ends_at = now() + interval '10 days' where shop_id = :S1;
+set role authenticated;
+select set_config('request.jwt.claim.sub', :A, false);
+select pg_temp.check(not public.makeflow_is_admin(), 'a shop owner is not an admin');
+select pg_temp.expect_error($q$select public.cashier_admin_data()$q$, 'owner reads all shops');
+select pg_temp.expect_error($q$select public.cashier_admin_activate('11111111-1111-1111-1111-111111111111', 'yearly', 0, '')$q$, 'owner activates own shop');
+select pg_temp.expect_error($q$select public.cashier_admin_set('11111111-1111-1111-1111-111111111111', '{"expires_at": "2099-01-01"}')$q$, 'owner extends own shop');
+select pg_temp.expect_error($q$select public.cashier_admin_reset_password('970599000111', 'hacked123')$q$, 'owner resets a password');
+select pg_temp.expect_error($q$select public.cashier_admin_payment_delete(1)$q$, 'owner deletes a payment');
+select pg_temp.expect_error($q$select * from cashier_admin_payments$q$, 'payments not readable');
+select pg_temp.expect_error($q$select * from makeflow_admins$q$, 'admins not readable');
+select pg_temp.expect_error($q$select public.makeflow_need_admin()$q$, 'internal check not callable');
+select set_config('request.jwt.claim.sub', :ADM, false);
+select pg_temp.check(public.makeflow_is_admin(), 'the listed account is an admin');
+select pg_temp.check(jsonb_array_length(public.cashier_admin_data()->'shops') >= 2, 'admin sees every shop');
+select pg_temp.check((select s->>'account_phone' from jsonb_array_elements(public.cashier_admin_data()->'shops') s where s->>'id' = '11111111-1111-1111-1111-111111111111') = '970599000111', 'with its account phone');
+select pg_temp.check(public.cashier_admin_data()::text not like '%$2a$%', 'and never a password hash');
+-- التفعيل أثناء التجربة يبدأ بعد نهايتها (لا تضيع أيام)، والتجديد يُضاف إلى ما تبقّى
+select pg_temp.check(abs(extract(epoch from public.cashier_admin_activate(:S1, 'monthly', 30, 'نقدًا') - ((now() + interval '10 days') + interval '1 month'))) < 60, 'a month starts after the trial');
+select pg_temp.check(public.cashier_admin_activate(:S1, 'yearly', 300, '') > now() + interval '1 year' + interval '1 month', 'renewing adds to what is left');
+select pg_temp.expect_error($q$select public.cashier_admin_activate('11111111-1111-1111-1111-111111111111', 'lifetime', 0, '')$q$, 'unknown plan');
+select pg_temp.expect_error($q$select public.cashier_admin_activate('99999999-9999-9999-9999-999999999999', 'monthly', 0, '')$q$, 'unknown shop');
+select pg_temp.check(jsonb_array_length(public.cashier_admin_data()->'payments') = 2, 'both payments are recorded');
+select pg_temp.check((select (s->>'paid')::numeric from jsonb_array_elements(public.cashier_admin_data()->'shops') s where s->>'id' = '11111111-1111-1111-1111-111111111111') = 330, 'and summed per shop');
+select pg_temp.check(public.cashier_admin_set(:S1, '{"is_active": false}'), 'admin stops a shop');
+reset role;
+select pg_temp.check(not public.cashier_license_ok(:S1) and (select plan = 'yearly' and source = 'admin' and expires_at > now() from cashier_licenses where shop_id = :S1), 'stopped shop is refused, its dates are kept');
+set role authenticated;
+select pg_temp.check(public.cashier_admin_set(:S1, '{"is_active": true, "expires_at": "2000-01-01T00:00:00Z", "trial_ends_at": null}'), 'admin sets the dates by hand');
+reset role;
+select pg_temp.check(not public.cashier_license_ok(:S1) and (select trial_ends_at is null from cashier_licenses where shop_id = :S1), 'an expiry in the past ends the subscription');
+set role authenticated;
+select pg_temp.check(public.cashier_admin_set(:S1, '{"expires_at": null, "trial_ends_at": "2099-01-01T00:00:00Z"}'), 'admin extends the trial');
+select pg_temp.check(public.cashier_license_ok(:S1), 'the shop works again');
+select pg_temp.check(public.cashier_admin_payment_delete((select (p->>'id')::bigint from jsonb_array_elements(public.cashier_admin_data()->'payments') p limit 1)), 'a wrong payment is deleted');
+select pg_temp.check(jsonb_array_length(public.cashier_admin_data()->'payments') = 1, 'only that one');
+select pg_temp.expect_error($q$select public.cashier_admin_reset_password('970599000111', '123')$q$, 'short temporary password');
+select pg_temp.check(public.cashier_admin_reset_password('970599000111', 'temp4567'), 'admin sets a temporary password');
+select pg_temp.check(not public.cashier_admin_reset_password('970500000000', 'temp4567'), 'unknown phone changes nothing');
+select set_config('request.jwt.claim.sub', 'eeeeeeee-0000-0000-0000-00000000000e', false);
+select pg_temp.check((public.cashier_account_login('970599000111', 'temp4567')->>'ok')::boolean, 'the owner signs in with it');
+reset role;
+
 \echo ALL SCHEMA TESTS PASSED

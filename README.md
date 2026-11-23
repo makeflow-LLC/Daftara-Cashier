@@ -304,6 +304,16 @@ restored if the pull fails (`core/backup.js`).
 
 Licenses live in `cashier_licenses` (`is_active`, `plan`, `expires_at`); only MakeFlow edits them.
 
+**MakeFlow admin panel.** `0008_admin_panel.sql` adds the `cashier_admin_*` functions used by the unified panel at
+`https://makeflow.tech/apps/admin/` (source: `daftara/admin/`, one page for Daftara, Cashier and Ghates): list every
+shop with its trial/subscription, activate a month or a year (starts after the current trial or subscription, and is
+recorded in `cashier_admin_payments`), stop/resume, set dates by hand, and set a temporary password for an owner who
+forgot it. Each function checks that the caller's Supabase Auth account is listed in `makeflow_admins` (shared with
+Daftara's `supabase/admin.sql`); shop devices are `authenticated` too and are refused. Setup: run `supabase/setup.sql`,
+create the admin user in Authentication, then
+`insert into makeflow_admins (user_id) select id from auth.users where email = '…';`.
+The panel also makes DCS/DCR codes (same format as `tools/license-generator.html`, which still works on its own).
+
 ## Build, test, release
 
 Every push runs `.github/workflows/android.yml`: unit tests, schema tests on Postgres, the APKs
