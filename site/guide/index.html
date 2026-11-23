@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>دليل استخدام دفترة كاشير</title>
+<meta name="description" content="دليل استخدام دفترة كاشير بالصور: البيع، الأصناف، الديون، المخزون، الصندوق والتقارير، خطوة بخطوة.">
+<meta name="theme-color" content="#0e7a51">
+<link rel="icon" href="../icon.svg" type="image/svg+xml">
+<style>
+/* دليل الاستخدام المصوّر للزبائن (makeflow.tech/apps/cashier/guide/). صفحة ثابتة على نسق صفحة التنزيل.
+   الصور هي صور الدليل داخل التطبيق: تُرفع مع نسخة الويب في ../app/guide/ فلا تُكرَّر هنا. */
+:root{--bg:#f3f2f2;--card:#fff;--text:#201e1d;--muted:#605d5d;--line:rgba(32,30,29,.12);--brand:#0e7a51;--brand-soft:#e8f5ee;--brand-ink:#085134;
+  --grad:linear-gradient(135deg,#0e7a51 0%,#0b6b63 55%,#0a5577 100%);color-scheme:light}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:17px/1.8 "Noto Sans Arabic","Segoe UI",Tahoma,system-ui,sans-serif}
+header{background:var(--grad);color:#fff;padding:30px 16px 34px;text-align:center}
+header img{width:64px;height:64px;border-radius:18px;background:#fff;padding:5px;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+h1{margin:10px 0 4px;font-size:27px;line-height:1.4}
+header p{margin:0 auto;max-width:520px;opacity:.92}
+.dl{display:inline-block;margin-top:14px;padding:9px 18px;border-radius:999px;background:#fff;color:var(--brand-ink);font-weight:700;text-decoration:none}
+nav{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:2px solid var(--line)}
+nav div{display:flex;gap:8px;overflow-x:auto;max-width:900px;margin:0 auto;padding:10px 16px;scrollbar-width:none}
+nav div::-webkit-scrollbar{display:none}
+nav a{flex:none;padding:6px 14px;border-radius:999px;background:var(--card);border:2px solid var(--line);color:var(--brand-ink);font-weight:700;font-size:15px;text-decoration:none;white-space:nowrap}
+main{max-width:900px;margin:0 auto;padding:0 16px 30px}
+section{scroll-margin-top:64px;padding-top:26px}
+h2{margin:0 0 6px;font-size:24px;color:var(--brand-ink)}
+.lead p{margin:0 0 6px;color:var(--muted)}
+.step{background:var(--card);border:2px solid var(--line);border-radius:20px;padding:16px 18px;margin-top:14px}
+h3{margin:0 0 6px;font-size:19px}
+p{margin:8px 0}
+ol,ul{margin:8px 0;padding-inline-start:24px}li{margin:5px 0}
+ol>li::marker{color:var(--brand);font-weight:700}
+figure{margin:14px auto 4px;text-align:center}
+figure img{display:block;margin:0 auto;width:270px;max-width:100%;height:auto;border-radius:22px;border:2px solid var(--line);box-shadow:0 6px 18px rgba(0,0,0,.08)}
+figcaption{margin-top:6px;color:var(--muted);font-size:14px}
+table{width:100%;border-collapse:collapse;margin:10px 0;font-size:16px}
+th,td{text-align:start;padding:8px 10px;border-bottom:2px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-size:14px}
+td:first-child{font-weight:700;white-space:nowrap}
+.wa{display:block;text-align:center;margin-top:26px;padding:14px;border-radius:16px;background:#25d366;color:#fff;font-weight:700;text-decoration:none}
+footer{text-align:center;color:var(--muted);font-size:14px;padding:10px 16px 30px}
+footer a{color:var(--brand-ink);font-weight:700}
+@media (min-width:720px){
+  .has-fig{display:grid;grid-template-columns:1fr 270px;gap:24px;align-items:start}
+  .has-fig figure{margin:0}
+  .has-fig figure+figure{grid-column:2}
+}
+@media print{nav,.dl,.wa{display:none}.step{break-inside:avoid}}
+</style>
+</head>
+<body>
+<header>
+  <img src="../icon.svg" alt="">
+  <h1>دليل استخدام دفترة كاشير</h1>
+  <p>كل قسم بخطوات قصيرة وصورة من التطبيق نفسه.</p>
+  <a class="dl" href="../">تنزيل التطبيق</a>
+</header>
+<nav aria-label="أقسام الدليل"><div>
+<a href="#start">ابدأ في خمس دقائق</a>
+<a href="#sale">البيع</a>
+<a href="#products">الأصناف</a>
+<a href="#debts">الديون</a>
+<a href="#stock">المخزون والشراء</a>
+<a href="#money">الصندوق والمصاريف والتقارير</a>
+<a href="#team">الموظفون</a>
+<a href="#account">حماية بياناتك والاشتراك</a>
+<a href="#pc">العمل على الحاسوب</a>
+<a href="#settings">الإعدادات والمساعدة</a>
+</div></nav>
+<main>
+<section id="start">
+<h2>ابدأ في خمس دقائق</h2>
+<div class="lead"><p>أربع خطوات فقط وتبدأ البيع.</p></div>
+<div class="step has-fig"><div class="txt">
+<h3>أول تشغيل</h3>
+<ol>
+<li>اكتب اسم المحل ورقم جواله. يظهران أعلى كل فاتورة.</li>
+<li>اضغط «التالي» واختر نوع محلك (بقالة، ملابس، صيدلية…). يجهّز لك التطبيق ما يناسبه.</li>
+<li>أضف أصنافك: افتح «الأصناف» ثم «إضافة سريعة بالمسح».</li>
+<li>اضغط الزر الأخضر «بيع» في أسفل الشاشة، امسح الأصناف ثم «ادفع».</li>
+</ol>
+<p>عندك حساب قديم أو نسخة محفوظة؟ اختر «عندي حساب» أو «استعادة» من أول شاشة.</p>
+</div>
+<figure><img src="../app/guide/setup.webp" alt="أول شاشة: اسم المحل" width="270" height="554" loading="lazy"><figcaption>أول شاشة: اسم المحل</figcaption></figure>
+</div>
+<div class="step has-fig"><div class="txt">
+<h3>الشاشة الرئيسية</h3>
+<p>نظرة واحدة على محلك اليوم.</p>
+<ul>
+<li><b>الجزء الأخضر في الأعلى:</b> مبيعات اليوم، الربح، وعدد الفواتير. اضغط أي رقم لترى تفاصيله.</li>
+<li><b>النقد في الدرج:</b> كم يجب أن يكون في درج المحل الآن.</li>
+<li><b>لك عند الزبائن / عليك للتجار:</b> مجموع الديون. اضغط لفتحها.</li>
+<li><b>الأزرار الملوّنة:</b> بيع جديد، شراء بضاعة، المخزون، الديون.</li>
+<li><b>الشريط السفلي:</b> الرئيسية، الأصناف، بيع، الديون، المزيد.</li>
+</ul>
+<p>تحت الأزرار تظهر التنبيهات: صنف نفد، موعد دفع لتاجر، أو راتب حان.</p>
+</div>
+<figure><img src="../app/guide/home.webp" alt="الشاشة الرئيسية" width="270" height="554" loading="lazy"><figcaption>الشاشة الرئيسية</figcaption></figure>
+</div>
+<div class="step has-fig"><div class="txt">
+<h3>المزيد: كل الأقسام</h3>
+<p>اضغط «المزيد» في الشريط السفلي لتجد باقي الأقسام: التقارير، الفواتير، الصندوق، المصاريف، المخزون، العروض، الأدوات، والإعدادات.</p>
+<p>في أعلى كل صفحة زر «شرح» يفتح شرح تلك الصفحة دون أن تغادرها.</p>
+</div>
+<figure><img src="../app/guide/more.webp" alt="المزيد: كل الأقسام" width="270" height="554" loading="lazy"><figcaption>المزيد: كل الأقسام</figcaption></figure>
+</div>
+</section>
+<section id="sale">
+<h2>البيع</h2>
+<div class="lead"><p>تجمع أصناف الزبون في السلة ثم تقبض. يُحفظ البيع وينقص المخزون وتخرج الفاتورة في خطوة واحدة.</p></div>
+<div class="step has-fig"><div class="txt">
+<h3>السلة</h3>
+<ol>
+<li>اضغط الزر الأخضر «بيع» في أسفل الشاشة.</li>
+<li>أضف الأصناف بإحدى ثلاث طرق: امسح الرقم المطبوع على الصنف (الباركود) بالكاميرا، أو اكتب اسمه في البحث، أو اضغط زرّه السريع (خبز، خضار…).</li>
+<li>غيّر الكمية بـ + و −. اضغط على السطر لتكتب الكمية أو السعر أو خصمًا على الصنف.</li>
+<li>«خصم» يخصم من الفاتورة كلها. «زبون» يحدد الزبون، وهو لازم للبيع بالدين.</li>
+</ol>
+<p>جاء زبون ثانٍ قبل أن تنتهي؟ اضغط «علّق» وارجع للسلة لاحقًا من «معلّقة». ولو أُغلق التطبيق فجأة تبقى السلة كما هي.</p>
+<p>تبيع شيئًا ليس في أصنافك، مثل تصوير أو طباعة أو خدمة؟ استعمل «مبلغ بلا صنف» واكتب المبلغ فقط.</p>
+</div>
+<figure><img src="../app/guide/sale.webp" alt="السلة: الأصناف والكميات والإجمالي" width="270" height="554" loading="lazy"><figcaption>السلة: الأصناف والكميات والإجمالي</figcaption></figure>
+</div>
+<div class="step has-fig"><div class="txt">
+<h3>الدفع</h3>
+<ol>
+<li>اضغط «ادفع».</li>
+<li>اكتب المبلغ الذي استلمته، فيحسب لك التطبيق الباقي.</li>
+<li>اختر طريقة الدفع: نقدًا، تحويل، محفظة، أو آجل (دين على الزبون).</li>
+</ol>
+</div>
+<figure><img src="../app/guide/sale-pay.webp" alt="الدفع: المبلغ ثم الطريقة" width="270" height="554" loading="lazy"><figcaption>الدفع: المبلغ ثم الطريقة</figcaption></figure>
+</div>
+<div class="step has-fig"><div class="txt">
+<h3>الفاتورة</h3>
+<p>بعد الدفع تظهر الفاتورة. اضغط «أرسل واتساب» أو اطبعها، ثم «بيع جديد».</p>
+<p>الفاتورة لا تُظهر سعر التكلفة ولا الربح، فأرسلها للزبون مطمئنًا.</p>
+</div>
+<figure><img src="../app/guide/sale-receipt.webp" alt="الفاتورة جاهزة للإرسال" width="270" height="554" loading="lazy"><figcaption>الفاتورة جاهزة للإرسال</figcaption></figure>
+</div>
+<div class="step has-fig"><div class="txt">
+<h3>المرتجع والتبديل</h3>
+<p>الزبون أرجع بضاعة أو يريد تبديلها؟</p>
+<ol>
+<li>من شاشة البيع اضغط «مرتجع».</li>
+<li>اختر فاتورة البيع من القائمة، أو اكتب رقمها في البحث.</li>
+<li>حدّد ما يرجعه الزبون وكم حبة.</li>
+<li>اضغط «سجّل المرتجع»: يُرد المبلغ نقدًا أو يُخصم من دين الزبون. أو «بدّل ببضاعة أخرى» ويدفع الفرق فقط.</li>
+</ol>
+<p>الصنف المرتجع يعود للمخزون وحده.</p>
+</div>
+<figure><img src="../app/guide/returns.webp" alt="اختر الفاتورة التي يرجع منها الزبون" width="270" height="554" loading="lazy"><figcaption>اختر الفاتورة التي يرجع منها الزبون</figcaption></figure>
+</div>
+<div class="step has-fig"><div class="txt">
+<h3>سجل الفواتير</h3>
+<p>كل ما سُجّل في المحل محفوظ في «المزيد» ثم «الفواتير»: البيع، المرتجعات، والشراء.</p>
+<ul>
+<li>ابحث برقم الفاتورة أو اسم الزبون أو اسم صنف.</li>
+<li>اختر النوع والمدة (اليوم، آخر 7 أيام…).</li>
+<li>اضغط الفاتورة لتفتحها وترسلها أو تطبعها من جديد.</li>
+</ul>
+</div>
+<figure><img src="../app/guide/invoices.webp" alt="سجل الفواتير مع البحث" width="270" height="554" loading="lazy"><figcaption>سجل الفواتير مع البحث</figcaption></figure>
+</div>
+<div class="step has-fig"><div class="txt">
+<h3>العروض</h3>
+<p>تعمل العرض مرة واحدة من «المزيد» ثم «العروض»، فيُطبَّق وحده عند البيع ويظهر في الفاتورة.</p>
+<ol>
+<li>اضغط «عرض جديد».</li>
+<li>اختر النوع: خصم بنسبة، «اشترِ واحصل مجانًا»، أو سعر للكمية (مثل 3 بـ 10).</li>
+<li>اختر على ماذا: صنف، قسم من الأصناف، أو كل المحل.</li>
+<li>حدّد تاريخ البداية والنهاية إن أردت، ثم احفظ.</li>
+</ol>
+</div>
+<figure><img src="../app/guide/offers.webp" alt="العروض" width="270" height="554" loading="lazy"><figcaption>العروض</figcaption></figure>
+</div>
+<div class="step has-fig"><div class="txt">
+<h3>الاستلام بالمحفظة</h3>
+<p>الزبون يدفع من محفظته (جوال باي، بال باي)؟ تعرض له رمزًا مربّعًا يمسحه بكاميرا جواله، فيُفتح عنده التحويل جاهزًا برقمك والمبلغ، بلا إملاء أرقام.</p>
+<ol>
+<li>مرة واحدة فقط: اكتب رقم محفظتك في «أرقام المحافظ» واضغط «حفظ».</li>
+<li>من الرئيسية اضغط «استلام بالمحفظة» واكتب المبلغ، فيظهر الرمز.</li>
+<li>الزبون يمسح الرمز بكاميرا جواله ويؤكد برقمه السري.</li>
+<li>حين يصلك إشعار المحفظة بوصول المبلغ اضغط «سجّل الدفعة».</li>
+</ol>
+<p>إن لم يُمسح الرمز، تجد تحته أرقامًا يكتبها الزبون بيده في لوحة الاتصال.</p>
+</div>
+<figure><img src="../app/guide/wallets.webp" alt="أرقام المحافظ" width="270" height="554" loading="lazy"><figcaption>أرقام المحافظ</figcaption></figure>
+</div>
+</section>
+<section id="products">
+<h2>الأصناف</h2>
+<div class="lead"><p>قائمة كل ما تبيعه بأسعاره وكمياته. الاسم وسعر البيع يكفيان لتبدأ.</p></div>
+<div class="step has-fig"><div class="txt">
+<h3>قائمة الأصناف</h3>
+<ul>
+<li>ابحث بالاسم، أو اختر قسمًا من الشريط في الأعلى.</li>
+<li>اضغط أي صنف لتعديله.</li>
+<li>الرقم بجانب الصنف هو الكمية الموجودة: الأحمر يعني نفد، والأصفر يعني قارب على النفاد.</li>
+</ul>
+</div>
+<figure><img src="../app/guide/products.webp" alt="قائمة الأصناف" width="270" height="554" loading="lazy"><figcaption>قائمة الأصناف</figcaption></figure>
+</div>
+<div class="step"><div class="txt">
+<h3>إضافة أصناف كثيرة بسرعة</h3>
+<p>أسرع طريقة لإدخال أصناف المحل أول مرة.</p>
+<ol>
+<li>اضغط «إضافة سريعة بالمسح».</li>
+<li>وجّه الكاميرا إلى الرقم المطبوع على الصنف (الباركود).</li>
+<li>اكتب الاسم وسعر البيع.</li>
+<li>اضغط «حفظ وامسح التالي». حين تنتهي اضغط «تم».</li>
+</ol>
+<p>الكاميرا لا تقرأ؟ أبعد الجوال شبرًا، أو اكتب الرقم بيدك في الخانة أسفل الشاشة.</p>
+</div>
+</div>
+<div class="step has-fig"><div class="txt">
+<h3>بطاقة الصنف</h3>
+<p>اضغط «صنف جديد» لتضيف صنفًا واحدًا بكل تفاصيله.</p>
+<ol>
+<li>اكتب الاسم وامسح الباركود.</li>
+<li>اكتب سعر البيع وسعر التكلفة (بكم اشتريته). منهما يُحسب ربحك.</li>
+<li>اكتب الكمية الموجودة الآن ليبدأ المخزون صحيحًا.</li>
+<li>تشتريه بالكرتونة؟ اختر «كرتونة» واكتب كم قطعة فيها وسعرها.</li>
+<li>«خيارات إضافية» فيها: البيع بالكيلو أو المتر، القسم، متى ينبّهك التطبيق أن الصنف قارب على النفاد، وتاريخ الانتهاء.</li>
+</ol>
+<p>إن تركت سعر التكلفة فارغًا لا يُحسب ربح هذا الصنف في التقارير. وإن حذفت صنفًا بالخطأ اضغط «تراجع» في الإشعار الذي يظهر.</p>
+</div>
+<figure><img src="../app/guide/product-form.webp" alt="بطاقة الصنف" width="270" height="554" loading="lazy"><figcaption>بطاقة الصنف</figcaption></figure>
+</div>
+<div class="step has-fig"><div class="txt">
+<h3>تغيير أسعار كثيرة مرة واحدة</h3>
+<p>ارتفع السعر عند التاجر؟ من «المزيد» ثم «الأدوات» ثم «تحديث الأسعار».</p>
+<ol>
+<li>اختر كل الأصناف أو قسمًا واحدًا.</li>
+<li>اختر «رفع» أو «تخفيض»، بنسبة أو بمبلغ، واكتب القيمة.</li>
+<li>راجع السعر القديم والجديد لكل صنف، ثم طبّق.</li>
+</ol>
+<p>يمكنك التراجع بعد التطبيق.</p>
+</div>
+<figure><img src="../app/guide/prices.webp" alt="تحديث الأسعار مرة واحدة" width="270" height="554" loading="lazy"><figcaption>تحديث الأسعار مرة واحدة</figcaption></figure>
+</div>
+<div class="step"><div class="txt">
+<h3>أدوات أخرى للأصناف</h3>
+<table><thead><tr><th>الأداة</th><th>متى تستعملها</th></tr></thead><tbody>
+<tr><td>استيراد من Excel</td><td>أصنافك مكتوبة في ملف جدول وتريد نقلها كلها دفعة واحدة</td></tr>
+<tr><td>ملصقات الباركود</td><td>عندك أصناف بلا رقم مطبوع (ملابس، بضاعة محلية) وتريد بيعها بالمسح</td></tr>
+<tr><td>التصنيفات</td><td>تريد ترتيب الأصناف في أقسام: ألبان، مشروبات، منظفات</td></tr>
+</tbody></table>
+</div>
+</div>
+</section>
+<section id="debts">
+<h2>الديون</h2>
+<div class="lead"><p>دفتر الديون بدل الدفتر الورقي: يحسب وحده ولا يضيع. افتحه من «الديون» في الشريط السفلي.</p></div>
+<div class="step has-fig"><div class="txt">
+<h3>ديون الزبائن</h3>
+<p>في الأعلى تبويبان: «الزبائن» (ما لك عندهم) و«التجار» (ما عليك لهم).</p>
+<ol>
+<li>اضغط «زبون جديد» واكتب اسمه ورقم جواله.</li>
+<li>اضغط اسم الزبون لتفتح حسابه.</li>
+<li>البيع الآجل من شاشة البيع يُسجَّل على الزبون وحده، فلا تكتبه مرتين.</li>
+</ol>
+<p>كنت تستعمل تطبيق دفترة؟ «استيراد من دفترة» ينقل الأسماء والأرصدة.</p>
+</div>
+<figure><img src="../app/guide/customers.webp" alt="ديون الزبائن" width="270" height="554" loading="lazy"><figcaption>ديون الزبائن</figcaption></figure>
+</div>
+<div class="step has-fig"><div class="txt">
+<h3>صفحة الزبون</h3>
+<p>حساب زبون واحد: كم عليه الآن، وكل حركة بتاريخها.</p>
+<ul>
+<li><b>استلمت دفعة:</b> اكتب ما دفعه. زر «كامل المبلغ» يسدّد الكل. يظهر بعدها وصل ترسله له أو تطبعه.</li>
+<li><b>دين جديد:</b> مبلغ أخذه دون فاتورة، مع ملاحظة.</li>
+<li><b>تذكير واتساب:</b> رسالة مهذبة برصيده.</li>
+<li><b>كشف واتساب:</b> يرسل له كشف حسابه كاملًا.</li>
+</ul>
+<p>أخطأت في مبلغ؟ اضغط الحركة وعدّلها. الحركة المعدّلة تبقى ظاهرة «ملغاة» فلا يضيع أثر.</p>
+</div>
+<figure><img src="../app/guide/customer.webp" alt="صفحة الزبون وكشف حسابه" width="270" height="554" loading="lazy"><figcaption>صفحة الزبون وكشف حسابه</figcaption></figure>
+</div>
+<div class="step has-fig"><div class="txt">
+<h3>تذكير كل من عليه دين</h3>
+<p>اضغط «ذكّر الزبائن بديونهم». ترى كل من عليه دين في قائمة واحدة، وترسل لكل واحد تذكيرًا بضغطة على واتساب أو رسالة نصية.</p>
+</div>
+<figure><img src="../app/guide/remind.webp" alt="تذكير من عليهم دين" width="270" height="554" loading="lazy"><figcaption>تذكير من عليهم دين</figcaption></figure>
+</div>
+<div class="step has-fig"><div class="txt">
+<h3>ديون التجار</h3>
+<p>ما عليك لتجار الجملة: لكل تاجر رصيده، والمجموع في الأعلى.</p>
+<ol>
+<li>اضغط «تاجر جديد»: اسمه ورقمه وكم عليك له الآن من دفترك القديم.</li>
+<li>اضغط التاجر، ثم «دفعت له» لتسجّل دفعة، أو «دين جديد» لبضاعة أخذتها بالدين مع موعد الدفع.</li>
+<li>يذكّرك التطبيق قبل موعد الدفع بثلاثة أيام، ويوم الموعد، وبعده حتى تدفع أو تؤجّل.</li>
+</ol>
+<p>«دين جديد» يزيد ما عليك فقط. لتدخل الأصناف إلى المخزون أيضًا استعمل «شراء بفاتورة».</p>
+</div>
+<figure><img src="../app/guide/suppliers.webp" alt="ديون التجار" width="270" height="554" loading="lazy"><figcaption>ديون التجار</figcaption></figure>
+</div>
+</section>
+<section id="stock">
+<h2>المخزون والشراء</h2>
+<div class="lead"><p>المخزون ينقص مع كل بيع ويزيد مع كل شراء وحده. افتحه من الزر البرتقالي «المخزون» في الرئيسية.</p></div>
+<div class="step has-fig"><div class="txt">
+<h3>نظرة على المخزون</h3>
+<ul>
+<li><b>البطاقتان في الأعلى:</b> قيمة بضاعتك بما دفعته فيها، وقيمتها بسعر البيع.</li>
+<li><b>الشريط:</b> كل الأصناف، نفد، منخفض، ينتهي قريبًا، راكد (لا يُباع).</li>
+<li><b>اطلب من التاجر عبر واتساب:</b> من «نفد» أو «منخفض» يرسل الطلبية جاهزة.</li>
+<li><b>تالف:</b> صنف انكسر أو انتهى. يُخصم من المخزون ويُحسب في الخسائر.</li>
+</ul>
+</div>
+<figure><img src="../app/guide/inventory.webp" alt="المخزون والتنبيهات" width="270" height="554" loading="lazy"><figcaption>المخزون والتنبيهات</figcaption></figure>
+</div>
+<div class="step has-fig"><div class="txt">
+<h3>شراء بضاعة</h3>
+<p>وصلتك بضاعة؟ سجّلها فيزيد المخزون، ويُسجَّل الدين على التاجر إن لم تدفع.</p>
+<ol>
+<li>اضغط الزر الأزرق «شراء بضاعة» في الرئيسية.</li>
+<li>امسح كل صنف أو ابحث عنه. الصنف الجديد تضيفه من نفس الشاشة.</li>
+<li>اكتب الكمية وبكم اشتريت الواحدة (أو الكرتونة).</li>
+<li>زر الكاميرا يحفظ صورة فاتورة التاجر الورقية.</li>
+<li>اضغط «حفظ» ثم اختر: «دفعت نقدًا» أو «على الحساب» مع اسم التاجر وموعد الدفع.</li>
+</ol>
+</div>
+<figure><img src="../app/guide/purchase.webp" alt="شراء بضاعة" width="270" height="554" loading="lazy"><figcaption>شراء بضاعة</figcaption></figure>
+</div>
+<div class="step has-fig"><div class="txt">
+<h3>الجرد</h3>
+<p>تقارن ما على الرف فعلًا بما في التطبيق. الجرد يكشف النقص والأخطاء ويصحّح المخزون.</p>
+<ol>
+<li>من المخزون اضغط «جرد».</li>
+<li>«امسح وعُدّ»: امسح الصنف واكتب كم حبة موجودة فعلًا. أو «اختر بالاسم».</li>
+<li>كرّر لكل صنف، ثم اضغط «اعتمد الجرد».</li>
+</ol>
+<p>الجرد يُحفظ وأنت تعمل، فأكمله لاحقًا إن انشغلت. وما لم تعدّه لا يتغير.</p>
+</div>
+<figure><img src="../app/guide/count.webp" alt="الجرد" width="270" height="554" loading="lazy"><figcaption>الجرد</figcaption></figure>
+</div>
+<div class="step"><div class="txt">
+<h3>مخزن خارج المحل</h3>
+<p>عندك بضاعة في البيت أو في مستودع؟ من المخزون اضغط «المخازن» ثم «مخزن جديد». بضاعة المخزن لا تُباع حتى تضغط «انقل إلى المحل».</p>
+</div>
+</div>
+</section>
+<section id="money">
+<h2>الصندوق والمصاريف والتقارير</h2>
+<div class="lead"><p>ثلاث صفحات تجيبك: كم في الدرج، كم صرفت، وهل المحل يربح. كلها في «المزيد».</p></div>
+<div class="step has-fig"><div class="txt">
+<h3>الصندوق</h3>
+<p>يحسب التطبيق كم يجب أن يكون في الدرج الآن.</p>
+<ol>
+<li>الرقم الكبير هو النقد المتوقع: ما بدأت به اليوم، زائد ما دخل نقدًا، ناقص ما خرج.</li>
+<li>آخر اليوم اضغط «أغلق الصندوق»، عُدّ النقد واكتب المبلغ.</li>
+<li>يخبرك التطبيق فورًا: مطابق، زيادة، أو عجز.</li>
+</ol>
+<p>تترك فكّة في الدرج؟ اضغط «ابدأ اليوم بنقد في الدرج». التحويلات والمحافظ والبيع الآجل لا تدخل في الدرج.</p>
+</div>
+<figure><img src="../app/guide/cash.webp" alt="الصندوق" width="270" height="554" loading="lazy"><figcaption>الصندوق</figcaption></figure>
+</div>
+<div class="step has-fig"><div class="txt">
+<h3>المصاريف</h3>
+<p>الكهرباء والإيجار والمواصلات تأكل من الربح. سجّلها ليكون الربح في التقارير حقيقيًا.</p>
+<ol>
+<li>اضغط «مصروف جديد» واكتب المبلغ ونوعه (كهرباء، إيجار، ماء…).</li>
+<li>اختر من أين دفعت: من الدرج، أو «من خارج الصندوق».</li>
+</ol>
+</div>
+<figure><img src="../app/guide/expenses.webp" alt="مصاريف الشهر" width="270" height="554" loading="lazy"><figcaption>مصاريف الشهر</figcaption></figure>
+</div>
+<div class="step"><div class="txt">
+<h3>رواتب الموظفين</h3>
+<p>اضغط «موظف جديد» واكتب اسمه وراتبه الشهري ويوم الدفع. حين تدفع اضغط اسمه ثم «ادفع الراتب»: كله، أو جزءًا منه سلفة. يذكّرك التطبيق قبل الموعد بثلاثة أيام.</p>
+</div>
+</div>
+<div class="step has-fig"><div class="txt">
+<h3>التقارير</h3>
+<p>هل المحل يربح؟ هنا الجواب لأي مدة.</p>
+<ol>
+<li>اختر المدة: اليوم، 7 أيام، هذا الشهر، الشهر الماضي، هذه السنة.</li>
+<li>البطاقة الأولى: كم بعت وكم ربحت من البضاعة.</li>
+<li>البطاقة الثانية: صافي الربح، أي ربح البضاعة ناقص المصاريف والتالف.</li>
+<li>انزل لترى الأكثر مبيعًا والأقل، وكم دخل من كل طريقة دفع.</li>
+</ol>
+<p>الربح = سعر البيع ناقص سعر التكلفة. لذلك اكتب سعر التكلفة في بطاقة كل صنف.</p>
+</div>
+<figure><img src="../app/guide/reports.webp" alt="التقارير" width="270" height="554" loading="lazy"><figcaption>التقارير</figcaption></figure>
+</div>
+<div class="step has-fig"><div class="txt">
+<h3>تقرير اليوم</h3>
+<p>ملخص يومك في صفحة واحدة تقرؤها في دقيقة: كم بعت مقارنة بأمس، أقوى ساعة، والأكثر مبيعًا. يجهز كل مساء ويظهر في الرئيسية، واضغط «أرسل لي على واتساب» ليصلك.</p>
+</div>
+<figure><img src="../app/guide/daily.webp" alt="تقرير اليوم" width="270" height="554" loading="lazy"><figcaption>تقرير اليوم</figcaption></figure>
+</div>
+</section>
+<section id="team">
+<h2>الموظفون</h2>
+<div class="step has-fig"><div class="txt">
+<p>عندك عامل؟ لكل شخص رمز يدخل به. العامل يبيع فقط ولا يرى الأرباح، وأنت تعرف من باع ماذا.</p>
+<ol>
+<li>من «المزيد» افتح «الإعدادات» ثم «الموظفون».</li>
+<li>اضغط «فعّل الموظفين» واكتب رمزك أنت أولًا. به تفتح كل شيء، فلا تعطه لأحد.</li>
+<li>اضغط «موظف جديد»: اسمه ورمزه (4 إلى 6 أرقام).</li>
+<li>اختر ما يُسمح له به: الخصم، البيع الآجل، المرتجع، الأصناف، الشراء، الصندوق، التقارير.</li>
+<li>عند تبديل الوردية اضغط «قفل» في «المزيد»، فيختار الموظف التالي اسمه ويكتب رمزه.</li>
+</ol>
+<p>كل فاتورة تحمل اسم من باعها. نسي الموظف رمزه؟ يغيّره له صاحب المحل من نفس الصفحة.</p>
+</div>
+<figure><img src="../app/guide/staff.webp" alt="الموظفون" width="270" height="554" loading="lazy"><figcaption>الموظفون</figcaption></figure>
+</div>
+<div class="step has-fig"><div class="txt">
+<h3>المحادثة مع الموظفين</h3>
+<p>تراسل موظفيك من داخل التطبيق بدل مجموعات واتساب. افتحها من «المزيد» ثم «المحادثة».</p>
+<ul>
+<li><b>المحادثات:</b> «كل أهل المحل» يراها الجميع. وبعد تفعيل «الموظفون» يظهر كل موظف باسمه لرسالة خاصة.</li>
+<li><b>التعميمات:</b> رسالة من صاحب المحل للجميع (دوام، سعر جديد، تنبيه). تظهر في رئيسية كل موظف، وتحتها ترى من قرأها.</li>
+</ul>
+<p>الرسائل تصل للأجهزة الأخرى حين يتوفر الإنترنت، وتحتاج أن تكون أنشأت حسابًا من «حسابي».</p>
+</div>
+<figure><img src="../app/guide/chat.webp" alt="المحادثة والتعميمات" width="270" height="554" loading="lazy"><figcaption>المحادثة والتعميمات</figcaption></figure>
+</div>
+</section>
+<section id="account">
+<h2>حماية بياناتك والاشتراك</h2>
+<div class="lead"><p>أنشئ حسابًا برقم جوالك وكلمة سر، فإن ضاع الجوال أو تعطّل يرجع كل شيء على جهاز جديد.</p></div>
+<div class="step"><div class="txt">
+<h3>حسابي</h3>
+<ol>
+<li>من «المزيد» افتح «حسابي».</li>
+<li>اكتب رقم جوالك وكلمة سر واضغط «أنشئ حسابي». هذه الخطوة وحدها تحتاج إنترنت.</li>
+<li>على جهاز جديد: ثبّت التطبيق واختر «عندي حساب» وادخل بالرقم وكلمة السر.</li>
+</ol>
+<p>نسيت كلمة السر؟ اطلب رمزًا عبر واتساب من شاشة الدخول.</p>
+</div>
+</div>
+<div class="step has-fig"><div class="txt">
+<h3>نسخة احتياطية</h3>
+<p>من «المزيد» ثم «الأدوات» اضغط «احفظ نسخة احتياطية». ينشئ التطبيق ملفًا فيه كل بيانات المحل، فأرسله لنفسك على واتساب. خذ نسخة كل أسبوع على الأقل.</p>
+</div>
+<figure><img src="../app/guide/tools.webp" alt="الأدوات والنسخة الاحتياطية" width="270" height="554" loading="lazy"><figcaption>الأدوات والنسخة الاحتياطية</figcaption></figure>
+</div>
+<div class="step has-fig"><div class="txt">
+<h3>الاشتراك</h3>
+<p>التجربة 30 يومًا بكل الميزات، ثم 30 ₪ شهريًا أو 300 ₪ سنويًا.</p>
+<ol>
+<li>من «المزيد» افتح «الاشتراك».</li>
+<li>اختر شهري أو سنوي، ثم «اشترك عبر واتساب» وأرسل الرسالة كما هي.</li>
+<li>بعد الدفع يصلك رمز التفعيل. الصقه في «عندي كود تفعيل» واضغط «فعّل».</li>
+</ol>
+<p>اشتركت وأنت في التجربة؟ أيام التجربة الباقية لا تضيع. وإن انتهى الاشتراك لا يُحذف شيء: ترى كل بياناتك، ويعود البيع فور التجديد.</p>
+</div>
+<figure><img src="../app/guide/subscribe.webp" alt="الاشتراك" width="270" height="554" loading="lazy"><figcaption>الاشتراك</figcaption></figure>
+</div>
+</section>
+<section id="pc">
+<h2>العمل على الحاسوب</h2>
+<div class="lead"><p>على شاشة الحاسوب يصير التطبيق برنامج كاشير كاملًا: قائمة ثابتة على اليمين، وجداول واسعة، وبيع سريع بلوحة المفاتيح.</p></div>
+<div class="step"><div class="txt">
+<h3>قارئ الباركود</h3>
+<p>صِل القارئ بالحاسوب فيعمل فورًا بلا أي إعداد.</p>
+<ul>
+<li>في شاشة البيع: يضيف الصنف للسلة.</li>
+<li>في الجرد: يفتح خانة العدد.</li>
+<li>في باقي الصفحات: يعرض سعر الصنف والموجود منه، مع زر «بِعه الآن».</li>
+<li>صنف غير مسجّل؟ يعرض التطبيق إضافته صنفًا جديدًا بضغطة.</li>
+</ul>
+</div>
+</div>
+<div class="step"><div class="txt">
+<h3>أزرار لوحة المفاتيح</h3>
+<p>الأزرار F1 إلى F10 هي الصف الأعلى في لوحة المفاتيح. تبيع بها دون أن تلمس الفأرة.</p>
+<table><thead><tr><th>الزر</th><th>ماذا يفعل</th></tr></thead><tbody>
+<tr><td>F1</td><td>يشرح الصفحة المفتوحة</td></tr>
+<tr><td>F2</td><td>بيع جديد من أي مكان</td></tr>
+<tr><td>F3</td><td>ينقلك إلى خانة البحث</td></tr>
+<tr><td>F4</td><td>خصم</td></tr>
+<tr><td>F6</td><td>اختيار الزبون</td></tr>
+<tr><td>F8</td><td>تعليق السلة</td></tr>
+<tr><td>F9</td><td>السلال المعلّقة</td></tr>
+<tr><td>F10</td><td>الدفع</td></tr>
+</tbody></table>
+<p>بيع كامل في ثلاث ضغطات: امسح الأصناف، اضغط F10، ثم الرقم 1 للدفع نقدًا، ثم Enter لبيع جديد.</p>
+<p>في الجداول اضغط عنوان العمود لترتّب به. وإن صغّرت النافذة يرجع التطبيق لشكل الجوال وحده.</p>
+</div>
+</div>
+</section>
+<section id="settings">
+<h2>الإعدادات والمساعدة</h2>
+<div class="lead"><p>تضبط التطبيق على مقاس محلك مرة واحدة من «المزيد» ثم «الإعدادات».</p></div>
+<div class="step has-fig"><div class="txt">
+<h3>أهم الإعدادات</h3>
+<table><thead><tr><th>الإعداد</th><th>ماذا يفيدك</th></tr></thead><tbody>
+<tr><td>بيانات المحل والشعار</td><td>الاسم والرقم والعنوان والشعار تظهر أعلى كل فاتورة</td></tr>
+<tr><td>الميزات</td><td>أطفئ ما لا تحتاجه فتبقى الشاشات بسيطة، وشغّله متى احتجته</td></tr>
+<tr><td>طرق الدفع</td><td>أضف طريقتك (بنك، محفظة) وأخفِ ما لا تستعمله</td></tr>
+<tr><td>العملات</td><td>زبون يدفع بالدولار أو الدينار؟ اكتب سعر الصرف فيحسب التطبيق المقابل بالشيكل</td></tr>
+<tr><td>رسائل الزبائن</td><td>رسالة تصل الزبون برصيده بعد كل دين أو دفعة، وتذكير دوري لمن عليه دين</td></tr>
+<tr><td>القفل والأصوات</td><td>قفل التطبيق بالبصمة، وصوت عند كل مسح ناجح</td></tr>
+</tbody></table>
+</div>
+<figure><img src="../app/guide/settings.webp" alt="الإعدادات" width="270" height="554" loading="lazy"><figcaption>الإعدادات</figcaption></figure>
+</div>
+<div class="step has-fig"><div class="txt">
+<h3>طابعة الفواتير</h3>
+<p>تطبع الفاتورة ورقًا للزبون على طابعة الفواتير الصغيرة.</p>
+<ol>
+<li>اربط الطابعة بالجوال من إعدادات البلوتوث في الجوال أولًا.</li>
+<li>اخترها من «طابعة الفواتير» واضغط «اطبع ورقة تجربة».</li>
+<li>شغّل «اطبع كل فاتورة بيع تلقائيًا» إن أردت ورقة بعد كل بيع.</li>
+</ol>
+</div>
+<figure><img src="../app/guide/printer.webp" alt="طابعة الفواتير" width="270" height="554" loading="lazy"><figcaption>طابعة الفواتير</figcaption></figure>
+</div>
+<div class="step has-fig"><div class="txt">
+<h3>ميزان الباركود</h3>
+<p>ميزانك يطبع ملصقًا للخضار أو اللحمة؟ امسح الملصق في البيع فيُضاف الصنف بوزنه وسعره دون كتابة.</p>
+<ol>
+<li>من «الإعدادات» افتح «الميزان» وشغّل «قراءة باركود الميزان».</li>
+<li>اختر شكل الملصق كما هو مضبوط في ميزانك.</li>
+<li>في بطاقة كل صنف يُوزن، افتح «خيارات إضافية» واكتب «رقم الصنف في الميزان».</li>
+</ol>
+<p>جرّب بملصق واحد قبل أن تعتمد عليه.</p>
+</div>
+<figure><img src="../app/guide/scale.webp" alt="ميزان الباركود" width="270" height="554" loading="lazy"><figcaption>ميزان الباركود</figcaption></figure>
+</div>
+<div class="step"><div class="txt">
+<h3>كتالوج واتساب</h3>
+<p>رابط فيه أصنافك وأسعارك. الزبون يتصفح من جواله ويضغط «اطلب عبر واتساب»، فتصلك رسالة الطلب جاهزة.</p>
+<ol>
+<li>من «الإعدادات» افتح «كتالوج واتساب» وشغّله. يحتاج حسابًا ورقم جوال المحل.</li>
+<li>انسخ الرابط وضعه في حالة واتساب، أو أرسله لزبائنك.</li>
+<li>اكتب رسالة ترحيب، واختر إخفاء الأصناف التي نفدت.</li>
+</ol>
+<p>الزبون لا يرى سعر التكلفة ولا الكميات، والأسعار تتغيّر في الرابط وحدها حين تغيّرها في التطبيق.</p>
+</div>
+</div>
+<div class="step has-fig"><div class="txt">
+<h3>أين تجد المساعدة</h3>
+<ul>
+<li>في أي صفحة: زر «شرح» في الأعلى يفتح شرحها دون أن تغادرها.</li>
+<li>من «المزيد» افتح «المساعدة»: دليل مصوّر لكل صفحة، وأسئلة شائعة بأجوبة قصيرة، وبحث.</li>
+<li>لم تجد جوابًا؟ اضغط «اسألنا على واتساب» أسفل صفحة المساعدة.</li>
+</ul>
+</div>
+<figure><img src="../app/guide/help-sheet.webp" alt="زر «شرح» يفتح شرح الصفحة فوقها" width="270" height="554" loading="lazy"><figcaption>زر «شرح» يفتح شرح الصفحة فوقها</figcaption></figure>
+</div>
+</section>
+  <a class="wa" href="https://wa.me/970567900316?text=%D9%85%D8%B1%D8%AD%D8%A8%D9%8B%D8%A7%D8%8C%20%D8%B9%D9%86%D8%AF%D9%8A%20%D8%B3%D8%A4%D8%A7%D9%84%20%D8%B9%D9%86%20%D8%AF%D9%81%D8%AA%D8%B1%D8%A9%20%D9%83%D8%A7%D8%B4%D9%8A%D8%B1">سؤال أو مساعدة؟ راسلنا على واتساب</a>
+</main>
+<footer>دفترة كاشير — أحد منتجات <b>MakeFlow</b><br><a href="../">صفحة التنزيل</a> · <a href="../privacy.html">سياسة الخصوصية</a> · <a href="../terms.html">شروط الاستخدام</a></footer>
+</body>
+</html>

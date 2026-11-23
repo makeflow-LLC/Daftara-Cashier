@@ -142,6 +142,8 @@ Nothing else needs to change.
   itself with `setHelpButton`); home, first-run setup, the lock screen and the scanner add it by hand.
 - Screenshots live in `guide/*.webp` (540px, ~20 KB each, shipped with the app). `npm run guide:shots` rebuilds them
   from the real app with a demo shop (needs Playwright + Chromium: `npm i --no-save playwright`).
+- Public guide for customers: `site/guide/index.html` (static, plain wording, linked from the download page), live at
+  `https://makeflow.tech/apps/cashier/guide/`. Its screenshots are the web app's copies in `../app/guide/`, so nothing is duplicated.
 - A new route must be listed in a topic's `routes`: `tests/guide.test.mjs` fails otherwise, and also checks that
   every image, FAQ link and «open» button points at something that exists.
 
