@@ -623,8 +623,8 @@ alter table public.cashier_invoice_lines add column if not exists position small
 --  * مهلة 3 أيام بعد انتهاء الاشتراك المدفوع.
 --
 -- إدارة (SQL Editor):
---   تفعيل شهر:  update cashier_licenses set plan='monthly', is_active=true, expires_at=greatest(now(), coalesce(expires_at, now())) + interval '1 month', updated_at=now() where shop_id='…';
---   تفعيل سنة:  … + interval '1 year' …  plan='yearly'
+--   تفعيل شهر:  update cashier_licenses set plan='monthly', is_active=true, expires_at=greatest(now(), coalesce(expires_at, now()), coalesce(trial_ends_at, now())) + interval '1 month', updated_at=now() where shop_id='…';
+--   تفعيل سنة:  … + interval '1 year' …  plan='yearly'   (يبدأ بعد نهاية التجربة/الاشتراك الحالي، فلا تضيع أيام)
 --   إيقاف محل:  update cashier_licenses set is_active=false, updated_at=now() where shop_id='…';
 --   كل المحلات:  select s.name, s.phone, l.plan, l.is_active, l.trial_ends_at, l.expires_at from cashier_licenses l join cashier_shops s on s.id=l.shop_id order by l.updated_at desc;
 -- =====================================================================

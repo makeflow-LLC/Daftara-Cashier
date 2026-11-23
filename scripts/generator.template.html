@@ -163,9 +163,9 @@ function findCashierDevice(text) {
   function plan() { return document.querySelector('input[name=plan]:checked').value; }
   function two(n) { return (n < 10 ? '0' : '') + n; }
   function ymd(d) { return d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate()); }
-  // شهر أو سنة من اليوم، أو من نهاية الاشتراك الحالي إن كان ما زال ساريًا (التجديد المبكر لا يضيع أيامًا)
+  // شهر أو سنة من اليوم، أو من نهاية الاشتراك الحالي أو التجربة المجانية إن كانت ما زالت سارية (لا تضيع أيام)
   function defaultUntil() {
-    var m = /الاشتراك الحالي حتى:\s*(\d{4})-(\d{2})-(\d{2})/.exec($('req').value);
+    var m = /(?:الاشتراك الحالي|التجربة المجانية) حتى:\s*(\d{4})-(\d{2})-(\d{2})/.exec($('req').value);
     var base = new Date();
     if (m) { var cur = new Date(+m[1], +m[2] - 1, +m[3]); if (cur > base) base = cur; }
     return ymd(plan() === 'y' ? new Date(base.getFullYear() + 1, base.getMonth(), base.getDate()) : new Date(base.getFullYear(), base.getMonth() + 1, base.getDate()));

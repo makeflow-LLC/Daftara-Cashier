@@ -124,10 +124,13 @@ export function verifyCode(text, { device, publicKey, verify, now = Date.now() }
 }
 
 /** رسالة طلب الاشتراك التي يرسلها صاحب المحل على واتساب. */
-export function subscribeMessage({ shopName, device, plan, shopId, until = null }) {
+export function subscribeMessage({ shopName, device, plan, shopId, until = null, trialUntil = null }) {
   const d = until ? new Date(until) : null;
+  const t = !d && trialUntil ? new Date(trialUntil) : null;
   const two = (x) => String(x).padStart(2, '0');
   return `مرحبًا، أريد الاشتراك في دفترة كاشير (${PLAN_LABEL[plan]} — ${plan === 'yearly' ? '300' : '30'} شيكل)\nالمحل: ${shopName}\nرقم الجهاز: ${device}`
     + (d ? `\nالاشتراك الحالي حتى: ${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}` : '')
+    // أيام التجربة المتبقية لا تضيع: أداة الأكواد تبدأ الاشتراك من نهاية التجربة
+    + (t ? `\nالتجربة المجانية حتى: ${t.getFullYear()}-${two(t.getMonth() + 1)}-${two(t.getDate())}` : '')
     + (shopId ? `\nرقم المحل: ${shopId}` : '');
 }
