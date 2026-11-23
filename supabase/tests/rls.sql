@@ -298,4 +298,21 @@ select set_config('request.jwt.claim.sub', 'eeeeeeee-0000-0000-0000-00000000000e
 select pg_temp.check((public.cashier_account_login('970599000111', 'temp4567')->>'ok')::boolean, 'the owner signs in with it');
 reset role;
 
+-- سجل العمليات: كل تغيير من اللوحة يُكتب باسم المدير
+set role authenticated;
+select set_config('request.jwt.claim.sub', :A, false);
+select pg_temp.expect_error($q$select public.makeflow_admin_audit(100)$q$, 'owner reads the operations log');
+select pg_temp.expect_error($q$select public.makeflow_audit('cashier', 'forged', '', '', '{}')$q$, 'owner writes a log line');
+select pg_temp.expect_error($q$select * from makeflow_admin_log$q$, 'log table not readable');
+select set_config('request.jwt.claim.sub', :ADM, false);
+select pg_temp.expect_error($q$select public.makeflow_audit('cashier', 'forged', '', '', '{}')$q$, 'even an admin cannot write a log line directly');
+select pg_temp.check((select bool_and(a in (select l->>'action' from jsonb_array_elements(public.makeflow_admin_audit(1000)->'log') l)) from unnest(array['shop.activate', 'shop.set', 'payment.delete', 'shop.password']) a), 'every kind of change is logged');
+select pg_temp.check((select bool_and(l->>'admin_name' = 'test' and l->>'app' = 'cashier') from jsonb_array_elements(public.makeflow_admin_audit(1000)->'log') l), 'with the admin who made it');
+select pg_temp.check((select count(*) = 2 and bool_and(l->>'label' = 'بقالة أبو أحمد' and l->'details' ? 'until') and sum((l->'details'->>'amount')::numeric) = 330 from jsonb_array_elements(public.makeflow_admin_audit(1000)->'log') l where l->>'action' = 'shop.activate'), 'activations carry the shop, amount and new end date');
+select pg_temp.check(public.makeflow_admin_audit(1000)::text not like '%temp4567%', 'a password reset line never holds the password');
+select pg_temp.check((select count(*) = 0 from jsonb_array_elements(public.makeflow_admin_audit(1000)->'log') l where l->>'target' = '970500000000'), 'a change that touched nothing leaves no line');
+select pg_temp.check(public.makeflow_admin_name('سارة'), 'an admin names herself');
+select pg_temp.check(public.makeflow_admin_audit(1)->>'me' = 'سارة', 'and the panel reads the name back');
+reset role;
+
 \echo ALL SCHEMA TESTS PASSED

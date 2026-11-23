@@ -312,6 +312,7 @@ forgot it. Each function checks that the caller's Supabase Auth account is liste
 Daftara's `supabase/admin.sql`); shop devices are `authenticated` too and are refused. Setup: run `supabase/setup.sql`,
 create the admin user in Authentication, then
 `insert into makeflow_admins (user_id) select id from auth.users where email = '…';`.
+Every change is written to `makeflow_admin_log` with the admin who made it (the panel's *العمليات* tab).
 The panel also makes DCS/DCR codes (same format as `tools/license-generator.html`, which still works on its own).
 
 ## Build, test, release
