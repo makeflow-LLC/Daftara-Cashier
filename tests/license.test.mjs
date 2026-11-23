@@ -93,6 +93,10 @@ test('owner generator page: up to date, and its codes are accepted by the app', 
   const keys = nacl.sign.keyPair.fromSeed(new Uint8Array(32).fill(3));
   const msg = subscribeMessage({ shopName: 'بقالة', device: 'ABCDE-FGHJK', plan: 'yearly', until: Date.UTC(2027, 0, 15, 12) });
   assert.match(msg, /الاشتراك الحالي حتى: 2027-01-15/);
+  const trialMsg = subscribeMessage({ shopName: 'بقالة', device: 'ABCDE-FGHJK', plan: 'monthly', trialUntil: Date.UTC(2026, 11, 20, 12) });
+  assert.match(trialMsg, /التجربة المجانية حتى: 2026-12-20/);
+  assert.doesNotMatch(trialMsg, /الاشتراك الحالي/);
+  assert.match(html, /\(\?:الاشتراك الحالي\|التجربة المجانية\) حتى:/, 'generator starts the plan after the trial ends');
   const device = api.findCashierDevice(msg);
   assert.equal(device, 'ABCDE-FGHJK');
   const code = api.makeCashierCode(nacl, keys.secretKey, device, '20991231', 'y');

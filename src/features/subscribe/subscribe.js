@@ -98,7 +98,7 @@ export function renderSubscribe(el) {
         ? h('button', { class: 'btn btn-primary btn-block btn-lg', type: 'button', onclick: buy }, icon('check', 22), h('span', null, 'اشترك عبر Google Play'))
         : h('button', {
           class: 'btn btn-wa btn-block btn-lg', type: 'button',
-          onclick: () => openLink(`https://wa.me/${SUPPORT_PHONE}?text=${encodeURIComponent(subscribeMessage({ shopName: app.shop?.name || '', device: lic.device, plan, shopId: app.config.syncEnabled ? app.ctx.shopId : null, until: ['active', 'grace'].includes(lic.state.status) ? lic.state.until : null }))}`),
+          onclick: () => openLink(`https://wa.me/${SUPPORT_PHONE}?text=${encodeURIComponent(subscribeMessage({ shopName: app.shop?.name || '', device: lic.device, plan, shopId: app.config.syncEnabled ? app.ctx.shopId : null, until: ['active', 'grace'].includes(lic.state.status) ? lic.state.until : null, trialUntil: lic.state.status === 'trial' ? lic.state.until : null }))}`),
         }, icon('chat', 22), h('span', null, 'اشترك عبر واتساب')),
       isPlay ? null : h('div', { class: 'lic-steps' },
         h('div', null, h('b', { class: 'num' }, '1'), 'اضغط «اشترك عبر واتساب» وأرسل الرسالة كما هي'),
