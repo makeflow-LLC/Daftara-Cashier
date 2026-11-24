@@ -23,7 +23,11 @@ const KIND_ICON = { cash: 'cash', transfer: 'wallet', credit: 'user' };
  * prior (تعديل فاتورة): ما دُفع في الفاتورة الأصلية [{ method_id, kind, amount }] — أُخرج عند إلغائها بطريقته نفسها،
  * فيُسجَّل هنا من جديد بالطريقة نفسها، ويدفع الزبون الفرق فقط (أو يُرد له الباقي نقدًا).
  */
-export function openPay({ total, customer, credit = 0, prior = null, onConfirm, onClose = null }) {
+/**
+ * name: الاسم على الفاتورة لزبون عابر — خانة مستقلة هنا، اختيارية، لا تنشئ حسابًا ولا تظهر في الديون.
+ * تُخفى حين يُختار زبون له حساب (اسمه هو ما يُكتب). تصل onConfirm في name.
+ */
+export function openPay({ total, customer, credit = 0, prior = null, name = '', onConfirm, onClose = null }) {
   if (prior) credit = prior.reduce((a, p) => a + p.amount, 0);
   const base = app.shop?.base_currency || 'ILS';
   let methods = [];
@@ -33,6 +37,9 @@ export function openPay({ total, customer, credit = 0, prior = null, onConfirm, 
   let busy = false;
   let offDigit = () => {};
   const body = h('div', { class: 'pay' });
+  const nameInput = input({ value: name || '', maxlength: 60, placeholder: 'اكتب اسمه لتجد الفاتورة لاحقًا', autocomplete: 'off', enterkeyhint: 'done' });
+  nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); nameInput.blur(); } });
+  const nameField = h('label', { class: 'field pay-name' }, h('span', { class: 'field-label' }, 'الاسم على الفاتورة (اختياري — بلا حساب ولا دين)'), nameInput);
 
   const sheet = openSheet((close) => {
     async function confirm(payments) {
@@ -43,7 +50,7 @@ export function openPay({ total, customer, credit = 0, prior = null, onConfirm, 
         feedback.error(); toast(err, { kind: 'error' }); return;
       }
       busy = true;
-      try { await onConfirm({ payments, customer: cust }); close(); }
+      try { await onConfirm({ payments, customer: cust, name: cust ? null : nameInput.value }); close(); }
       catch (e) { busy = false; feedback.error(); toast(e.message || 'تعذّر الحفظ', { kind: 'error' }); }
     }
 
@@ -81,7 +88,7 @@ export function openPay({ total, customer, credit = 0, prior = null, onConfirm, 
         credit ? h('div', { class: 'rc-kv' }, h('span', null, prior ? 'دفعه الزبون من قبل' : 'رصيد المرتجع'), money(-credit)) : null,
         credit ? h('div', { class: `pay-change ${back ? 'bad' : 'ok'}` }, h('span', null, back ? 'رُدّ للزبون الفرق' : due ? 'يدفع الزبون الفرق' : 'متساويان — لا فرق'), money(back || due)) : null,
         cust ? h('div', { class: 'pay-cust' }, icon('user', 18), h('span', null, cust.name),
-          h('button', { class: 'link-btn', type: 'button', onclick: () => { cust = null; paintMain(); } }, 'إزالة')) : null,
+          h('button', { class: 'link-btn', type: 'button', onclick: () => { cust = null; paintMain(); } }, 'إزالة')) : nameField,
         credit && !due
           ? button(prior ? 'احفظ التعديل' : 'تم التبديل', { block: true, size: 'lg', icon: 'check', onclick: () => { const m = methods.find((x) => x.kind === 'cash') || methods[0]; if (m || prior) confirm(build(m)); } })
           : h('div', { class: 'pay-methods' }, ...methods.map((m, i) => h('button', {

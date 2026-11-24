@@ -391,9 +391,9 @@ export function renderSale(el, params = {}) {
 
   async function chooseCustomer() {
     const { pickCustomer } = await import('../customers/picker.js');
-    const c = await pickCustomer({ title: 'زبون هذه الفاتورة', nameOnly: true });
+    const c = await pickCustomer({ title: 'زبون هذه الفاتورة (له حساب)' });
     if (!c) return;
-    if (c.nameOnly) { cart.customer = null; cart.name = c.nameOnly; } else { cart.customer = c; cart.name = null; }
+    cart.customer = c; cart.name = null;
     customerDiscount(); changed();
   }
 
@@ -448,10 +448,10 @@ export function renderSale(el, params = {}) {
     if (!t.count) return;
     if (scanner) scanner.pause();
     const edit = cart.edit;
-    const save = async ({ payments, customer }) => {
+    const save = async ({ payments, customer, name = null }) => {
       const r = await app.sales.checkout({
         lines: pr.lines, discount: cart.discount, payments, customerId: customer ? customer.id : null, currency: base,
-        note: customer ? null : cart.name, replaces: edit ? edit.id : null,
+        note: customer ? null : name, replaces: edit ? edit.id : null,
       });
       if (edit) {
         cart = empty();
@@ -481,6 +481,7 @@ export function renderSale(el, params = {}) {
       credit: cart.exchange ? cart.exchange.amount : 0,
       prior: edit && edit.prior.length ? edit.prior : null,
       customer: cart.customer,
+      name: cart.name,
       onConfirm: save,
       onClose,
     });
