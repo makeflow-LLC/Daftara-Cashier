@@ -92,7 +92,7 @@ export function reminderBanner() {
   const box = h('div');
   const paint = () => {
     const d = app.reminders && app.reminders.due;
-    fill(box, d ? h('button', { class: 'lic-banner lic-warn', type: 'button', onclick: () => navigate('/customers/remind?due=1') },
+    fill(box, d && app.can('see_debts') ? h('button', { class: 'lic-banner lic-warn', type: 'button', onclick: () => navigate('/customers/remind?due=1') },
       icon('chat', 26),
       h('span', { class: 'row-main' }, h('strong', null, 'حان موعد تذكير الزبائن بديونهم'), h('span', null, `${customersText(d.count)} — المجموع `, money(d.total))),
       h('span', { class: 'lic-cta' }, 'راجع وأرسل')) : null);

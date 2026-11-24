@@ -37,7 +37,7 @@ async function start() {
     if (app.locked) return path === '/lock' ? null : '/lock';
     if (path === '/lock' && !app.locked) return '/';
     if (route && route.perm && !(route.perm === 'owner' ? !app.staff || app.user?.owner : app.can(route.perm))) {
-      setTimeout(() => toast('هذه الشاشة لصاحب المحل — اطلب منه الصلاحية', { kind: 'error' }), 0);
+      setTimeout(() => toast('لا تملك صلاحية هذه الشاشة — اطلبها من صاحب المحل', { kind: 'error' }), 0);
       return '/';
     }
     return route && route.write && app.license.compute().readOnly ? '/subscribe' : null;

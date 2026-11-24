@@ -52,14 +52,14 @@ export function renderHome(el) {
       accountBanner(),
       stats,
       h('div', { class: 'quick' },
-        quick('scan', 'بيع جديد', () => navigate('/sale'), 'brand'),
+        app.can('sell') ? quick('scan', 'بيع جديد', () => navigate('/sale'), 'brand') : null,
         app.can('purchases') ? quick('truck', 'شراء بضاعة', () => navigate('/inventory/purchase')) : null,
         app.can('purchases') ? quick('box', 'المخزون', () => navigate('/inventory')) : null,
         quick('users', 'الديون: لك وعليك', () => navigate('/customers')),
       ),
       // استلام أي مبلغ من أي مشترٍ بالمحفظة (غير مرتبط بزبون). بلا رقم محفظة: الشاشة تقود إلى الإعدادات
-      h('button', { class: 'wallet-btn', type: 'button', onclick: () => navigate('/wallet') },
-        icon('wallet', 26), h('span', { class: 'row-main' }, h('strong', null, 'استلام بالمحفظة (QR)'), h('span', null, 'جوال باي وبال باي: الزبون يمسح الرمز ويحوّل')), icon('chevron', 20)),
+      app.can('sell') ? h('button', { class: 'wallet-btn', type: 'button', onclick: () => navigate('/wallet') },
+        icon('wallet', 26), h('span', { class: 'row-main' }, h('strong', null, 'استلام بالمحفظة (QR)'), h('span', null, 'جوال باي وبال باي: الزبون يمسح الرمز ويحوّل')), icon('chevron', 20)) : null,
       guide,
       section('تنبيهات', alerts),
       h('button', { class: 'beta-banner', type: 'button', onclick: () => openFeedback('note') },
@@ -93,7 +93,8 @@ export function renderHome(el) {
 
   async function paint() {
     const s = await todaySummary(app.db);
-    const debts = await app.customers.totals();
+    // مجموع ما لك عند الزبائن: لصاحب المحل ومن أعطاه صلاحية «يرى مجموع الديون»
+    const debts = app.can('see_debts') ? await app.customers.totals() : null;
     const owed = app.can('purchases') ? await app.inventory.supplierTotals() : null;
     const drawer = await app.cash.summary();
     const showProfit = app.can('see_profit');
@@ -107,7 +108,7 @@ export function renderHome(el) {
     );
     fill(stats,
       h('button', { class: 'stat stat-tap', type: 'button', onclick: () => navigate('/cash') }, h('div', { class: 'stat-label' }, icon('cash', 18), 'النقد في الدرج'), h('div', { class: 'stat-value' }, money(drawer.expectedCash))),
-      h('button', { class: 'stat stat-tap', type: 'button', onclick: () => navigate('/customers') }, h('div', { class: 'stat-label' }, icon('users', 18), 'لك عند الزبائن'), h('div', { class: 'stat-value' }, money(debts.total))),
+      debts ? h('button', { class: 'stat stat-tap', type: 'button', onclick: () => navigate('/customers') }, h('div', { class: 'stat-label' }, icon('users', 18), 'لك عند الزبائن'), h('div', { class: 'stat-value' }, money(debts.total))) : null,
       // ما عليك للتجار: ظاهر دائمًا في الرئيسية بجانب ما لك (كان مدفونًا في «المزيد»)
       owed ? h('button', { class: 'stat stat-tap', type: 'button', onclick: () => navigate('/suppliers') }, h('div', { class: 'stat-label' }, icon('truck', 18), 'عليك للتجار'), h('div', { class: 'stat-value' }, money(owed.total))) : null,
     );

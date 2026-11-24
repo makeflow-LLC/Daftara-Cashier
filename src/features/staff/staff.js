@@ -5,7 +5,7 @@ import { icon } from '../../ui/icons.js';
 import { header, button, input, field, switchRow, emptyState, helpButton } from '../../ui/components.js';
 import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
-import { PERMISSIONS, ROLES, pinProblem, makePin, checkPin, pinTaken, PIN_MAX } from '../../domain/staff.js';
+import { PERMISSIONS, ROLES, PERM_VERSION, permsOf, roleFor, pinProblem, makePin, checkPin, pinTaken, PIN_MAX } from '../../domain/staff.js';
 import { uuid } from '../../core/ids.js';
 import { app } from '../../core/app.js';
 import { navigate } from '../../core/router.js';
@@ -141,9 +141,10 @@ export function renderStaff(el) {
       fill(body,
         h('div', { class: 'acc-card acc-info' }, h('span', { class: 'acc-ic' }, icon('users', 30)),
           h('div', null, h('strong', null, 'عندك عامل في المحل؟'),
-            h('span', null, 'كل شخص يدخل برمز من 4 أرقام. الكاشير يبيع فقط ولا يرى الأرباح ولا يحذف — وأنت تعرف من باع ماذا في التقارير وتقرير اليوم.'))),
+            h('span', null, 'كل شخص يدخل برمز من 4 أرقام. الكاشير يبيع فقط ولا يرى الأرباح ولا مجموع الديون ولا يحذف — وأنت تعرف من باع ماذا في التقارير وتقرير اليوم.'))),
         h('ul', { class: 'feature-list' },
-          h('li', null, 'تحدد لكل موظف ما يستطيعه: خصم، آجل، مرتجع، أصناف، صندوق…'),
+          h('li', null, 'أدوار جاهزة بضغطة: كاشير، كاشير موثوق، محاسب، مراقب، مدير'),
+          h('li', null, 'أو تحدد لكل موظف ما يستطيعه: خصم، آجل، مرتجع، تعديل الفواتير، أصناف، صندوق…'),
           h('li', null, 'كل فاتورة تحمل اسم من باعها'),
           h('li', null, 'زر «قفل» يرجع الجهاز لشاشة الرمز')),
         button('فعّل الموظفين', { block: true, size: 'lg', icon: 'lock', onclick: enable }));
@@ -160,7 +161,7 @@ export function renderStaff(el) {
         members.length ? h('div', { class: 'list' }, ...members.map((m) => h('button', { class: `row row-tap ${m.active === false ? 'muted' : ''}`, type: 'button', onclick: () => editMember(m) },
           h('span', { class: 'person-av sm' }, m.name.charAt(0)),
           h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, m.name),
-            h('span', { class: 'row-sub' }, m.active === false ? 'موقوف' : `${roleName(m)} · ${m.perms.length ? `${m.perms.length} صلاحية` : 'يبيع فقط'}`)),
+            h('span', { class: 'row-sub' }, m.active === false ? 'موقوف' : `${roleName(m)} · ${ROLES[m.role] ? ROLES[m.role].hint : `${permsOf(m).length} صلاحية`}`)),
           icon('chevron', 20))))
           : emptyState('users', 'لا موظفين بعد', 'أضف أول موظف واختر ما يستطيعه.'),
         button('موظف جديد', { block: true, icon: 'plus', onclick: () => editMember(null) })),
@@ -214,21 +215,23 @@ export function renderStaff(el) {
     const name = input({ value: m ? m.name : '', maxlength: 30, placeholder: 'مثال: أحمد' });
     const pin = input({ type: 'password', inputmode: 'numeric', dir: 'ltr', maxlength: PIN_MAX, autocomplete: 'new-password', placeholder: m ? 'اتركه فارغًا لإبقائه' : '••••' });
     const pin2 = input({ type: 'password', inputmode: 'numeric', dir: 'ltr', maxlength: PIN_MAX, autocomplete: 'new-password' });
-    let role = m ? m.role : 'cashier';
-    let perms = new Set(m ? m.perms : ROLES.cashier.perms);
+    // الصلاحيات الفعلية (الدور الجاهز من تعريفه الحالي)، والدور يُستنتج منها: فلا يختلف المكتوب عن المعمول به
+    let perms = new Set(m ? permsOf(m) : ROLES.cashier.perms);
+    let role = roleFor(perms);
     const roles = h('div', { class: 'chips' });
+    const roleHint = h('p', { class: 'muted small' });
     const switches = h('div', { class: 'list' });
     function paintPerms() {
       fill(roles, ...Object.entries(ROLES).map(([k, r]) => h('button', {
         class: `chip ${role === k ? 'on' : ''}`, type: 'button',
         onclick: () => { role = k; perms = new Set(r.perms); paintPerms(); },
       }, r.name)));
+      roleHint.textContent = ROLES[role] ? ROLES[role].hint : 'صلاحيات خاصة: اخترتها أنت واحدة واحدة.';
       fill(switches, ...PERMISSIONS.map((p) => switchRow({
         title: p.label, sub: p.hint, checked: perms.has(p.key),
         onchange: (on) => {
           if (on) perms.add(p.key); else perms.delete(p.key);
-          const match = Object.entries(ROLES).find(([, r]) => r.perms.length === perms.size && r.perms.every((x) => perms.has(x)));
-          role = match ? match[0] : 'custom';
+          role = roleFor(perms);
           paintPerms();
         },
       })));
@@ -245,7 +248,7 @@ export function renderStaff(el) {
           if (bad) { feedback.error(); toast(bad, { kind: 'error' }); return; }
           p = makePin(pin.value, salt());
         }
-        const rec = { id: m ? m.id : uuid(), name: n, role, perms: PERMISSIONS.map((x) => x.key).filter((k) => perms.has(k)), pin: p, active: true };
+        const rec = { id: m ? m.id : uuid(), name: n, role, perms: PERMISSIONS.map((x) => x.key).filter((k) => perms.has(k)), pv: PERM_VERSION, pin: p, active: true };
         const list = (st.members || []).filter((x) => x.id !== rec.id);
         await saveStaff({ ...st, members: [...list, rec] });
         close(); feedback.ok(); paint();
@@ -254,8 +257,8 @@ export function renderStaff(el) {
     },
       field('الاسم', name),
       h('div', { class: 'grid-2' }, field(m ? 'رمز جديد' : 'رمزه (4–6 أرقام)', pin), field('أعد كتابته', pin2)),
-      h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'الدور'), roles),
-      h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'ما يستطيعه (البيع مسموح دائمًا)'), switches),
+      h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'الدور'), roles, roleHint),
+      h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'ما يستطيعه (غيّر أي شيء فيصير الدور «خاصًا»)'), switches),
       button('حفظ', { type: 'submit', block: true, size: 'lg', icon: 'check' }),
       m ? button(m.active === false ? 'أعد تفعيله' : 'أوقف هذا الموظف', {
         kind: 'text', block: true,

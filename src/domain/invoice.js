@@ -28,21 +28,37 @@ export function receiptModel({ invoice, lines, payments = [], methodNames = new 
   }
   totals.push({ label: 'الإجمالي', value: m(invoice.total), strong: true });
   if (invoice.type === 'purchase' && invoice.paid < invoice.total) totals.push({ label: 'على الحساب', value: m(invoice.total - invoice.paid) });
-  for (const p of payments) {
+  // فاتورة بيع ملغاة: ما خرج عند إلغائها (direction = out) ليس طريقة دفع تُعرض للزبون
+  for (const p of invoice.type === 'sale' ? payments.filter((x) => x.direction !== 'out') : payments) {
     totals.push({ label: p.method_kind === 'credit' ? 'آجل (على الحساب)' : (methodNames.get(p.method_id) || 'نقدًا'), value: m(p.amount) });
   }
+  const voided = invoice.status === 'void';
   return {
     shopName: shop.name || '', shopPhone: shop.phone || '', shopAddress: shop.address || '',
-    title: INVOICE_TITLES[invoice.type] || 'فاتورة', number: invoice.number, date: dateTimeText(invoice.created_at),
-    party: customer ? `الزبون: ${customer.name}` : supplier ? `التاجر: ${supplier.name}` : '',
+    // الملغاة تحمل ذلك في عنوانها أينما ظهرت (شاشة، صورة، نص، طباعة)
+    title: `${INVOICE_TITLES[invoice.type] || 'فاتورة'}${voided ? ' ملغاة' : ''}`, number: invoice.number, date: dateTimeText(invoice.created_at),
+    voided,
+    // زبون عابر بلا حساب: اسمه المكتوب على الفاتورة (invoice.note لفاتورة البيع)
+    party: customer ? `الزبون: ${customer.name}` : supplier ? `التاجر: ${supplier.name}` : invoiceName(invoice) ? `الاسم: ${invoiceName(invoice)}` : '',
     rows: lines.map((l) => ({
       name: l.name,
       calc: `${formatQty(l.qty)} × ${formatMoney(l.unit_price, cur, { symbol: false })}${l.discount ? ` − ${formatMoney(l.discount, cur, { symbol: false })}` : ''}`,
       total: m(l.total),
     })),
     totals,
-    foot: invoice.type === 'sale' ? 'شكرًا لتعاملكم معنا' : '',
+    foot: invoice.type === 'sale' && !voided ? 'شكرًا لتعاملكم معنا' : '',
   };
+}
+
+/** الاسم المكتوب على فاتورة بيع لزبون عابر (بلا حساب)، أو ''. */
+export function invoiceName(invoice) {
+  return invoice && invoice.type === 'sale' && !invoice.customer_id && invoice.note ? String(invoice.note) : '';
+}
+
+/** الفاتورة ملغاة؟ والتي حلّت مكانها فاتورة معدَّلة تُسمّى «عُدّلت». replacedIds: أرقام الفواتير التي عُدّلت. */
+export const isVoid = (i) => i.status === 'void';
+export function replacedIds(invoices) {
+  return new Set(invoices.filter((i) => i.type === 'sale' && i.original_invoice_id && !i.deleted).map((i) => i.original_invoice_id));
 }
 
 /**
@@ -82,18 +98,20 @@ export function invoiceText(model) {
 }
 
 /**
- * بحث في سجل الفواتير. filter: { query, type ('' = الكل), from (ISO أو null) }.
+ * بحث في سجل الفواتير. filter: { query, type ('' = الكل، 'void' = الملغاة), from (ISO أو null) }.
+ * الملغاة لا تظهر إلا في تبويبها: السجل يعرض ما هو قائم فعلًا. والبحث يطابق أيضًا الاسم المكتوب على الفاتورة.
  * extra: { customerNames: Map(id→اسم), supplierNames, productHits: Set(invoice_id) — فواتير فيها صنف يطابق البحث }.
  */
 export function filterInvoices(invoices, { query = '', type = '', from = null } = {}, { customerNames = new Map(), supplierNames = new Map(), productHits = new Set() } = {}) {
   const q = normalizeArabic(query);
   return invoices.filter((i) => {
     if (i.deleted) return false;
-    if (type && i.type !== type) return false;
+    if (type === 'void' ? !isVoid(i) : isVoid(i)) return false;
+    if (type && type !== 'void' && i.type !== type) return false;
     if (from && i.created_at < from) return false;
     if (!q) return true;
     if (matchesInvoiceNumber(i.number, query)) return true;
-    const party = normalizeArabic(customerNames.get(i.customer_id) || supplierNames.get(i.supplier_id) || '');
+    const party = normalizeArabic(customerNames.get(i.customer_id) || supplierNames.get(i.supplier_id) || invoiceName(i));
     return (party && party.includes(q)) || productHits.has(i.id);
   }).sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
 }

@@ -15,7 +15,7 @@ export async function handleGlobalScan(raw) {
   const code = normalizeBarcode(raw);
   const hit = await app.products.resolveScan(code, app.shop?.settings?.scale);
   const sell = () => navigate(`/sale?scan=${encodeURIComponent(code)}`);
-  if (hit && hit.scale) { sell(); return; } // ملصق ميزان: مكانه شاشة البيع
+  if (hit && hit.scale && app.can('sell')) { sell(); return; } // ملصق ميزان: مكانه شاشة البيع
   if (!hit || !hit.product) {
     feedback.error();
     if (!app.can('products')) { toast('باركود غير مسجّل — اطلب من صاحب المحل إضافته', { kind: 'error' }); return; }
@@ -35,7 +35,7 @@ export async function handleGlobalScan(raw) {
         h('strong', null, money(hit.pack && Number.isSafeInteger(hit.pack.sell_price) ? hit.pack.sell_price : p.sell_price, p.currency))),
       h('div', null, h('span', { class: 'muted small' }, 'الموجود في المحل'), h('strong', null, num(formatQty(p.qty)), ` ${u.short}`)),
       h('div', null, h('span', { class: 'muted small' }, 'الباركود'), h('strong', { class: 'num' }, code))),
-    readOnly ? null : h('button', { class: 'btn btn-primary btn-block btn-lg', type: 'button', onclick: () => { close(); sell(); } }, icon('scan', 22), h('span', null, 'بِعه الآن')),
+    readOnly || !app.can('sell') ? null : h('button', { class: 'btn btn-primary btn-block btn-lg', type: 'button', onclick: () => { close(); sell(); } }, icon('scan', 22), h('span', null, 'بِعه الآن')),
     app.can('products') ? button('افتح بطاقة الصنف', { kind: 'outline', block: true, icon: 'edit', onclick: () => { close(); navigate(`/products/edit?id=${p.id}`); } }) : null,
   ), { title: p.name });
 }

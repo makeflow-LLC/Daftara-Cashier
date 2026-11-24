@@ -1,14 +1,19 @@
 // الموظفون والصلاحيات (نقي): كل موظف له اسم ورمز PIN وصلاحيات. صاحب المحل يرى كل شيء.
 // الإعداد كله في settings.staff للمحل (يتزامن مع كل الأجهزة):
-//   { enabled, owner: { name, pin: {salt, hash} }, members: [{ id, name, role, perms: [...], pin, active }] }
+//   { enabled, owner: { name, pin: {salt, hash} }, members: [{ id, name, role, perms: [...], pv, pin, active }] }
+// role: اسم دور جاهز (صلاحياته تُقرأ من ROLES هنا، فتتحدّث مع التطبيق) أو 'custom' (صلاحياته المحفوظة في perms).
+// pv: نسخة قائمة الصلاحيات وقت الحفظ — موظف حُفظ قبل إضافة صلاحية كانت مفتوحة للجميع يبقى يملكها (LEGACY).
 // الرمز لا يُحفظ أبدًا كما هو: SHA-256 مع ملح لكل شخص. هذا قفل للمحل (من يرى ماذا)، لا حماية للبيانات من خبير.
 
 // ---------- الصلاحيات ----------
 export const PERMISSIONS = Object.freeze([
+  { key: 'sell', label: 'يبيع', hint: 'شاشة البيع والاستلام بالمحفظة — أطفئها لمن يراجع ولا يبيع (محاسب، مراقب)' },
   { key: 'see_profit', label: 'يرى الأرباح والتكلفة', hint: 'في الرئيسية والتقارير وبطاقة الصنف' },
   { key: 'discount', label: 'يعطي خصمًا ويغيّر السعر', hint: 'في شاشة البيع، ويبيع «مبلغًا بلا صنف»' },
   { key: 'credit', label: 'يبيع بالآجل (دين)', hint: 'ويسجّل ديونًا ودفعات للزبائن' },
+  { key: 'see_debts', label: 'يرى مجموع الديون', hint: 'كم لك عند الزبائن كلهم — في الرئيسية وصفحة الديون' },
   { key: 'returns', label: 'يعمل مرتجع', hint: 'يرجع بضاعة ويرد المال' },
+  { key: 'invoices', label: 'يعدّل الفواتير ويلغيها', hint: 'يصحّح فاتورة بعد حفظها أو يلغيها' },
   { key: 'products', label: 'يضيف ويعدّل الأصناف والأسعار', hint: 'والاستيراد وتحديث الأسعار' },
   { key: 'purchases', label: 'الشراء والمخزون وديون التجار', hint: 'يستلم بضاعة ويجرد ويدفع للتجار' },
   { key: 'cash', label: 'الصندوق', hint: 'فتح الوردية وإغلاقها والمصروفات' },
@@ -19,10 +24,32 @@ export const PERMISSIONS = Object.freeze([
 export const PERM_KEYS = PERMISSIONS.map((p) => p.key);
 
 export const ROLES = Object.freeze({
-  cashier: { name: 'كاشير', hint: 'يبيع فقط', perms: [] },
-  senior: { name: 'كاشير موثوق', hint: 'يبيع ويعطي خصمًا وآجلًا ومرتجعًا', perms: ['discount', 'credit', 'returns'] },
+  cashier: { name: 'كاشير', hint: 'يبيع فقط: لا أرباح ولا مجموع الديون ولا حذف', perms: ['sell'] },
+  senior: { name: 'كاشير موثوق', hint: 'يبيع ويعطي خصمًا وآجلًا ومرتجعًا', perms: ['sell', 'discount', 'credit', 'returns'] },
+  accountant: { name: 'محاسب', hint: 'الديون والصندوق والتقارير وتصحيح الفواتير — لا يبيع', perms: ['see_profit', 'credit', 'see_debts', 'invoices', 'purchases', 'cash', 'reports'] },
+  viewer: { name: 'مراقب', hint: 'يرى المبيعات والديون والتقارير ولا يغيّر شيئًا', perms: ['see_profit', 'see_debts', 'reports'] },
   manager: { name: 'مدير', hint: 'كل شيء ما عدا الإعدادات', perms: PERM_KEYS.filter((k) => k !== 'settings') },
 });
+
+/** نسخة قائمة الصلاحيات: تُحفظ مع الموظف (pv) عند كل حفظ من شاشة الموظفين. */
+export const PERM_VERSION = 2;
+// صلاحيات أُضيفت في النسخة 2 وكانت قبلها مفتوحة لكل موظف: من حُفظ بصلاحيات خاصة قبلها لا يُسحب منه شيء
+const LEGACY = ['sell', 'see_debts'];
+
+/** صلاحيات الموظف الفعلية: الدور الجاهز من ROLES، والخاص من المحفوظ معه. */
+export function permsOf(user) {
+  if (!user || user.owner) return PERM_KEYS;
+  if (ROLES[user.role]) return ROLES[user.role].perms;
+  const own = Array.isArray(user.perms) ? user.perms : [];
+  return (user.pv || 1) >= PERM_VERSION ? own : [...new Set([...own, ...LEGACY])];
+}
+
+/** الدور الجاهز المطابق لهذه الصلاحيات تمامًا، أو 'custom'. */
+export function roleFor(perms) {
+  const set = new Set(perms);
+  const hit = Object.entries(ROLES).find(([, r]) => r.perms.length === set.size && r.perms.every((k) => set.has(k)));
+  return hit ? hit[0] : 'custom';
+}
 
 // أسماء قديمة في الكود ← الصلاحية
 const ALIAS = { see_cost: 'see_profit' };
@@ -32,7 +59,7 @@ export function allowed(user, action) {
   if (!user || user.owner) return true;
   const key = ALIAS[action] || action;
   if (!PERM_KEYS.includes(key)) return true; // ما ليس صلاحية معروفة مسموح
-  return Array.isArray(user.perms) && user.perms.includes(key);
+  return permsOf(user).includes(key);
 }
 
 // ---------- الرمز ----------

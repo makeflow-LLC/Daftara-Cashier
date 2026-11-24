@@ -9,7 +9,7 @@ import { makeClock } from '../src/domain/merge.js';
 import { uuid } from '../src/core/ids.js';
 import { buildReport, reportSections } from '../src/domain/reports.js';
 import {
-  sha256Hex, pinProblem, makePin, checkPin, pinTaken, whoHasPin, userById, allowed, staffName, ROLES, PERM_KEYS,
+  sha256Hex, pinProblem, makePin, checkPin, pinTaken, whoHasPin, userById, allowed, staffName, ROLES, PERM_KEYS, PERM_VERSION, permsOf, roleFor,
 } from '../src/domain/staff.js';
 
 test('sha256 matches node:crypto (empty, ascii, arabic, multi-block)', () => {
@@ -57,18 +57,50 @@ test('PIN rules, hashing and lookup', () => {
 });
 
 test('permissions: owner everything, cashier only selling, aliases', () => {
-  const cashier = { id: 'c', perms: [] };
-  const senior = { id: 's', perms: ROLES.senior.perms };
-  const manager = { id: 'm', perms: ROLES.manager.perms };
+  const cashier = { id: 'c', role: 'cashier', perms: ['sell'], pv: 2 };
+  const senior = { id: 's', role: 'senior', perms: ROLES.senior.perms, pv: 2 };
+  const manager = { id: 'm', role: 'manager', perms: ROLES.manager.perms, pv: 2 };
   assert.equal(allowed(null, 'settings'), true);
   assert.equal(allowed({ owner: true }, 'settings'), true);
-  for (const k of PERM_KEYS) assert.equal(allowed(cashier, k), false, k);
+  for (const k of PERM_KEYS) assert.equal(allowed(cashier, k), k === 'sell', k);
   assert.equal(allowed(cashier, 'see_cost'), false, 'see_cost follows see_profit');
-  assert.equal(allowed(cashier, 'sell'), true, 'unknown actions (selling) stay open');
+  assert.equal(allowed(cashier, 'anything_else'), true, 'unknown actions stay open');
   assert.equal(allowed(senior, 'discount'), true);
   assert.equal(allowed(senior, 'see_profit'), false);
   assert.equal(allowed(manager, 'see_cost'), true);
   assert.equal(allowed(manager, 'settings'), false);
+});
+
+test('roles: accountant and viewer do not sell; the cashier does not see the debts total', () => {
+  const as = (role) => ({ id: role, role, perms: ROLES[role].perms, pv: PERM_VERSION });
+  assert.deepEqual(Object.keys(ROLES), ['cashier', 'senior', 'accountant', 'viewer', 'manager']);
+  assert.equal(allowed(as('cashier'), 'see_debts'), false);
+  assert.equal(allowed(as('cashier'), 'invoices'), false);
+  assert.equal(allowed(as('accountant'), 'sell'), false);
+  for (const k of ['see_debts', 'see_profit', 'reports', 'cash', 'credit', 'invoices']) assert.equal(allowed(as('accountant'), k), true, k);
+  assert.equal(allowed(as('accountant'), 'settings'), false);
+  // المراقب يرى ولا يغيّر: لا بيع ولا آجل ولا مرتجع ولا أصناف ولا صندوق ولا حذف
+  for (const k of ['sell', 'credit', 'returns', 'invoices', 'products', 'purchases', 'cash', 'delete', 'discount', 'settings']) assert.equal(allowed(as('viewer'), k), false, k);
+  for (const k of ['see_debts', 'see_profit', 'reports']) assert.equal(allowed(as('viewer'), k), true, k);
+  for (const k of ['sell', 'see_debts', 'invoices']) assert.equal(allowed(as('manager'), k), true, k);
+  for (const r of Object.values(ROLES)) for (const k of r.perms) assert.ok(PERM_KEYS.includes(k), k);
+  assert.equal(roleFor(ROLES.viewer.perms), 'viewer');
+  assert.equal(roleFor(['sell', 'reports']), 'custom');
+});
+
+test('staff saved before the new permissions keep working: nothing is taken away silently', () => {
+  // كاشير قديم (perms فارغة، بلا pv): ما زال يبيع؛ ومدير قديم يأخذ صلاحيات المدير الجديدة من تعريف الدور
+  const oldCashier = { id: 'c', role: 'cashier', perms: [] };
+  assert.equal(allowed(oldCashier, 'sell'), true);
+  assert.equal(allowed(oldCashier, 'see_debts'), false);
+  const oldManager = { id: 'm', role: 'manager', perms: ['see_profit', 'discount', 'credit', 'returns', 'products', 'purchases', 'cash', 'reports', 'delete'] };
+  for (const k of ['sell', 'see_debts', 'invoices']) assert.equal(allowed(oldManager, k), true, k);
+  // صلاحيات خاصة قديمة: البيع ومجموع الديون كانا مفتوحين للجميع فيبقيان، والجديد المقيَّد (تعديل الفواتير) لا يُمنح
+  const oldCustom = { id: 'x', role: 'custom', perms: ['reports'] };
+  assert.deepEqual([...permsOf(oldCustom)].sort(), ['reports', 'see_debts', 'sell']);
+  assert.equal(allowed(oldCustom, 'invoices'), false);
+  // بعد حفظه من الشاشة الجديدة (pv) صلاحياته كما اختيرت تمامًا
+  assert.deepEqual(permsOf({ ...oldCustom, pv: PERM_VERSION }), ['reports']);
 });
 
 test('every saved invoice carries who made it; sync pulls keep theirs', async () => {

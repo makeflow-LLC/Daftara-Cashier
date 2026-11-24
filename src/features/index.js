@@ -45,7 +45,7 @@ export const MODULES = [
   {
     id: 'sale',
     routes: [
-      { path: '/sale', write: true, chrome: false, render: renderSale },
+      { path: '/sale', perm: 'sell', write: true, chrome: false, render: renderSale },
       { path: '/sale/returns', perm: 'returns', write: true, chrome: false, render: renderReturns },
     ],
   },
@@ -64,7 +64,7 @@ export const MODULES = [
     routes: [
       { path: '/customers', tab: 'customers', render: renderCustomers },
       { path: '/customers/view', tab: 'customers', chrome: false, render: renderCustomer },
-      { path: '/customers/remind', tab: 'customers', chrome: false, render: renderRemind },
+      { path: '/customers/remind', perm: 'see_debts', tab: 'customers', chrome: false, render: renderRemind },
     ],
   },
   {
@@ -92,7 +92,7 @@ export const MODULES = [
     ],
   },
   { id: 'chat', routes: [{ path: '/chat', tab: 'settings', chrome: false, render: renderChat }] },
-  { id: 'wallet', routes: [{ path: '/wallet', write: true, chrome: false, render: renderWallet }] },
+  { id: 'wallet', routes: [{ path: '/wallet', perm: 'sell', write: true, chrome: false, render: renderWallet }] },
   { id: 'cash', routes: [{ path: '/cash', perm: 'cash', tab: 'settings', chrome: false, render: renderCash }] },
   { id: 'invoices', routes: [{ path: '/invoices', tab: 'settings', chrome: false, render: renderInvoices }] },
   {
