@@ -1368,3 +1368,4 @@ body{font-weight:500}
 .rc-void{align-self:center;margin:0 auto var(--space-2);padding:2px 18px;border:2px solid var(--danger);border-radius:var(--radius-md);color:var(--danger);font-weight:700;font-size:18px;text-align:center;width:max-content;transform:rotate(-4deg)}
 .rc-void-info{text-align:center;margin:var(--space-2) 0 0}
 .picker-hint{padding:var(--space-2) var(--space-3);margin:0}
+.pay-name{margin-bottom:var(--space-3)}

@@ -6,19 +6,15 @@ import { openSheet, toast } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
 import { app } from '../../core/app.js';
 
-/**
- * يفتح ورقة الاختيار ويرجع الزبون المختار أو null.
- * nameOnly: يعرض أيضًا «اكتب الاسم على الفاتورة فقط» لزبون عابر بلا حساب — يرجع { nameOnly: 'الاسم' }.
- */
-export function pickCustomer({ title = 'اختر الزبون', nameOnly = false } = {}) {
+/** يفتح ورقة الاختيار ويرجع الزبون المختار أو null. */
+export function pickCustomer({ title = 'اختر الزبون' } = {}) {
   return new Promise((resolve) => {
     let chosen = null;
     let all = [];
-    const q = input({ type: 'search', placeholder: nameOnly ? 'ابحث عن زبون أو اكتب اسمًا' : 'ابحث بالاسم أو رقم الجوال', autocomplete: 'off' });
+    const q = input({ type: 'search', placeholder: 'ابحث بالاسم أو رقم الجوال', autocomplete: 'off' });
     const list = h('div', { class: 'list picker-list' });
     const sheet = openSheet((close) => {
       function pick(c) { chosen = c; close(); }
-      const typed = () => q.value.trim().replace(/\s+/g, ' ').slice(0, 60);
       function paint() {
         const items = app.customers.search(all, q.value).slice(0, 40);
         fill(list,
@@ -28,14 +24,7 @@ export function pickCustomer({ title = 'اختر الزبون', nameOnly = false
             c.balance ? h('span', { class: `row-end ${c.balance > 0 ? 'owed' : ''}` }, money(c.balance)) : null)),
           h('button', { class: 'row row-tap row-add', type: 'button', onclick: () => createNew(pick) },
             h('span', { class: 'row-ic' }, icon('plus', 20)),
-            h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, q.value.trim() ? `زبون جديد: «${q.value.trim()}»` : 'زبون جديد'),
-              nameOnly ? h('span', { class: 'row-sub' }, 'يُحفظ له حساب: ديون ودفعات وكشف') : null)),
-          // زبون عابر: اسمه على الفاتورة فقط لتجدها لاحقًا بالبحث — بلا حساب ولا دين
-          !nameOnly ? null : typed() && !/^\d+$/.test(typed())
-            ? h('button', { class: 'row row-tap row-add', type: 'button', onclick: () => pick({ nameOnly: typed() }) },
-              h('span', { class: 'row-ic' }, icon('edit', 20)),
-              h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, `اكتب «${typed()}» على الفاتورة فقط`), h('span', { class: 'row-sub' }, 'بلا حساب — لتجد الفاتورة باسمه لاحقًا')))
-            : h('p', { class: 'muted small picker-hint' }, 'زبون عابر؟ اكتب اسمه في البحث ثم اختر «على الفاتورة فقط».'),
+            h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, q.value.trim() ? `زبون جديد: «${q.value.trim()}»` : 'زبون جديد'))),
         );
       }
       q.addEventListener('input', paint);
