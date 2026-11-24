@@ -48,7 +48,8 @@ export function mountShell(root) {
     const current = sideItemFor(here(), visible);
     fill(side,
       h('div', { class: 'side-shop' }, h('span', { class: 'side-logo' }, (app.shop?.name || '؟').trim().charAt(0)), h('strong', null, app.shop?.name || 'دفترة كاشير')),
-      h('button', { class: `side-sale ${here() === '/sale' ? 'on' : ''}`, type: 'button', onclick: () => navigate('/sale') }, icon('scan', 24), h('span', null, 'بيع جديد'), kbd('F2')),
+      // من لا يبيع (محاسب، مراقب) لا يرى زر البيع
+      app.can('sell') ? h('button', { class: `side-sale ${here() === '/sale' ? 'on' : ''}`, type: 'button', onclick: () => navigate('/sale') }, icon('scan', 24), h('span', null, 'بيع جديد'), kbd('F2')) : null,
       h('div', { class: 'side-items' }, ...visible.map((it, i) => h('button', {
         class: `side-item ${current === it ? 'on' : ''}`, type: 'button', 'aria-current': current === it ? 'page' : null, onclick: () => navigate(it.path),
       }, icon(it.icon, 22), h('span', null, it.label), i < 9 ? kbd(`Alt ${i + 1}`) : null))),
@@ -59,14 +60,14 @@ export function mountShell(root) {
   onRoute((route) => {
     const chrome = route.chrome !== false;
     bar.hidden = !chrome;
-    fab.hidden = !chrome;
+    fab.hidden = !chrome || !app.can('sell');
     document.body.classList.toggle('has-tabbar', chrome);
     document.body.classList.toggle('has-side', !BARE.includes(here()));
     for (const [id, b] of buttons) b.classList.toggle('on', id === route.tab);
     paintSide();
   });
   app.bus.on('shop', paintSide);
-  app.bus.on('user', paintSide);
+  app.bus.on('user', () => { paintSide(); if (!app.can('sell')) fab.hidden = true; });
   // عبور الحد بين الجوال والحاسوب: الشاشة تُرسم من جديد بشكلها المناسب (جدول أو قائمة)
   onWideChange(() => render());
 
@@ -76,7 +77,7 @@ export function mountShell(root) {
   };
   setGlobalShortcuts([
     { key: 'F1', label: 'شرح هذه الصفحة', sheet: false, run: () => { const t = topicForPath(here()); if (t) openHelpSheet(t); } },
-    { key: 'F2', label: 'بيع جديد', sheet: true, run: () => navigate('/sale') },
+    { key: 'F2', label: 'بيع جديد', sheet: true, run: () => { if (app.can('sell')) navigate('/sale'); } },
     { key: 'F3', label: 'ابحث في هذه الصفحة', run: focusSearch },
     { key: '/', run: focusSearch },
     { key: 'Ctrl+K', run: focusSearch },

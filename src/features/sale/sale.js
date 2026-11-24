@@ -8,7 +8,7 @@ import { feedback } from '../../ui/feedback.js';
 import { startInlineScanner } from '../../ui/scanner.js';
 import { listenKeyScanner, isDesktop } from '../../ui/keyscan.js';
 import { pageShortcuts, kbd } from '../../ui/shortcuts.js';
-import { makeLine, makeCustomLine, addLine, lineTotal, cartTotals } from '../../domain/cart.js';
+import { makeLine, makeCustomLine, addLine, lineTotal, cartTotals, cartFromInvoice } from '../../domain/cart.js';
 import { uuid } from '../../core/ids.js';
 import { applyOffers, localDay } from '../../domain/offers.js';
 import { searchProducts, normalizeBarcode } from '../../domain/product.js';
@@ -33,7 +33,10 @@ export function renderSale(el, params = {}) {
   // الربح خاص بصاحب المحل: لا يظهر في شاشة البيع إلا إن فعّله من الإعدادات (الزبون قد يرى الشاشة)
   const showProfit = app.can('see_profit') && readPrefs().saleProfit === true;
   // exchange: تبديل — { amount, number } رصيد مرتجع يُخصم مما يدفعه الزبون في هذه الفاتورة
-  let cart = { lines: [], discount: null, customer: null, exchange: null };
+  // name: اسم زبون عابر يُكتب على الفاتورة (بلا حساب). edit: فاتورة تُعدَّل { id, number, total, prior, credit, customerId }
+  const empty = () => ({ lines: [], discount: null, customer: null, exchange: null, name: null, edit: null });
+  let cart = empty();
+  const fromSaved = (c) => ({ ...empty(), lines: c.lines || [], discount: c.discount || null, customer: c.customer || null, exchange: c.exchange || null, name: c.name || null, edit: c.edit || null });
   let products = null;          // تُحمَّل بعد الرسم (لا تؤخر فتح الشاشة)
   let byId = new Map();         // للعروض على التصنيفات
   let scanner = null;
@@ -57,7 +60,8 @@ export function renderSale(el, params = {}) {
   const camBtn = labeled('scan', 'الكاميرا', 'الكاميرا', toggleCamera);
   const torchBtn = labeled('flash', 'فلاش', 'الفلاش', () => scanner && scanner.toggleTorch());
   torchBtn.hidden = true;
-  const payBtn = h('button', { class: 'btn btn-primary btn-lg paybtn', type: 'button', onclick: pay }, icon('check', 22), h('span', null, 'ادفع'), kbd('F10'));
+  const payLabel = h('span', null, 'ادفع');
+  const payBtn = h('button', { class: 'btn btn-primary btn-lg paybtn', type: 'button', onclick: pay }, icon('check', 22), payLabel, kbd('F10'));
 
   el.append(h('div', { class: 'sale' },
     header('بيع', { back: true, actions: [torchBtn, camBtn, heldBtn, app.can('returns') ? labeled('undo', 'مرتجع', 'مرتجع', () => navigate('/sale/returns')) : null].filter(Boolean) }),
@@ -82,7 +86,7 @@ export function renderSale(el, params = {}) {
     saveTimer = setTimeout(() => app.sales.saveCurrent(serialize()), 300);
   }
   function serialize() {
-    return { lines: cart.lines, discount: cart.discount, exchange: cart.exchange || null, customer: cart.customer ? { id: cart.customer.id, name: cart.customer.name, phone: cart.customer.phone } : null };
+    return { lines: cart.lines, discount: cart.discount, exchange: cart.exchange || null, name: cart.name || null, edit: cart.edit || null, customer: cart.customer ? { id: cart.customer.id, name: cart.customer.name, phone: cart.customer.phone } : null };
   }
 
   // العروض تُحسب من جديد مع كل تغيير: السطور كما في السلة + خصم العرض (domain/offers.js)
@@ -98,8 +102,15 @@ export function renderSale(el, params = {}) {
     } else {
       fill(cartEl, h('div', { class: 'list cart-list' }, ...pr.lines.map((l, i) => lineRow(l, i))));
     }
-    fill(custEl, cart.customer ? h('div', { class: 'cust-chip' }, icon('user', 16), h('span', null, cart.customer.name),
-      h('button', { class: 'icon-btn sm', type: 'button', 'aria-label': 'إزالة الزبون', onclick: () => { cart.customer = null; customerDiscount(); changed(); } }, icon('x', 16))) : null,
+    fill(custEl,
+      // تعديل فاتورة: شريط ظاهر حتى تُحفظ — والخروج منه بضغطة يُبقي الفاتورة كما كانت
+      cart.edit ? h('div', { class: 'cust-chip edit-chip' }, icon('edit', 16),
+        h('span', null, 'تعديل الفاتورة ', num(cart.edit.number), ' — كانت ', money(cart.edit.total)),
+        h('button', { class: 'icon-btn sm', type: 'button', 'aria-label': 'إلغاء التعديل', onclick: () => { cart = empty(); changed(); toast('أُلغي التعديل — الفاتورة كما كانت', { kind: 'info', ms: 3500 }); } }, icon('x', 16))) : null,
+      cart.customer ? h('div', { class: 'cust-chip' }, icon('user', 16), h('span', null, cart.customer.name),
+        h('button', { class: 'icon-btn sm', type: 'button', 'aria-label': 'إزالة الزبون', onclick: () => { cart.customer = null; customerDiscount(); changed(); } }, icon('x', 16))) : null,
+      !cart.customer && cart.name ? h('div', { class: 'cust-chip' }, icon('edit', 16), h('span', null, 'على الفاتورة: ', cart.name),
+        h('button', { class: 'icon-btn sm', type: 'button', 'aria-label': 'إزالة الاسم', onclick: () => { cart.name = null; changed(); } }, icon('x', 16))) : null,
       // تبديل: رصيد المرتجع ظاهر حتى تُدفع الفاتورة (الإلغاء = رُدّ له المبلغ نقدًا كما في فاتورة المرتجع)
       cart.exchange ? h('div', { class: 'cust-chip exchange-chip' }, icon('swap', 16),
         h('span', null, 'تبديل: للزبون ', money(cart.exchange.amount), cart.exchange.number ? [' من المرتجع ', num(cart.exchange.number)] : null),
@@ -113,6 +124,7 @@ export function renderSale(el, params = {}) {
         showProfit && t.count ? h('span', { class: `pt-profit ${t.profit < 0 ? 'neg' : ''}` }, ' · ربح ', num(formatMoney(t.profit, base))) : null,
       ));
     payBtn.disabled = !cart.lines.length;
+    payLabel.textContent = cart.edit ? 'احفظ التعديل' : 'ادفع';
   }
 
   function lineRow(l, i) {
@@ -379,8 +391,10 @@ export function renderSale(el, params = {}) {
 
   async function chooseCustomer() {
     const { pickCustomer } = await import('../customers/picker.js');
-    const c = await pickCustomer({ title: 'زبون هذه الفاتورة' });
-    if (c) { cart.customer = c; customerDiscount(); changed(); }
+    const c = await pickCustomer({ title: 'زبون هذه الفاتورة', nameOnly: true });
+    if (!c) return;
+    if (c.nameOnly) { cart.customer = null; cart.name = c.nameOnly; } else { cart.customer = c; cart.name = null; }
+    customerDiscount(); changed();
   }
 
   // خصم دائم للزبون (من بطاقته): يُطبَّق على الفاتورة حين يُختار، ولا يغيّر خصمًا كتبه الكاشير
@@ -392,9 +406,9 @@ export function renderSale(el, params = {}) {
 
   async function holdCart() {
     if (!cart.lines.length) { toast('السلة فارغة'); return; }
-    const label = cart.customer ? cart.customer.name : null;
+    const label = cart.edit ? `تعديل ${cart.edit.number}` : cart.customer ? cart.customer.name : cart.name || null;
     await app.sales.hold(serialize(), label);
-    cart = { lines: [], discount: null, customer: null };
+    cart = empty();
     changed();
     paintHeld();
     feedback.ok();
@@ -415,9 +429,9 @@ export function renderSale(el, params = {}) {
       return h('button', {
         class: 'row row-tap', type: 'button',
         onclick: async () => {
-          if (cart.lines.length) await app.sales.hold(serialize(), cart.customer ? cart.customer.name : null);
+          if (cart.lines.length) await app.sales.hold(serialize(), cart.edit ? `تعديل ${cart.edit.number}` : cart.customer ? cart.customer.name : cart.name || null);
           const c = await app.sales.takeHeld(hd.id);
-          cart = { lines: c.lines, discount: c.discount, customer: c.customer, exchange: c.exchange || null };
+          cart = fromSaved(c);
           close(); changed(); paintHeld();
         },
       }, h('span', { class: 'row-ic' }, icon('cart', 20)),
@@ -433,45 +447,109 @@ export function renderSale(el, params = {}) {
     const t = cartTotals(pr.lines, cart.discount);
     if (!t.count) return;
     if (scanner) scanner.pause();
+    const edit = cart.edit;
+    const save = async ({ payments, customer }) => {
+      const r = await app.sales.checkout({
+        lines: pr.lines, discount: cart.discount, payments, customerId: customer ? customer.id : null, currency: base,
+        note: customer ? null : cart.name, replaces: edit ? edit.id : null,
+      });
+      if (edit) {
+        cart = empty();
+        changed();
+        feedback.ok();
+        const diff = r.invoice.total - edit.total;
+        toast(`عُدّلت الفاتورة ${r.invoice.number}${diff ? ` — ${diff > 0 ? 'زادت' : 'نقصت'} ${formatMoney(Math.abs(diff), base)}` : ''}`, { kind: 'ok', ms: 4500 });
+        done(r, { doneLabel: 'تم', doneIcon: 'check' });
+        return;
+      }
+      if (customer) {
+        // بيع بالآجل: رسالة SMS للزبون إن شغّلها صاحب المحل
+        const credit = (await app.db.customer_entries.where('customer_id').equals(customer.id).toArray())
+          .filter((e) => e.invoice_id === r.invoice.id).reduce((t, e) => t + e.amount, 0);
+        if (credit > 0) app.sms.notify('sale_credit', customer, credit);
+      }
+      cart = empty();
+      changed();
+      feedback.ok();
+      done(r);
+    };
+    const onClose = () => { if (scanner) scanner.resume(); };
+    // فاتورة آجلة كلها وزبونها لم يتغير: لا أسئلة دفع — الفرق ينزل أو يزيد على حسابه مباشرة
+    if (edit && !edit.prior.length && edit.credit > 0 && cart.customer && cart.customer.id === edit.customerId) return confirmCreditEdit(t.total, save, onClose);
     openPay({
       total: t.total,
       credit: cart.exchange ? cart.exchange.amount : 0,
+      prior: edit && edit.prior.length ? edit.prior : null,
       customer: cart.customer,
-      onConfirm: async ({ payments, customer }) => {
-        const r = await app.sales.checkout({ lines: pr.lines, discount: cart.discount, payments, customerId: customer ? customer.id : null, currency: base });
-        if (customer) {
-          // بيع بالآجل: رسالة SMS للزبون إن شغّلها صاحب المحل
-          const credit = (await app.db.customer_entries.where('customer_id').equals(customer.id).toArray())
-            .filter((e) => e.invoice_id === r.invoice.id).reduce((t, e) => t + e.amount, 0);
-          if (credit > 0) app.sms.notify('sale_credit', customer, credit);
-        }
-        cart = { lines: [], discount: null, customer: null };
-        changed();
-        feedback.ok();
-        done(r);
-      },
-      onClose: () => { if (scanner) scanner.resume(); },
+      onConfirm: save,
+      onClose,
     });
   }
 
+  // تعديل فاتورة آجلة: سطران يقولان ما سيحدث لحساب الزبون، وزر واحد
+  async function confirmCreditEdit(total, save, onClose) {
+    const edit = cart.edit;
+    const customer = cart.customer;
+    const m = (await app.sales.paymentMethods()).find((x) => x.kind === 'credit');
+    const diff = total - edit.credit;
+    let busy = false;
+    openSheet((close) => h('div', { class: 'pay' },
+      h('div', { class: 'pay-total' }, h('span', null, 'الإجمالي بعد التعديل'), money(total)),
+      h('div', { class: 'rc-kv' }, h('span', null, 'كانت'), money(edit.total)),
+      h('div', { class: 'pay-cust' }, icon('user', 18), h('span', null, customer.name, ' — آجل على حسابه')),
+      h('div', { class: `pay-change ${diff > 0 ? 'bad' : 'ok'}` },
+        h('span', null, diff > 0 ? 'يزيد على حسابه' : diff < 0 ? 'ينزل من حسابه' : 'حسابه لا يتغير'), money(Math.abs(diff))),
+      button('احفظ التعديل', { block: true, size: 'lg', icon: 'check', onclick: async () => {
+        if (busy) return;
+        busy = true;
+        try { await save({ payments: [{ method_id: m ? m.id : null, kind: 'credit', amount: total, fee_bp: 0, currency: base }], customer }); close(); }
+        catch (e) { busy = false; feedback.error(); toast(e.message || 'تعذّر الحفظ', { kind: 'error' }); }
+      } }),
+      h('p', { class: 'muted small' }, 'الفاتورة تبقى برقمها نفسه، والمخزون يتصحح وحده.'),
+    ), { title: `حفظ تعديل ${edit.number}`, onClose });
+  }
+
+  // يفتح فاتورة محفوظة للتعديل: سطورها كما بيعت تدخل السلة، والسلة الجارية (إن وُجدت) تُعلَّق
+  async function startEdit(id) {
+    if (!app.can('invoices')) { toast('تعديل الفواتير لمن له الصلاحية', { kind: 'error' }); return; }
+    if (cart.edit && cart.edit.id === id) return;
+    const pv = await app.sales.voidPreview(id);
+    if (pv.problem) { feedback.error(); toast(pv.problem, { kind: 'error', ms: 5000 }); return; }
+    if (cart.lines.length) { await app.sales.hold(serialize(), cart.customer ? cart.customer.name : cart.name || null); paintHeld(); toast('عُلّقت السلة الجارية — تجدها في «معلّقة»', { kind: 'info', ms: 3500 }); }
+    const inv = pv.invoice;
+    const cu = inv.customer_id ? await app.db.customers.get(inv.customer_id) : null;
+    const prior = (await app.db.payments.where('invoice_id').equals(id).toArray())
+      .filter((p) => p.direction === 'in' && p.method_kind !== 'credit' && p.amount > 0)
+      .map((p) => ({ method_id: p.method_id, kind: p.method_kind, amount: p.amount }));
+    cart = {
+      ...empty(), ...cartFromInvoice(inv, pv.lines),
+      customer: cu && !cu.deleted ? { id: cu.id, name: cu.name, phone: cu.phone } : null,
+      name: cu ? null : inv.note || null,
+      edit: { id: inv.id, number: inv.number, total: inv.total, prior, credit: pv.credit, customerId: inv.customer_id || null },
+    };
+    changed();
+  }
+
   // بعد الدفع: الفاتورة نفسها (بلا ربح — قد يراها الزبون)، وزر واحد لبيع جديد
-  function done(r) {
+  function done(r, opts = {}) {
     if (scanner) scanner.pause();
     // الطباعة التلقائية إن فعّلها صاحب المحل لهذا الجهاز
     printer.settings().then(async (s) => { if (s.auto && (await printer.ready())) printReceipt(r.invoice.id); });
-    showReceipt(r.invoice.id, { onClose: () => { if (scanner) scanner.resume(); search.blur(); } });
+    showReceipt(r.invoice.id, { ...opts, onClose: () => { if (scanner) scanner.resume(); search.blur(); } });
   }
 
   // ---------- البدء ----------
   paint();
   paintHeld();
   app.sales.loadCurrent().then(async (c) => {
-    if (c && c.lines.length && !cart.lines.length) cart = { lines: c.lines, discount: c.discount, customer: c.customer, exchange: c.exchange || null };
+    if (c && c.lines.length && !cart.lines.length) cart = fromSaved(c);
     // قادم من «بدّل ببضاعة أخرى» في المرتجع: رصيد المرتجع وزبونه. نمسحهما من العنوان حتى لا يتكررا عند إعادة الفتح
     const amount = Number(params.exchange);
     if (Number.isSafeInteger(amount) && amount > 0) cart.exchange = { amount, number: params.ref || null };
     if (params.customer) { const cu = await app.db.customers.get(params.customer); if (cu && !cu.deleted) cart.customer = { id: cu.id, name: cu.name, phone: cu.phone }; }
     if (params.exchange || params.customer) { history.replaceState(null, '', '#/sale'); app.sales.saveCurrent(serialize()); }
+    // قادم من «عدّل الفاتورة» في سجل الفواتير أو كشف الزبون
+    if (params.edit) { history.replaceState(null, '', '#/sale'); await startEdit(params.edit); }
     paint();
   });
   setTimeout(async () => {

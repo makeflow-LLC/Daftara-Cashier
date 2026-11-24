@@ -76,6 +76,11 @@ export const app = {
     return allowed(app.user, action);
   },
 
+  /** يملك واحدة على الأقل من هذه الصلاحيات؟ (مثل: من يبيع أو يسجّل ديونًا يضيف زبونًا) */
+  canAny(...actions) {
+    return actions.some((a) => app.can(a));
+  },
+
   /** يدخل شخص (id = 'owner' أو معرّف موظف) أو يقفل الجهاز (null). كل ما يُحفظ بعدها يحمل اسمه. */
   async setUser(id) {
     app.user = id ? userById(app.shop?.settings?.staff, id) : null;

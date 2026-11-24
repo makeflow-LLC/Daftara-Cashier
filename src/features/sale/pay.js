@@ -19,7 +19,12 @@ const KIND_ICON = { cash: 'cash', transfer: 'wallet', credit: 'user' };
  * credit: رصيد مرتجع للتبديل (رُدّ للزبون في فاتورة المرتجع) — يدفع الزبون الفرق فقط، أو يُرد له الباقي.
  * في السجلات: المرتجع أخرج المبلغ نقدًا من الدرج، والبيع الجديد يُدخله نقدًا، فالصافي = الفرق الفعلي.
  */
-export function openPay({ total, customer, credit = 0, onConfirm, onClose = null }) {
+/**
+ * prior (تعديل فاتورة): ما دُفع في الفاتورة الأصلية [{ method_id, kind, amount }] — أُخرج عند إلغائها بطريقته نفسها،
+ * فيُسجَّل هنا من جديد بالطريقة نفسها، ويدفع الزبون الفرق فقط (أو يُرد له الباقي نقدًا).
+ */
+export function openPay({ total, customer, credit = 0, prior = null, onConfirm, onClose = null }) {
+  if (prior) credit = prior.reduce((a, p) => a + p.amount, 0);
   const base = app.shop?.base_currency || 'ILS';
   let methods = [];
   let cust = customer;
@@ -46,7 +51,25 @@ export function openPay({ total, customer, credit = 0, onConfirm, onClose = null
     const due = Math.max(0, total - credit);       // ما يدفعه الزبون فعلًا
     const back = Math.max(0, credit - total);      // ما يُرد له إن أخذ بأقل من المرتجع
     // مع رصيد المرتجع: الجزء المقابل له نقدًا (يعادل ما أخرجه المرتجع من الدرج)، والفرق بالطريقة المختارة
+    // ما دُفع سابقًا يُعاد تسجيله بطرقه (التحويل أولًا: الفرق المردود يخرج من النقد)، بحد أقصى max
+    function priorRows(max) {
+      const out = [];
+      let left = max;
+      for (const p of [...prior].sort((a, b) => (a.kind === 'cash') - (b.kind === 'cash'))) {
+        const a = Math.min(p.amount, left);
+        if (a > 0) { out.push({ method_id: p.method_id ?? null, kind: p.kind, amount: a, fee_bp: 0, currency: base }); left -= a; }
+      }
+      return out;
+    }
     function build(m) {
+      if (prior) {
+        if (due <= 0) return priorRows(total);
+        // الفرق بنفس طريقة ما دُفع سابقًا ← سطر واحد في الفاتورة (نقدًا 15 لا نقدًا 10 + نقدًا 5)
+        const rows = priorRows(credit);
+        const same = rows.find((r) => r.kind === m.kind && (r.method_id ?? null) === (m.id ?? null));
+        if (same) same.amount += due; else rows.push(pay(m, due));
+        return rows;
+      }
       const cashM = methods.find((x) => x.kind === 'cash') || m;
       if (!credit || m === cashM) return [pay(m, total)];
       return due > 0 ? [pay(cashM, Math.min(credit, total)), pay(m, due)] : [pay(cashM, total)];
@@ -54,13 +77,13 @@ export function openPay({ total, customer, credit = 0, onConfirm, onClose = null
 
     function paintMain() {
       fill(body,
-        h('div', { class: 'pay-total' }, h('span', null, credit ? 'ثمن البضاعة الجديدة' : 'المطلوب'), money(total)),
-        credit ? h('div', { class: 'rc-kv' }, h('span', null, 'رصيد المرتجع'), money(-credit)) : null,
+        h('div', { class: 'pay-total' }, h('span', null, prior ? 'الإجمالي بعد التعديل' : credit ? 'ثمن البضاعة الجديدة' : 'المطلوب'), money(total)),
+        credit ? h('div', { class: 'rc-kv' }, h('span', null, prior ? 'دفعه الزبون من قبل' : 'رصيد المرتجع'), money(-credit)) : null,
         credit ? h('div', { class: `pay-change ${back ? 'bad' : 'ok'}` }, h('span', null, back ? 'رُدّ للزبون الفرق' : due ? 'يدفع الزبون الفرق' : 'متساويان — لا فرق'), money(back || due)) : null,
         cust ? h('div', { class: 'pay-cust' }, icon('user', 18), h('span', null, cust.name),
           h('button', { class: 'link-btn', type: 'button', onclick: () => { cust = null; paintMain(); } }, 'إزالة')) : null,
         credit && !due
-          ? button('تم التبديل', { block: true, size: 'lg', icon: 'check', onclick: () => { const m = methods.find((x) => x.kind === 'cash') || methods[0]; if (m) confirm(build(m)); } })
+          ? button(prior ? 'احفظ التعديل' : 'تم التبديل', { block: true, size: 'lg', icon: 'check', onclick: () => { const m = methods.find((x) => x.kind === 'cash') || methods[0]; if (m || prior) confirm(build(m)); } })
           : h('div', { class: 'pay-methods' }, ...methods.map((m, i) => h('button', {
             class: `pay-method pay-${m.kind}`, type: 'button', onclick: () => confirm(build(m)),
           }, i < 9 ? kbd(String(i + 1)) : null, icon(KIND_ICON[m.kind], 26), h('span', null, m.name)))),
@@ -111,6 +134,6 @@ export function openPay({ total, customer, credit = 0, onConfirm, onClose = null
     document.addEventListener('keydown', onDigit);
     offDigit = () => document.removeEventListener('keydown', onDigit);
     return body;
-  }, { title: 'الدفع', onClose: () => { offDigit(); if (onClose) onClose(); } });
+  }, { title: prior ? 'حفظ التعديل' : 'الدفع', onClose: () => { offDigit(); if (onClose) onClose(); } });
   return sheet;
 }

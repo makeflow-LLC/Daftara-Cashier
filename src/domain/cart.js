@@ -109,12 +109,20 @@ export function validatePayment(total, payments, customerId) {
   return null;
 }
 
+/** اسم يُكتب على فاتورة زبون عابر (بلا حساب): نص قصير نظيف أو null. */
+export function cleanNote(v) {
+  const n = String(v ?? '').trim().replace(/\s+/g, ' ').slice(0, 60);
+  return n || null;
+}
+
 // ---------- بناء الفاتورة ----------
 /**
  * يحوّل السلة والدفع إلى سجلات جاهزة للحفظ في معاملة واحدة (نقي: المعرّفات والوقت من الخارج).
  * env: { newId, now, prefix, seq, currency, cashSessionId, deviceId, userId }
  */
 export function buildSale({ lines, discount = null, payments, customerId = null, note = null }, env) {
+  // env.replaces: فاتورة تُعدَّل — الجديدة تأخذ رقمها وتاريخها وتشير إليها (الأصلية تُلغى في المعاملة نفسها)
+  const replaces = env.replaces || null;
   if (!lines.length) throw new Error('السلة فارغة');
   for (const l of lines) assertInt(l.qty, 'qty');
   const pre = cartTotals(lines, discount);
@@ -125,11 +133,12 @@ export function buildSale({ lines, discount = null, payments, customerId = null,
   const invoiceId = env.newId();
   const invoice = {
     id: invoiceId,
-    number: formatInvoiceNumber(env.prefix, 'sale', env.seq),
-    seq: env.seq,
+    number: replaces ? replaces.number : formatInvoiceNumber(env.prefix, 'sale', env.seq),
+    seq: replaces ? replaces.seq : env.seq,
     type: 'sale',
     status: 'final',
     customer_id: customerId,
+    original_invoice_id: replaces ? replaces.id : null,
     currency: env.currency || 'ILS',
     subtotal: totals.subtotal,
     discount: totals.discount,
@@ -137,9 +146,11 @@ export function buildSale({ lines, discount = null, payments, customerId = null,
     cost_total: totals.cost,
     fee_total: pay.fees,
     paid: totals.total - pay.credit,
-    note,
+    note: cleanNote(note),
     device_id: env.deviceId ?? null,
-    created_at: env.now,
+    created_at: replaces ? replaces.created_at : env.now,
+    // المعدَّلة تبقى باسم من باعها (تقرير «حسب الموظف»)؛ من عدّلها مكتوب في سجل العمليات
+    ...(replaces ? { created_by: replaces.created_by ?? null } : {}),
   };
   const invoiceLines = lines.map((l, position) => ({
     id: env.newId(), invoice_id: invoiceId, position, product_id: l.product_id, unit_id: l.unit_id, name: l.name, unit: l.unit,
@@ -171,7 +182,7 @@ export function buildSale({ lines, discount = null, payments, customerId = null,
   }));
   const customerEntries = pay.credit > 0 ? [{
     id: env.newId(), customer_id: customerId, type: 'sale_credit', amount: pay.credit, invoice_id: invoiceId,
-    note: invoice.number, created_at: env.now,
+    note: invoice.number, created_at: invoice.created_at,
   }] : [];
   return { invoice, lines: invoiceLines, payments: paymentRows, movements, customerEntries, change: pay.change, profit: totals.profit };
 }
@@ -200,13 +211,31 @@ export function netLineTotals(invoice, lines) {
 }
 
 /**
+ * ما بقي دينًا على الزبون من هذه الفاتورة: ما بيع آجلًا − ما خُصم من دينه في مرتجعاتها السابقة.
+ * previousReturns: فواتير المرتجع السابقة لها (total − paid = ما خُصم من الدين).
+ */
+export function creditLeft(original, previousReturns = []) {
+  const sold = Math.max(0, (original.total || 0) - (original.paid || 0));
+  return Math.max(0, sold - sum(previousReturns, (r) => Math.max(0, (r.total || 0) - (r.paid || 0))));
+}
+
+/** كيف يُرد مبلغ مرتجع: { credit: يُخصم من الدين, cash: يُرد نقدًا }. auto = كما دُفعت الفاتورة: الآجل أولًا. */
+export function refundSplit(total, refund, left = 0) {
+  if (refund === 'credit') return { credit: total, cash: 0 };
+  if (refund === 'auto') { const credit = Math.min(total, Math.max(0, left)); return { credit, cash: total - credit }; }
+  return { credit: 0, cash: total };
+}
+
+/**
  * مرتجع من فاتورة: picks = [{ line, qty }] (الكمية بالألف بوحدة السطر).
- * refund: 'cash' يُرد نقدًا، 'credit' يُخصم من دين الزبون.
+ * refund: 'cash' يُرد نقدًا، 'credit' يُخصم من دين الزبون،
+ *         'auto' كما دُفعت: يُخصم من دينه ما بقي آجلًا من هذه الفاتورة (env.creditLeft) والباقي يُرد نقدًا.
  */
 export function buildReturn(original, originalLines, picks, refund, env) {
   const chosen = picks.filter((p) => p.qty > 0);
   if (!chosen.length) throw new Error('اختر ما يُرجع');
   if (refund === 'credit' && !original.customer_id) throw new Error('الفاتورة بلا زبون: الإرجاع نقدًا فقط');
+  if (original.status === 'void') throw new Error('هذه الفاتورة ملغاة');
   const nets = netLineTotals(original, originalLines);
   const invoiceId = env.newId();
   const lines = chosen.map((p, position) => {
@@ -222,23 +251,78 @@ export function buildReturn(original, originalLines, picks, refund, env) {
   });
   const total = sum(lines, (l) => l.total);
   const cost = sum(lines, (l) => lineAmount(l.unit_cost, l.qty));
+  const split = refundSplit(total, refund, original.customer_id ? env.creditLeft || 0 : 0);
   const invoice = {
     id: invoiceId, number: formatInvoiceNumber(env.prefix, 'sale_return', env.seq), seq: env.seq, type: 'sale_return', status: 'final',
     customer_id: original.customer_id || null, original_invoice_id: original.id, currency: original.currency,
-    subtotal: total, discount: 0, total, cost_total: cost, fee_total: 0, paid: refund === 'cash' ? total : 0,
+    subtotal: total, discount: 0, total, cost_total: cost, fee_total: 0, paid: split.cash,
     note: `مرتجع من ${original.number}`, device_id: env.deviceId ?? null, created_at: env.now,
   };
   const movements = lines.filter((l) => l.product_id).map((l) => ({
     id: env.newId(), product_id: l.product_id, type: 'sale_return', qty: signedQty('sale_return', packToBase(l.qty, l.unit_factor)),
     unit_cost: divRound(l.unit_cost * QTY_SCALE, l.unit_factor), ref_type: 'invoice', ref_id: invoiceId, created_at: env.now,
   }));
-  const payments = refund === 'cash' && total > 0 ? [{
+  const payments = split.cash > 0 ? [{
     id: env.newId(), invoice_id: invoiceId, customer_id: original.customer_id || null, cash_session_id: env.cashSessionId ?? null,
-    direction: 'out', method_id: env.cashMethodId ?? null, method_kind: 'cash', amount: total, fee: 0, currency: original.currency, created_at: env.now,
+    direction: 'out', method_id: env.cashMethodId ?? null, method_kind: 'cash', amount: split.cash, fee: 0, currency: original.currency, created_at: env.now,
   }] : [];
-  const customerEntries = refund === 'credit' && total > 0 ? [{
-    id: env.newId(), customer_id: original.customer_id, type: 'return_credit', amount: -total, invoice_id: invoiceId,
+  const customerEntries = split.credit > 0 ? [{
+    id: env.newId(), customer_id: original.customer_id, type: 'return_credit', amount: -split.credit, invoice_id: invoiceId,
     note: invoice.number, created_at: env.now,
   }] : [];
-  return { invoice, lines, movements, payments, customerEntries, total };
+  return { invoice, lines, movements, payments, customerEntries, total, credit: split.credit, cash: split.cash };
+}
+
+// ---------- إلغاء الفاتورة وتعديلها ----------
+// لا شيء يُمحى: الفاتورة تصير status = void (فتخرج من التقارير كأنها لم تكن)، وتُضاف حركات عكسية:
+// البضاعة ترجع للمخزون، وما دُفع يخرج بطريقته نفسها، وقيد الدين يُلغى في كشف الزبون (void:<القيد>).
+// التعديل = إلغاء + فاتورة جديدة بالرقم نفسه في معاملة واحدة (buildSale مع env.replaces).
+
+/** سبب يمنع إلغاء الفاتورة أو تعديلها، أو null. returns: مرتجعاتها السابقة. */
+export function voidProblem(invoice, returns = []) {
+  if (!invoice || invoice.deleted) return 'الفاتورة غير موجودة';
+  if (invoice.type !== 'sale') return 'الإلغاء والتعديل لفواتير البيع فقط';
+  if (invoice.status === 'void') return 'هذه الفاتورة ملغاة من قبل';
+  if (returns.length) return 'رُجعت بضاعة من هذه الفاتورة — أرجِع الباقي من «مرتجع وتبديل»';
+  return null;
+}
+
+/**
+ * الحركات العكسية لإلغاء فاتورة بيع (نقي). data: { invoice, lines, payments, entries } كما حُفظت.
+ * env: { newId, now, cashSessionId }.
+ * يرجع { movements, payments, customerEntries, refund: ما يُرد للزبون (نقدًا وتحويلًا), credit: ما نزل من دينه }.
+ */
+export function buildVoid({ invoice, lines, payments = [], entries = [] }, env) {
+  const movements = lines.filter((l) => l.product_id).map((l) => ({
+    id: env.newId(), product_id: l.product_id, type: 'sale_return', qty: signedQty('sale_return', packToBase(l.qty, l.unit_factor)),
+    unit_cost: divRound(l.unit_cost * QTY_SCALE, l.unit_factor), ref_type: 'invoice', ref_id: invoice.id, note: `إلغاء ${invoice.number}`, created_at: env.now,
+  }));
+  const back = payments.filter((p) => p.direction === 'in' && p.amount > 0).map((p) => ({
+    id: env.newId(), invoice_id: invoice.id, customer_id: p.customer_id ?? null,
+    cash_session_id: p.method_kind === 'cash' ? env.cashSessionId ?? null : null,
+    direction: 'out', method_id: p.method_id ?? null, method_kind: p.method_kind, amount: p.amount, fee: 0,
+    currency: p.currency || invoice.currency, note: `إلغاء ${invoice.number}`, created_at: env.now,
+  }));
+  const customerEntries = entries.filter((e) => e.invoice_id === invoice.id && e.type === 'sale_credit' && e.amount > 0).map((e) => ({
+    id: env.newId(), customer_id: e.customer_id, type: e.type, amount: -e.amount, invoice_id: invoice.id,
+    note: `void:${e.id}`, created_at: env.now,
+  }));
+  return {
+    movements, payments: back, customerEntries,
+    refund: sum(back.filter((p) => p.method_kind !== 'credit'), (p) => p.amount),
+    credit: sum(customerEntries, (e) => -e.amount),
+  };
+}
+
+/** سطور فاتورة محفوظة ← سطور سلة (لتعديل الفاتورة): بالأسعار والخصومات والتكلفة كما بيعت. */
+export function cartFromInvoice(invoice, lines) {
+  return {
+    lines: lines.map((l, i) => ({
+      // ‎:custom في آخر المفتاح: العروض لا تغيّر سعر سطر بيع من قبل (domain/offers.js)
+      key: `${l.product_id ? `${l.product_id}:${l.unit_id || ''}` : 'custom'}:edit${i}:custom`,
+      product_id: l.product_id, unit_id: l.unit_id, name: l.name, unit: l.unit || 'piece',
+      factor: l.unit_factor || QTY_SCALE, qty: l.qty, unit_price: l.unit_price, unit_cost: l.unit_cost || 0, discount: l.discount || 0,
+    })),
+    discount: invoice.discount > 0 ? { type: 'amount', value: invoice.discount } : null,
+  };
 }

@@ -1,6 +1,6 @@
 // حفظ البيع والمرتجع والسلال المعلّقة على الجهاز. كل بيع معاملة واحدة: الفاتورة وسطورها والدفعات
 // وحركات المخزون وقيد دين الزبون — إما كلها أو لا شيء. رقم الفاتورة من عدّاد هذا الجهاز (A-0001…).
-import { buildSale, buildReturn, returnableLines } from '../../domain/cart.js';
+import { buildSale, buildReturn, returnableLines, creditLeft, buildVoid, voidProblem } from '../../domain/cart.js';
 import { uuid } from '../../core/ids.js';
 
 export function createSaleRepo({ db, store, getContext, clock }) {
@@ -26,25 +26,88 @@ export function createSaleRepo({ db, store, getContext, clock }) {
     for (const e of r.customerEntries) await w.append('customer_entries', e);
   }
 
+  /** الفاتورة وكل ما كُتب معها (للإلغاء): سطورها ودفعاتها وقيد دينها ومرتجعاتها. */
+  async function invoiceData(invoiceId) {
+    const invoice = await db.invoices.get(invoiceId);
+    if (!invoice) return { invoice: null, lines: [], payments: [], entries: [], returns: [] };
+    const [lines, payments, entries, returns] = await Promise.all([
+      db.invoice_lines.where('invoice_id').equals(invoiceId).toArray(),
+      db.payments.where('invoice_id').equals(invoiceId).toArray(),
+      invoice.customer_id ? db.customer_entries.where('customer_id').equals(invoice.customer_id).toArray() : [],
+      returnsOf(invoiceId),
+    ]);
+    return { invoice, lines: lines.sort((a, b) => (a.position || 0) - (b.position || 0)), payments, entries: entries.filter((e) => e.invoice_id === invoiceId), returns };
+  }
+  async function returnsOf(invoiceId) {
+    return (await db.invoices.where('type').equals('sale_return').toArray()).filter((r) => r.original_invoice_id === invoiceId && !r.deleted && r.status !== 'void');
+  }
+  async function voidable(invoiceId) {
+    const d = await invoiceData(invoiceId);
+    const problem = voidProblem(d.invoice, d.returns);
+    if (problem) throw new Error(problem);
+    return d;
+  }
+  /** داخل معاملة: الحركات العكسية + الفاتورة تصير ملغاة + سطر في سجل العمليات (من ومتى). */
+  async function writeVoid(w, d, { now, cashSessionId, action }) {
+    const v = buildVoid(d, { newId: uuid, now, cashSessionId });
+    for (const p of v.payments) await w.append('payments', p);
+    for (const m of v.movements) await w.append('movements', m);
+    for (const e of v.customerEntries) await w.append('customer_entries', e);
+    const invoice = await w.patch('invoices', d.invoice.id, { status: 'void' });
+    await w.append('audit_log', {
+      user_id: w.ctx.userId ?? null, action, entity: 'invoice', entity_id: d.invoice.id,
+      data: { number: d.invoice.number, total: d.invoice.total, refund: v.refund, credit: v.credit }, created_at: now,
+    });
+    return { invoice, refund: v.refund, credit: v.credit };
+  }
+
   const repo = {
     async paymentMethods() {
       return (await db.payment_methods.orderBy('sort').toArray()).filter((m) => !m.deleted && m.active);
     },
 
-    /** يحفظ البيع. يرجع { invoice, change, profit }. */
+    /**
+     * يحفظ البيع. يرجع { invoice, change, profit }.
+     * sale.replaces = رقم فاتورة تُعدَّل: تُلغى الأصلية وتُحفظ هذه مكانها برقمها وتاريخها — في المعاملة نفسها.
+     */
     async checkout(sale) {
       const ctx = getContext();
       const cashSessionId = await openSessionId();
+      const old = sale.replaces ? await voidable(sale.replaces) : null;
       return store.write(async (w) => {
-        const seq = await nextSeq('sale');
+        const now = clock();
+        if (old) await writeVoid(w, old, { now, cashSessionId, action: 'invoice_edit' });
+        const seq = old ? old.invoice.seq : await nextSeq('sale');
         const r = buildSale(sale, {
-          newId: uuid, now: clock(), prefix: ctx.prefix || 'A', seq,
-          currency: sale.currency || 'ILS', cashSessionId, deviceId: ctx.deviceId,
+          newId: uuid, now, prefix: ctx.prefix || 'A', seq,
+          currency: sale.currency || (old ? old.invoice.currency : 'ILS'), cashSessionId, deviceId: ctx.deviceId,
+          replaces: old ? old.invoice : null,
         });
         await writeAll(w, r);
         await db.meta.delete('cart:current');
         return { invoice: r.invoice, change: r.change, profit: r.profit };
       });
+    },
+
+    // ---------- إلغاء الفاتورة وتعديلها ----------
+    /** ما يُعرض قبل الإلغاء أو التعديل: { problem (سبب المنع أو null), invoice, lines, refund, credit }. */
+    async voidPreview(invoiceId) {
+      const d = await invoiceData(invoiceId);
+      const problem = voidProblem(d.invoice, d.returns);
+      if (problem) return { problem, invoice: d.invoice, lines: d.lines, refund: 0, credit: 0 };
+      const v = buildVoid(d, { newId: uuid, now: clock(), cashSessionId: null });
+      return { problem: null, invoice: d.invoice, lines: d.lines, refund: v.refund, credit: v.credit };
+    },
+    /** يلغي فاتورة بيع: البضاعة ترجع، ما دُفع يخرج من الصندوق، ودين الزبون ينزل. يرجع { invoice, refund, credit }. */
+    async voidInvoice(invoiceId) {
+      const d = await voidable(invoiceId);
+      const cashSessionId = await openSessionId();
+      return store.write((w) => writeVoid(w, d, { now: clock(), cashSessionId, action: 'invoice_void' }));
+    },
+    /** من ألغى الفاتورة أو عدّلها ومتى (من سجل العمليات): { action, user_id, created_at } أو null. */
+    async voidInfo(invoiceId) {
+      const rows = (await db.audit_log.toArray()).filter((a) => a.entity === 'invoice' && a.entity_id === invoiceId);
+      return rows.sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0] || null;
     },
 
     // ---------- السلة الحالية (تبقى لو أُغلق التطبيق فجأة) ----------
@@ -66,8 +129,8 @@ export function createSaleRepo({ db, store, getContext, clock }) {
 
     // ---------- الفواتير والمرتجع ----------
     async recentSales(limit = 50) {
-      return (await db.invoices.orderBy('created_at').reverse().limit(limit * 2).toArray())
-        .filter((i) => i.type === 'sale' && !i.deleted).slice(0, limit);
+      return (await db.invoices.orderBy('created_at').reverse().limit(limit * 3).toArray())
+        .filter((i) => i.type === 'sale' && !i.deleted && i.status !== 'void').slice(0, limit);
     },
     async invoice(id) {
       const inv = await db.invoices.get(id);
@@ -78,15 +141,16 @@ export function createSaleRepo({ db, store, getContext, clock }) {
     /** سطور الفاتورة مع ما رُجع منها سابقًا وما يمكن إرجاعه. */
     async returnable(invoiceId) {
       const { invoice, lines } = await repo.invoice(invoiceId);
-      const returns = (await db.invoices.where('type').equals('sale_return').toArray()).filter((r) => r.original_invoice_id === invoiceId && !r.deleted);
+      const returns = await returnsOf(invoiceId);
       const prev = [];
       for (const r of returns) prev.push(...(await db.invoice_lines.where('invoice_id').equals(r.id).toArray()));
-      return { invoice, lines, rows: returnableLines(lines, prev) };
+      // creditLeft: ما بقي دينًا من هذه الفاتورة — المرتجع يُخصم منه أولًا (refund = 'auto')
+      return { invoice, lines, rows: returnableLines(lines, prev), creditLeft: invoice.customer_id ? creditLeft(invoice, returns) : 0 };
     },
-    /** picks: [{ line, qty }] ؛ refund: 'cash' | 'credit' */
+    /** picks: [{ line, qty }] ؛ refund: 'auto' (كما دُفعت: من الدين أولًا) | 'cash' | 'credit' */
     async processReturn(invoiceId, picks, refund) {
       const ctx = getContext();
-      const { invoice, lines, rows } = await repo.returnable(invoiceId);
+      const { invoice, lines, rows, creditLeft: left } = await repo.returnable(invoiceId);
       for (const p of picks) {
         const row = rows.find((r) => r.line.id === p.line.id);
         if (!row || p.qty > row.returnable) throw new Error('الكمية أكبر مما يمكن إرجاعه');
@@ -96,10 +160,10 @@ export function createSaleRepo({ db, store, getContext, clock }) {
       return store.write(async (w) => {
         const seq = await nextSeq('sale_return');
         const r = buildReturn(invoice, lines, picks.map((p) => ({ line: lines.find((l) => l.id === p.line.id), qty: p.qty })), refund, {
-          newId: uuid, now: clock(), prefix: ctx.prefix || 'A', seq, cashSessionId, cashMethodId: cash?.id, deviceId: ctx.deviceId,
+          newId: uuid, now: clock(), prefix: ctx.prefix || 'A', seq, cashSessionId, cashMethodId: cash?.id, deviceId: ctx.deviceId, creditLeft: left,
         });
         await writeAll(w, r);
-        return { invoice: r.invoice, total: r.total };
+        return { invoice: r.invoice, total: r.total, credit: r.credit, cash: r.cash };
       });
     },
   };

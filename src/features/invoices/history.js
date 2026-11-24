@@ -3,7 +3,7 @@ import { h, fill, num } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { header, emptyState, input, money, dataTable } from '../../ui/components.js';
 import { isWide } from '../../ui/wide.js';
-import { filterInvoices, INVOICE_TITLES, dateTimeText } from '../../domain/invoice.js';
+import { filterInvoices, INVOICE_TITLES, dateTimeText, invoiceName, isVoid, replacedIds } from '../../domain/invoice.js';
 import { normalizeArabic } from '../../domain/product.js';
 import { app } from '../../core/app.js';
 import { bus } from '../../core/bus.js';
@@ -12,7 +12,7 @@ import { showReceipt } from '../sale/receipt.js';
 import { showVoucher } from '../customers/voucher.js';
 import { matchesInvoiceNumber } from '../../domain/numbering.js';
 
-const TYPES = [['', 'الكل'], ['sale', 'بيع'], ['sale_return', 'مرتجع'], ['purchase', 'شراء'], ['receipt', 'سندات القبض']];
+const TYPES = [['', 'الكل'], ['sale', 'بيع'], ['sale_return', 'مرتجع'], ['purchase', 'شراء'], ['receipt', 'سندات القبض'], ['void', 'الملغاة']];
 const RANGES = [['today', 'اليوم'], ['week', 'آخر 7 أيام'], ['month', 'آخر 30 يومًا'], ['all', 'كل الوقت']];
 const ICON = { sale: 'receipt', sale_return: 'undo', purchase: 'truck', purchase_return: 'undo' };
 
@@ -21,9 +21,13 @@ export function renderInvoices(el, params) {
   let lines = null;
   let receipts = [];
   let names = { customerNames: new Map(), supplierNames: new Map() };
+  let replaced = new Set();
+  const partyOf = (i) => names.customerNames.get(i.customer_id) || names.supplierNames.get(i.supplier_id) || invoiceName(i);
+  const voidTag = (i) => (isVoid(i) ? h('span', { class: 'tag-cancelled' }, replaced.has(i.id) ? 'عُدّلت' : 'ملغاة') : null);
+  const open = (i) => showReceipt(i.id, { doneLabel: 'إغلاق', doneIcon: 'x', manage: true });
   let type = params.type || '';
   let range = params.range || 'week';
-  const q = input({ type: 'search', placeholder: 'رقم الفاتورة أو السند، اسم الزبون، أو اسم صنف', autocomplete: 'off' });
+  const q = input({ type: 'search', placeholder: 'رقم الفاتورة أو السند، الاسم، أو اسم صنف', autocomplete: 'off' });
   const typeChips = h('div', { class: 'chips chips-scroll' });
   const rangeChips = h('div', { class: 'chips chips-scroll' });
   const body = h('div');
@@ -50,14 +54,15 @@ export function renderInvoices(el, params) {
     const items = filterInvoices(all, { query, type, from: from() }, { ...names, productHits });
     const total = items.filter((i) => i.type === 'sale').reduce((a, i) => a + i.total, 0);
     fill(body, items.length ? h('div', null,
-      h('div', { class: 'list-count muted small' }, `${items.length} فاتورة`, type === 'sale' || !type ? [' — مبيعات ', money(total)] : null),
+      h('div', { class: 'list-count muted small' }, `${items.length} فاتورة`, type === 'sale' || !type ? [' — مبيعات ', money(total)] : null,
+        type === 'void' ? ' — ملغاة أو عُدّلت: لا تدخل في التقارير، وبضاعتها ومالها رجعا' : null),
       isWide() ? invoiceTable(items) : h('div', { class: 'list' }, ...items.slice(0, 150).map((i) => {
-        const party = names.customerNames.get(i.customer_id) || names.supplierNames.get(i.supplier_id);
-        return h('button', { class: 'row row-tap', type: 'button', onclick: () => showReceipt(i.id, { doneLabel: 'إغلاق', doneIcon: 'x' }) },
-          h('span', { class: `row-ic ${i.type === 'sale' ? '' : 'ic-debt'}` }, icon(ICON[i.type], 20)),
+        const party = partyOf(i);
+        return h('button', { class: `row row-tap ${isVoid(i) ? 'entry-cancelled' : ''}`, type: 'button', onclick: () => open(i) },
+          h('span', { class: `row-ic ${i.type === 'sale' ? '' : 'ic-debt'}` }, icon(isVoid(i) ? 'x' : ICON[i.type], 20)),
           h('span', { class: 'row-main' },
-            h('span', { class: 'row-title' }, INVOICE_TITLES[i.type].replace('فاتورة ', ''), ' ', num(i.number), party ? h('span', { class: 'muted' }, ` · ${party}`) : null),
-            h('span', { class: 'row-sub' }, num(dateTimeText(i.created_at)), i.type === 'sale' && i.paid < i.total ? ' · آجل' : '')),
+            h('span', { class: 'row-title' }, INVOICE_TITLES[i.type].replace('فاتورة ', ''), ' ', num(i.number), voidTag(i) ? [' ', voidTag(i)] : null, party ? h('span', { class: 'muted' }, ` · ${party}`) : null),
+            h('span', { class: 'row-sub' }, num(dateTimeText(i.created_at)), i.type === 'sale' && i.paid < i.total ? ' · آجل' : i.type === 'sale_return' && i.paid < i.total ? ' · نزل من دينه' : '')),
           money(i.total, i.currency));
       })),
       !isWide() && items.length > 150 ? h('p', { class: 'muted small' }, 'تظهر أحدث 150 فاتورة — ضيّق البحث لرؤية الأقدم.') : null)
@@ -65,16 +70,17 @@ export function renderInvoices(el, params) {
   }
 
   function invoiceTable(items) {
-    const partyOf = (i) => names.customerNames.get(i.customer_id) || names.supplierNames.get(i.supplier_id) || '';
     return dataTable({
       rows: items,
-      onRow: (i) => showReceipt(i.id, { doneLabel: 'إغلاق', doneIcon: 'x' }),
+      onRow: open,
+      rowClass: (i) => (isVoid(i) ? 'dt-cancelled' : ''),
       columns: [
         { key: 'number', label: 'الرقم', by: (i) => i.created_at, cell: (i) => h('strong', null, num(i.number)) },
-        { key: 'type', label: 'النوع', by: (i) => i.type, cell: (i) => h('span', { class: `dt-tag ${i.type === 'sale' ? '' : 'alt'}` }, INVOICE_TITLES[i.type].replace('فاتورة ', '')) },
-        { key: 'party', label: 'الزبون / التاجر', grow: true, by: partyOf, cell: (i) => partyOf(i) || h('span', { class: 'muted' }, '—') },
+        { key: 'type', label: 'النوع', by: (i) => i.type, cell: (i) => [h('span', { class: `dt-tag ${i.type === 'sale' ? '' : 'alt'}` }, INVOICE_TITLES[i.type].replace('فاتورة ', '')), voidTag(i) ? [' ', voidTag(i)] : null] },
+        { key: 'party', label: 'الاسم', grow: true, by: partyOf, cell: (i) => partyOf(i) || h('span', { class: 'muted' }, '—') },
         { key: 'date', label: 'التاريخ', by: (i) => i.created_at, cell: (i) => num(dateTimeText(i.created_at)) },
-        { key: 'pay', label: 'الدفع', by: (i) => (i.paid < i.total ? 1 : 0), cell: (i) => (i.paid < i.total ? h('span', { class: 'dt-tag warn' }, i.type === 'purchase' ? 'على الحساب' : 'آجل') : 'مدفوعة') },
+        { key: 'pay', label: 'الدفع', by: (i) => (i.paid < i.total ? 1 : 0), cell: (i) => (i.type === 'sale_return' ? (i.paid < i.total ? h('span', { class: 'dt-tag warn' }, 'نزل من دينه') : 'رُدّ نقدًا')
+          : i.paid < i.total ? h('span', { class: 'dt-tag warn' }, i.type === 'purchase' ? 'على الحساب' : 'آجل') : 'مدفوعة') },
         { key: 'total', label: 'الإجمالي', num: true, by: (i) => i.total, cell: (i) => money(i.total, i.currency) },
       ],
     });
@@ -102,6 +108,7 @@ export function renderInvoices(el, params) {
     receipts = await app.customers.receipts();
     const [inv, cs, ss] = await Promise.all([app.db.invoices.toArray(), app.db.customers.toArray(), app.db.suppliers.toArray()]);
     all = inv;
+    replaced = replacedIds(inv);
     lines = null;
     names = { customerNames: new Map(cs.map((c) => [c.id, c.name])), supplierNames: new Map(ss.map((s) => [s.id, s.name])) };
     paint();
@@ -109,5 +116,5 @@ export function renderInvoices(el, params) {
   let t = null;
   q.addEventListener('input', () => { clearTimeout(t); t = setTimeout(paint, 150); });
   load();
-  return bus.on('data', (e) => { if (e.tables.includes('invoices') || e.tables.includes('customer_entries')) load(); });
+  return bus.on('data', (e) => { if (e.tables.includes('invoices') || e.tables.includes('customer_entries') || e.tables.includes('customers')) load(); });
 }

@@ -18,6 +18,8 @@ import { debtTabs } from './tabs.js';
 import { showVoucher } from './voucher.js';
 
 const cur = () => app.shop?.base_currency || 'ILS';
+// من يبيع أو يسجّل ديونًا يضيف زبونًا ويستلم دفعة؛ المراقب يرى فقط
+const canWrite = () => app.canAny('sell', 'credit');
 const dateText = (iso) => new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
 
 /** يفتح رابطًا خارجيًا (واتساب، اتصال): داخل التطبيق يسلّمه أندرويد للتطبيق المناسب. */
@@ -42,11 +44,12 @@ export function renderCustomers(el) {
       tabs.el,
       totalEl,
       h('div', { class: 'search-row' }, icon('search', 20), search),
-      h('div', { class: 'product-actions' },
+      // من يراقب فقط (لا يبيع ولا يسجّل ديونًا) يرى القائمة ولا يضيف
+      canWrite() ? h('div', { class: 'product-actions' },
         button('زبون جديد', { icon: 'plus', onclick: () => editCustomer(null, (c) => navigate(`/customers/view?id=${c.id}`)) }),
-        button('استيراد من دفترة', { kind: 'outline', icon: 'clipboard', onclick: () => importFromDaftara(load) }),
-      ),
-      button('ذكّر الزبائن بديونهم', { kind: 'outline', icon: 'chat', block: true, onclick: () => navigate('/customers/remind') }),
+        app.can('credit') ? button('استيراد من دفترة', { kind: 'outline', icon: 'clipboard', onclick: () => importFromDaftara(load) }) : null,
+      ) : null,
+      app.can('see_debts') ? button('ذكّر الزبائن بديونهم', { kind: 'outline', icon: 'chat', block: true, onclick: () => navigate('/customers/remind') }) : null,
       body,
     ),
   );
@@ -54,7 +57,8 @@ export function renderCustomers(el) {
   function paint() {
     const owing = all.filter((c) => c.balance > 0);
     const total = owing.reduce((a, c) => a + c.balance, 0);
-    fill(totalEl, all.length ? h('div', { class: 'debt-card' },
+    // المجموع لمن له صلاحية «يرى مجموع الديون»؛ رصيد كل زبون يبقى ظاهرًا ليُخدم
+    fill(totalEl, all.length && app.can('see_debts') ? h('div', { class: 'debt-card' },
       h('div', { class: 'hero-label' }, 'لك عند الزبائن'),
       h('div', { class: 'hero-value' }, money(total)),
       h('div', { class: 'hero-mini-label' }, `${owing.length} زبون عليه دين من ${all.length}`)) : null);
@@ -101,11 +105,11 @@ export async function renderCustomer(el, params) {
     h('header', { class: 'topbar' },
       h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'رجوع', onclick: () => history.back() }, icon('back')),
       h('div', { class: 'topbar-title' }, titleEl),
-      h('div', { class: 'topbar-actions' }, iconButton('edit', 'تعديل الزبون', () => editCustomer(c, load, !app.can('delete') ? null : async () => {
+      h('div', { class: 'topbar-actions' }, canWrite() ? iconButton('edit', 'تعديل الزبون', () => editCustomer(c, load, !app.can('delete') ? null : async () => {
         await app.customers.remove(c.id);
         history.back();
         toast(`حُذف «${c.name}»`, { undo: () => app.customers.restore(c.id) });
-      })), helpButton()),
+      })) : null, helpButton()),
     ),
     h('div', { class: 'page split' }, top, list),
   );
@@ -121,9 +125,9 @@ export async function renderCustomer(el, params) {
         h('div', { class: 'hero-value' }, money(Math.abs(c.balance))),
         owes && days >= 1 ? h('div', { class: 'hero-mini-label' }, `أقدم دين منذ ${days} يوم`) : null,
         c.note ? h('div', { class: 'hero-mini-label' }, c.note) : null),
-      h('div', { class: 'big-actions' },
+      canWrite() ? h('div', { class: 'big-actions' },
         h('button', { class: 'big-btn pay', type: 'button', onclick: () => amountSheet('payment') }, icon('cash', 26), h('span', null, 'استلمت دفعة')),
-        app.can('credit') ? h('button', { class: 'big-btn debt', type: 'button', onclick: () => amountSheet('debt') }, icon('plus', 26), h('span', null, 'دين جديد')) : null),
+        app.can('credit') ? h('button', { class: 'big-btn debt', type: 'button', onclick: () => amountSheet('debt') }, icon('plus', 26), h('span', null, 'دين جديد')) : null) : null,
       h('div', { class: 'mini-actions' },
         miniBtn('alert', 'تذكير واتساب', () => send(reminderText({ shopName: app.shop.name, customerName: c.name, balance: c.balance, currency: cur() })), !owes),
         miniBtn('receipt', 'كشف واتساب', () => send(statementText({ shopName: app.shop.name, customerName: c.name, entries: c.raw, currency: cur(), formatDate: dateText })), !c.entries.length),
@@ -134,7 +138,7 @@ export async function renderCustomer(el, params) {
     const tapOf = (e) => {
       if (e.cancelled) return null;
       const canEdit = editableEntry(e) && app.can('delete');
-      return e.invoice_id ? () => showReceipt(e.invoice_id, { doneLabel: 'إغلاق', doneIcon: 'x' })
+      return e.invoice_id ? () => showReceipt(e.invoice_id, { doneLabel: 'إغلاق', doneIcon: 'x', manage: true, onChanged: load })
         : e.type === 'payment' && e.payment_id ? () => showVoucher(e.payment_id, { doneLabel: 'إغلاق', onEdit: canEdit ? () => entrySheet(e) : null })
           : canEdit ? () => entrySheet(e) : null;
     };
