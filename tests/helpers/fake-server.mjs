@@ -57,7 +57,8 @@ export function createFakeServer() {
         // تحقق كامل قبل أي كتابة (مثل معاملة Postgres واحدة)
         for (const r of rows) {
           if (!isMember(r.shop_id, uid())) throw new HttpError(403, { message: 'row-level security' }, name);
-          if (server.reject && server.reject(name, r)) throw new HttpError(400, { message: 'check constraint' }, name);
+          const no = server.reject && server.reject(name, r); // true، أو جسم خطأ PostgREST بعينه
+          if (no) throw new HttpError(400, typeof no === 'object' ? no : { message: 'check constraint' }, name);
           const ex = t.get(r.id);
           if (ex && ex.shop_id !== r.shop_id) throw new HttpError(403, { message: 'cannot move' }, name);
         }

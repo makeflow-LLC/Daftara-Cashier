@@ -252,6 +252,33 @@ select pg_temp.check(not exists (select 1 from jsonb_array_elements(public.cashi
 select pg_temp.check(exists (select 1 from jsonb_array_elements(public.cashier_shop_catalog(:S1)->'products') p where p->>'name' = 'زيت'), 'in-stock item still shown');
 reset role;
 
+-- ===== 0009: وحدة الأوقية، وصورة الصنف في الكتالوج
+insert into cashier_products (id, shop_id, name, sell_price, unit) values ('00000000-0000-0000-0000-0000000000c4', :S1, 'زعتر', 500, 'ounce') on conflict (id) do nothing;
+select pg_temp.expect_error($q$insert into cashier_products (id, shop_id, name, unit) values (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'x', 'box')$q$, 'unknown unit');
+insert into cashier_inventory_movements (id, shop_id, product_id, type, qty) values ('00000000-0000-0000-0000-0000000000d2', :S1, '00000000-0000-0000-0000-0000000000c4', 'opening', 8000) on conflict (id) do nothing;
+insert into cashier_product_images (id, shop_id, product_id, path, position) values
+  ('00000000-0000-0000-0000-0000000000e1', :S1, '00000000-0000-0000-0000-0000000000c1', '11111111-1111-1111-1111-111111111111/products/00000000-0000-0000-0000-0000000000e1.webp', 1),
+  ('00000000-0000-0000-0000-0000000000e2', :S1, '00000000-0000-0000-0000-0000000000c1', '11111111-1111-1111-1111-111111111111/products/00000000-0000-0000-0000-0000000000e2.webp', 0)
+on conflict (id) do nothing;
+insert into storage.objects (bucket_id, name) values
+  ('cashier-media', '11111111-1111-1111-1111-111111111111/products/00000000-0000-0000-0000-0000000000e2_t.webp'),
+  ('cashier-media', '11111111-1111-1111-1111-111111111111/logo.webp'),
+  ('cashier-media', '11111111-1111-1111-1111-111111111111/purchases/inv.webp'),
+  ('cashier-media', '22222222-2222-2222-2222-222222222222/products/other.webp');
+set role anon;
+select pg_temp.check((select p->>'unit' from jsonb_array_elements(public.cashier_shop_catalog(:S1)->'products') p where p->>'name' = 'زعتر') = 'ounce', 'catalog: sold by the ounce');
+select pg_temp.check((select p->>'image' from jsonb_array_elements(public.cashier_shop_catalog(:S1)->'products') p where p->>'name' = 'زيت') like '%e2.webp', 'catalog: first image of the product');
+select pg_temp.check((select p->'image' from jsonb_array_elements(public.cashier_shop_catalog(:S1)->'products') p where p->>'name' = 'زعتر') = 'null'::jsonb, 'catalog: image is optional');
+select pg_temp.check((select count(*) from storage.objects) > 0 and (select bool_and(name like '11111111-1111-1111-1111-111111111111/products/%') from storage.objects),
+  'anon reads product images of an open catalog only (no logo, no purchase photos, no other shop)');
+select pg_temp.expect_error($q$insert into storage.objects (bucket_id, name) values ('cashier-media', '11111111-1111-1111-1111-111111111111/products/anon.webp')$q$, 'anon uploads');
+reset role;
+update cashier_shops set settings = jsonb_set(settings, '{catalog,enabled}', 'false') where id = :S1;
+set role anon;
+select pg_temp.check((select count(*) from storage.objects) = 0, 'catalog off: images private again');
+reset role;
+update cashier_shops set settings = jsonb_set(settings, '{catalog,enabled}', 'true') where id = :S1;
+
 -- ===== لوحة الإدارة الموحّدة (0008): للمدير المذكور في makeflow_admins وحده
 \set ADM '''dddddddd-0000-0000-0000-00000000000d'''
 insert into makeflow_admins (user_id, note) values (:ADM, 'test');

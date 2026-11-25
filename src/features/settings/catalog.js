@@ -36,7 +36,7 @@ export function renderCatalog(el) {
     fill(body,
       h('div', { class: 'acc-card acc-info' }, h('span', { class: 'acc-ic' }, icon('store', 30)),
         h('div', null, h('strong', null, 'محلك على جوال كل زبون'),
-          h('span', null, 'رابط فيه أصنافك وأسعارك. الزبون يختار ويضغط «اطلب عبر واتساب» فتصلك رسالة الطلب جاهزة. لا تكلفة ولا كميات تظهر للزبون.'))),
+          h('span', null, 'رابط فيه أصنافك وأسعارك. الزبون يختار ويضغط «اطلب عبر واتساب» فتصلك رسالة الطلب جاهزة. كل صنف بوحدته (قطعة، كيلو، أوقية…) وبصورته إن أضفتها. لا تكلفة ولا كميات تظهر للزبون.'))),
       h('div', { class: 'list section' },
         switchRow({ title: 'الكتالوج شغّال', sub: c.enabled ? 'الرابط يعمل الآن' : 'مطفأ — الرابط لا يعرض شيئًا', checked: c.enabled, onchange: async (on) => { await save({ enabled: on }); paint(); } }),
         switchRow({ title: 'أخفِ الأصناف النافدة', sub: 'وإلا تظهر «غير متوفر الآن»', checked: !!c.hideOutOfStock, onchange: (on) => save({ hideOutOfStock: on }) })),

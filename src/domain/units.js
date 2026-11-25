@@ -8,8 +8,10 @@ export const ONE = QTY_SCALE;
 export const UNITS = Object.freeze({
   piece: Object.freeze({ id: 'piece', name: 'قطعة', short: 'قطعة', measured: false }),
   meter: Object.freeze({ id: 'meter', name: 'متر', short: 'م', measured: true }),
-  kg: Object.freeze({ id: 'kg', name: 'كيلو', short: 'كغ', measured: true }),
-  gram: Object.freeze({ id: 'gram', name: 'غرام', short: 'غ', measured: true }),
+  kg: Object.freeze({ id: 'kg', name: 'كيلو', short: 'كغ', measured: true, grams: 1000 }),
+  // الأوقية في فلسطين ربع كيلو (250 غرامًا): بهارات، مكسرات، قهوة… تُسعَّر وتُباع بها
+  ounce: Object.freeze({ id: 'ounce', name: 'أوقية', short: 'أوقية', measured: true, grams: 250 }),
+  gram: Object.freeze({ id: 'gram', name: 'غرام', short: 'غ', measured: true, grams: 1 }),
   liter: Object.freeze({ id: 'liter', name: 'لتر', short: 'ل', measured: true }),
 });
 

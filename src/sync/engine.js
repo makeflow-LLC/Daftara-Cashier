@@ -29,6 +29,16 @@ export function schemaGap(err) {
   return null;
 }
 
+/**
+ * الخادم أقدم من التطبيق في قيمة مسموحة: وحدة «أوقية» قبل تشغيل setup.sql الجديد (قيد cashier_products_unit_check).
+ * السجل سليم، فلا يُعزل: يبقى في الطابور ويُرفع وحده حين يُحدَّث الخادم.
+ */
+export function serverBehind(err) {
+  if (!(err instanceof HttpError)) return false;
+  const b = err.body && typeof err.body === 'object' ? err.body : {};
+  return b.code === '23514' && /cashier_products_unit_check/.test(String(b.message || ''));
+}
+
 export function createSyncEngine({ db, api, getContext, emit = () => {}, now = () => new Date().toISOString(), gate = null }) {
   let running = null;
   let status = { state: 'idle', pending: 0, lastSyncAt: null, error: null };
@@ -76,6 +86,8 @@ export function createSyncEngine({ db, api, getContext, emit = () => {}, now = (
   const missingCols = new Map();
   // جداول جديدة غير موجودة على الخادم بعد: تبقى سجلاتها في الطابور وتُجرَّب مرة في كل مزامنة
   let skipTables = new Set();
+  // سجلات سليمة يرفضها خادم لم يُحدَّث بعد (serverBehind): لا تُجرَّب إلا مرة في كل مزامنة ولا تُعزل
+  let held = new Set();
   const strip = (name, row) => {
     const miss = missingCols.get(name);
     if (!miss || !miss.size) return row;
@@ -87,8 +99,9 @@ export function createSyncEngine({ db, api, getContext, emit = () => {}, now = (
   async function push() {
     let pushed = 0;
     skipTables = new Set();
+    held = new Set();
     for (let round = 0; round < 50; round++) {
-      const entries = await db.outbox.orderBy('seq').filter((e) => !e.dead && !skipTables.has(e.table)).limit(PUSH_BATCH).toArray();
+      const entries = await db.outbox.orderBy('seq').filter((e) => !e.dead && !skipTables.has(e.table) && !held.has(e.seq)).limit(PUSH_BATCH).toArray();
       if (!entries.length) break;
       const groups = new Map();
       for (const e of entries) {
@@ -140,6 +153,7 @@ export function createSyncEngine({ db, api, getContext, emit = () => {}, now = (
         ok++;
       } catch (one) {
         if (!(one instanceof HttpError) || one.transient) throw one;
+        if (serverBehind(one)) { held.add(e.seq); continue; }
         const tries = (e.tries || 0) + 1;
         await db.outbox.update(e.seq, { tries, dead: tries >= MAX_TRIES, error: String(one.message).slice(0, 300) });
       }

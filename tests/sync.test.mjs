@@ -156,6 +156,27 @@ test('a rejected record is isolated, the rest still syncs', async () => {
   assert.equal(a.sync.status.state, 'error');
 });
 
+test('a product by the ounce waits for an older server instead of being dropped', async () => {
+  const server = createFakeServer();
+  const a = device(server, { shopId: uuid() });
+  await newShop(a);
+  await a.store.put('products', { name: 'زعتر', unit: 'ounce', sell_price: 500 });
+  await a.store.put('products', { name: 'سكر' });
+  // خادم لم يُشغَّل عليه setup.sql الجديد: قيد الوحدة القديم يرفض «أوقية»
+  const old = { code: '23514', message: 'new row for relation "cashier_products" violates check constraint "cashier_products_unit_check"' };
+  server.reject = (table, row) => (row.unit === 'ounce' ? old : false);
+  for (let i = 0; i < 8; i++) await a.sync.run();
+  assert.equal(server.tables.get('cashier_products').size, 1);
+  const left = await a.db.outbox.toArray();
+  assert.equal(left.length, 1);
+  assert.ok(!left[0].dead && !left[0].tries);
+  assert.notEqual(a.sync.status.state, 'error');
+  server.reject = null; // حُدِّث الخادم
+  await a.sync.run();
+  assert.equal(server.tables.get('cashier_products').size, 2);
+  assert.equal(await a.store.pendingCount(), 0);
+});
+
 test('pull asks once and skips tables with nothing new', async () => {
   const server = createFakeServer();
   const a = device(server, { shopId: uuid() });
