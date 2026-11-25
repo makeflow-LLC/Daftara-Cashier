@@ -7,7 +7,8 @@
 <meta name="theme-color" content="#0e7a51">
 <title>كتالوج المحل</title>
 <!-- كتالوج المحل للزبائن: أصناف المحل وأسعارها، يختار الزبون ثم «اطلب عبر واتساب» فتصل رسالة الطلب جاهزة لصاحب المحل.
-     shop.html?s=<معرّف المحل> — البيانات من دالة cashier_shop_catalog (تعمل فقط إن شغّل صاحب المحل الكتالوج). -->
+     shop.html?s=<معرّف المحل> — البيانات من دالة cashier_shop_catalog (تعمل فقط إن شغّل صاحب المحل الكتالوج).
+     كل صنف بوحدته (قطعة، كيلو، أوقية…) وصورته إن وُجدت — المنطق في src/domain/catalog.js. -->
 <style>
 :root{--bg:#f3f2f2;--card:#fff;--ink:#201e1d;--muted:#605d5d;--line:rgba(32,30,29,.12);--brand:#0e7a51;--brand-100:#e8f5ee;--brand-700:#085134;
   --grad:linear-gradient(135deg,#0e7a51 0%,#0b6b63 55%,#0a5577 100%);--danger:#aa0b56;
@@ -35,10 +36,20 @@ main{max-width:860px;margin:0 auto;padding:16px 16px 120px}
 .item .price{color:var(--brand-700);font-weight:700;font-size:17px;margin-top:auto}
 .item .unit{color:var(--muted);font-size:13px;font-weight:400}
 .item.off{opacity:.55}
+.badge{align-self:flex-start;background:var(--brand-100);color:var(--brand-700);border-radius:999px;padding:2px 10px;font-size:13px;font-weight:700}
+.pic{position:relative;display:block;width:100%;height:0;padding:78% 0 0;border-radius:12px;background:var(--brand-100);overflow:hidden}
+.pic img{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .2s}
+.pic img.in{opacity:1}
+.pic img.now{transition:none}
+.pic span{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;font-size:34px;font-weight:700;color:var(--brand);opacity:.35}
+button.pic{cursor:zoom-in}
+.view{position:fixed;left:0;right:0;top:0;bottom:0;background:rgba(0,0,0,.86);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:6;padding:16px;cursor:zoom-out}
+.view img{max-width:100%;max-height:80vh;border-radius:14px;background:#fff}
+.view p{margin:0;color:#fff;font-weight:700;font-size:17px;text-align:center}
 .add{background:var(--brand);color:#fff;border-radius:12px;min-height:44px;font-weight:700;font-size:15px}
 .step{display:flex;align-items:center;justify-content:space-between;background:var(--brand-100);border-radius:12px;min-height:44px}
 .step button{width:44px;height:44px;background:transparent;color:var(--brand-700);font-size:22px;font-weight:700}
-.step span{font-weight:700;color:var(--brand-700)}
+.step span{font-weight:700;color:var(--brand-700);text-align:center;line-height:1.25}
 .na{color:var(--danger);font-size:14px;font-weight:700}
 .empty{text-align:center;color:var(--muted);padding:40px 10px}
 .bar{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));background:rgba(243,242,242,.96);border-top:1px solid var(--line)}
@@ -70,7 +81,7 @@ footer a{color:var(--brand-700)}
 <script type="module">
 import { normalizePhone, whatsappLink } from './src/domain/ledger.js';
 import { formatMoney } from './src/domain/currency.js';
-import { unit as unitOf } from './src/domain/units.js';
+import { nextQty, qtyText, unitBadge, priceUnit, chosenItems, itemText, orderText, imageUrl } from './src/domain/catalog.js';
 import { normalizeArabic } from './src/domain/product.js';
 
 const $ = (id) => document.getElementById(id);
@@ -79,8 +90,8 @@ const fill = (e, ...kids) => { e.textContent = ''; for (const c of kids.flat()) 
 const el = (tag, props = {}, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(props)) { if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else if (k === 'class') e.className = v; else e.setAttribute(k, v); } for (const c of kids.flat()) if (c != null) e.append(c instanceof Node ? c : String(c)); return e; };
 const shopId = new URLSearchParams(location.search).get('s') || '';
 const cfg = window.CASHIER_CONFIG || {};
-const key = `catalog-cart:${shopId}`;
-let shop = null, cat = null;
+const key = `catalog-cart2:${shopId}`; // الكميات بالألف وبوحدة كل صنف
+let shop = null, cat = null, withPics = false;
 let cart = {};
 try { cart = JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch { cart = {}; }
 const saveCart = () => { try { localStorage.setItem(key, JSON.stringify(cart)); } catch { /* */ } };
@@ -110,6 +121,8 @@ async function load() {
     shop.message ? el('div', { class: 'msg' }, shop.message) : null);
   const ids = new Set(shop.products.map((p) => p.id));
   for (const id of Object.keys(cart)) if (!ids.has(id)) delete cart[id];
+  // خانة الصورة تظهر في كل البطاقات إن كان لصنف واحد على الأقل صورة؛ وإلا تبقى البطاقات صغيرة كما هي
+  withPics = shop.products.some((p) => imageUrl(cfg.supabaseUrl, p.image));
   paint();
 }
 
@@ -126,62 +139,89 @@ function paint() {
   paintBar();
 }
 
+// ---------- صور الأصناف (اختيارية): المصغّرة حين تظهر البطاقة، والكاملة عند الضغط ----------
+// التخزين خاص، فالصورة تُجلب بمفتاح الصفحة ثم تُعرض. ما فشل (لم تُرفع بعد) يبقى مكانه الحرف الأول.
+const pics = new Map(); // العنوان → Promise<objectURL | null>
+const ready = new Map(); // ما نزل فعلًا: يُعرض فورًا حين تُعاد رسم البطاقات (كل ضغطة + تعيد الرسم)
+function picture(url) {
+  if (!pics.has(url)) {
+    pics.set(url, fetch(url, { headers: { apikey: cfg.supabaseAnonKey, Authorization: `Bearer ${cfg.supabaseAnonKey}` } })
+      .then((r) => (r.ok ? r.blob() : null)).then((b) => (b && b.size ? URL.createObjectURL(b) : null)).catch(() => null)
+      .then((u) => { if (u) ready.set(url, u); return u; }));
+  }
+  return pics.get(url);
+}
+const show = (img, url) => picture(url).then((u) => { if (u) { img.src = u; img.classList.add('in'); } });
+const seen = 'IntersectionObserver' in window ? new IntersectionObserver((list) => {
+  for (const x of list) if (x.isIntersecting) { seen.unobserve(x.target); show(x.target, x.target.dataset.src); }
+}, { rootMargin: '300px' }) : null;
+
+function pic(p) {
+  const thumb = imageUrl(cfg.supabaseUrl, p.image);
+  const letter = el('span', { 'aria-hidden': 'true' }, [...p.name.trim()][0] || '');
+  if (!thumb) return el('div', { class: 'pic' }, letter);
+  const img = el('img', { alt: p.name, 'data-src': thumb });
+  if (ready.has(thumb)) { img.src = ready.get(thumb); img.className = 'in now'; }
+  else if (seen) seen.observe(img); else show(img, thumb);
+  return el('button', { class: 'pic', type: 'button', 'aria-label': `صورة ${p.name}`, onclick: () => zoom(p, img) }, letter, img);
+}
+
+function zoom(p, small) {
+  if (!small.src) return;
+  const big = el('img', { alt: p.name, src: small.src });
+  const view = el('div', { class: 'view', onclick: () => view.remove() }, big, el('p', {}, p.name));
+  document.body.append(view);
+  picture(imageUrl(cfg.supabaseUrl, p.image, { full: true })).then((u) => { if (u) big.src = u; });
+}
+
 function card(p) {
   const n = cart[p.id] || 0;
-  const u = unitOf(p.unit);
+  const per = priceUnit(p.unit);
+  const badge = unitBadge(p.unit);
   const ctl = !p.available ? el('span', { class: 'na' }, 'غير متوفر الآن')
     : n ? el('div', { class: 'step' },
-      el('button', { type: 'button', 'aria-label': 'زيادة', onclick: () => set(p, n + 1) }, '+'),
-      el('span', { class: 'num' }, String(n)),
-      el('button', { type: 'button', 'aria-label': 'إنقاص', onclick: () => set(p, n - 1) }, '−'))
-      : el('button', { class: 'add', type: 'button', onclick: () => set(p, 1) }, 'أضف للطلب');
+      el('button', { type: 'button', 'aria-label': 'زيادة', onclick: () => set(p, nextQty(p.unit, n, 1)) }, '+'),
+      el('span', per ? {} : { class: 'num' }, qtyText(p.unit, n)),
+      el('button', { type: 'button', 'aria-label': 'إنقاص', onclick: () => set(p, nextQty(p.unit, n, -1)) }, '−'))
+      : el('button', { class: 'add', type: 'button', onclick: () => set(p, nextQty(p.unit, 0, 1)) }, 'أضف للطلب');
   return el('div', { class: `item ${p.available ? '' : 'off'}` },
+    withPics ? pic(p) : null,
     el('div', { class: 'name' }, p.name),
-    el('div', { class: 'price' }, el('span', { class: 'num' }, money(p.price)), u.measured ? el('span', { class: 'unit' }, ` / ${u.name}`) : null),
+    badge ? el('span', { class: 'badge' }, badge) : null,
+    el('div', { class: 'price' }, el('span', { class: 'num' }, money(p.price)), per ? el('span', { class: 'unit' }, ` / ${per}`) : null),
     ctl);
 }
 
 function set(p, n) {
-  if (n > 0) cart[p.id] = Math.min(n, 999); else delete cart[p.id];
+  if (n > 0) cart[p.id] = n; else delete cart[p.id];
   saveCart(); paint();
 }
 
-function chosen() {
-  const by = new Map(shop.products.map((p) => [p.id, p]));
-  return Object.entries(cart).map(([id, n]) => ({ p: by.get(id), n })).filter((x) => x.p && x.p.available);
-}
+const chosen = () => chosenItems(shop.products, cart);
+const sumOf = (items) => items.reduce((a, x) => a + x.total, 0);
 
 function paintBar() {
   const items = chosen();
-  const total = items.reduce((a, x) => a + x.p.price * x.n, 0);
   $('bar').hidden = !items.length;
-  fill($('sum'), el('span', {}, `${items.length} صنف · `, el('span', { class: 'num' }, money(total))));
+  fill($('sum'), el('span', {}, `${items.length} صنف · `, el('span', { class: 'num' }, money(sumOf(items)))));
 }
 
 $('order').addEventListener('click', () => {
   const items = chosen();
-  const total = items.reduce((a, x) => a + x.p.price * x.n, 0);
   const name = el('input', { class: 'field', autocomplete: 'name', placeholder: 'اختياري' });
   const note = el('textarea', { class: 'field', rows: '2', placeholder: 'توصيل، وقت الاستلام… (اختياري)' });
   const sheet = el('div', { class: 'sheet', onclick: (e) => { if (e.target === sheet) sheet.remove(); } }, el('div', {},
     el('h2', {}, 'طلبك'),
-    ...items.map((x) => el('div', { class: 'line' }, el('span', {}, `${x.p.name} × `, el('span', { class: 'num' }, String(x.n))), el('span', { class: 'num' }, money(x.p.price * x.n)))),
-    el('div', { class: 'total' }, el('span', {}, 'المجموع التقريبي'), el('span', { class: 'num' }, money(total))),
+    ...items.map((x) => el('div', { class: 'line' }, el('span', {}, itemText(x.p, x.qty)), el('span', { class: 'num' }, money(x.total)))),
+    el('div', { class: 'total' }, el('span', {}, 'المجموع التقريبي'), el('span', { class: 'num' }, money(sumOf(items)))),
     el('label', {}, 'اسمك'), name, el('label', {}, 'ملاحظة'), note,
-    el('button', { class: 'go', type: 'button', onclick: () => send(items, total, name.value.trim(), note.value.trim()) }, 'أرسل الطلب على واتساب'),
+    el('button', { class: 'go', type: 'button', onclick: () => send(items, name.value.trim(), note.value.trim()) }, 'أرسل الطلب على واتساب'),
     el('button', { class: 'ghost', type: 'button', onclick: () => sheet.remove() }, 'رجوع')));
   document.body.append(sheet);
 });
 
-function send(items, total, name, note) {
-  const lines = [`مرحبًا ${shop.name}، أريد أن أطلب:`];
-  items.forEach((x, i) => lines.push(`${i + 1}. ${x.p.name} × ${x.n} = ${money(x.p.price * x.n)}`));
-  lines.push(`المجموع: ${money(total)}`);
-  if (name) lines.push(`الاسم: ${name}`);
-  if (note) lines.push(`ملاحظة: ${note}`);
-  lines.push('(من كتالوج المحل)');
-  const phone = normalizePhone(shop.phone || '');
-  location.href = whatsappLink(phone, lines.join('\n'));
+function send(items, name, note) {
+  location.href = whatsappLink(normalizePhone(shop.phone || ''), orderText({ shopName: shop.name, items, name, note, money }));
 }
 
 $('q').addEventListener('input', () => shop && paint());

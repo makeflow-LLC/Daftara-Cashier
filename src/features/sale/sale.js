@@ -196,7 +196,7 @@ export function renderSale(el, params = {}) {
   function askQty(line) {
     const u = unitOf(line.unit);
     const q = input({ dir: 'ltr', inputmode: 'decimal', class: 'input input-xl', placeholder: '0' });
-    const presets = u.id === 'kg' ? ['0.25', '0.5', '1', '2'] : u.id === 'meter' ? ['0.5', '1', '1.5', '2', '3'] : ['0.5', '1', '2'];
+    const presets = u.id === 'kg' ? ['0.25', '0.5', '1', '2'] : u.id === 'ounce' ? ['0.5', '1', '2', '4'] : u.id === 'meter' ? ['0.5', '1', '1.5', '2', '3'] : ['0.5', '1', '2'];
     openSheet((close) => h('form', {
       onsubmit: (e) => {
         e.preventDefault();

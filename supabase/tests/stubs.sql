@@ -19,4 +19,6 @@ create or replace function storage.foldername(name text) returns text[] language
 alter table storage.objects enable row level security;
 grant usage on schema storage to authenticated;
 grant select, insert, update, delete on storage.objects to authenticated;
+grant usage on schema storage to anon;
+grant select, insert on storage.objects to anon; -- كما في Supabase: الصلاحية للجدول، والسياسات (RLS) هي الحَكَم
 grant usage on schema public to anon, authenticated;

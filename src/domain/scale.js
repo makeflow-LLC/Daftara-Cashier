@@ -7,7 +7,7 @@
 // طول رقم الصنف قابل للتعديل (4 أو 5 أو 6) وكذلك البداية؛ القيمة تأخذ الباقي (12 − البداية − رقم الصنف).
 // منطق نقي: لا DOM ولا قاعدة بيانات.
 import { isValidEan, checkDigit } from './product.js';
-import { lineAmount, QTY_SCALE } from './units.js';
+import { lineAmount, QTY_SCALE, unit } from './units.js';
 
 export const SCALE_DEFAULTS = Object.freeze({
   enabled: false,
@@ -70,7 +70,7 @@ export function parseScaleBarcode(barcode, settings) {
 
 /**
  * الكمية والخصم لسطر من ملصق الميزان.
- * weight: الكمية = الوزن (الكيلو بالألف = الغرام؛ صنف بوحدة «غرام» = الغرام × 1000).
+ * weight: الكمية = الوزن بوحدة الصنف (الكيلو بالألف = الغرام؛ «غرام» = الغرام × 1000؛ «أوقية» = الغرام ÷ 250).
  * price : الكمية = السعر ÷ سعر الوحدة، مقرّبة للأعلى، والفرق الصغير (أغورة أو اثنتان) خصم على السطر
  *         فيطابق إجمالي السطر المطبوع على الملصق تمامًا.
  * يرجع { qty, discount } أو null إن تعذّر (صنف بلا سعر في وضع السعر).
@@ -78,7 +78,7 @@ export function parseScaleBarcode(barcode, settings) {
 export function scaleQuantity(product, parsed) {
   if (!parsed) return null;
   if (parsed.mode === 'weight') {
-    const qty = product.unit === 'gram' ? parsed.value * QTY_SCALE : parsed.value;
+    const qty = Math.round((parsed.value * QTY_SCALE) / (unit(product.unit).grams || 1000));
     return { qty, discount: 0 };
   }
   const price = product.sell_price;

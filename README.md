@@ -90,6 +90,12 @@ Nothing else needs to change.
   (`src/domain/printer.js`), so Arabic prints on any printer. Desktop/web print the same image via the system dialog.
 - Shop catalog: `shop.html?s=<shop id>` (web build) reads `cashier_shop_catalog` (`0006_shop_catalog.sql`, callable
   without sign-in, returns data only when the owner enabled the catalog; never cost, stock or customers).
+  Each product is ordered in its own unit (`src/domain/catalog.js`: pieces by 1, kilos by quarters, ounces by halves…)
+  and shows its first image when it has one (`0009`: the RPC returns `image`; a storage policy lets `anon` read
+  `<shop>/products/*` only while that shop's catalog is on). The page fetches thumbnails lazily, the full image on tap.
+- Units: `ounce` (أوقية = 250 g) joins piece/meter/kg/gram/liter (`0009` widens the check constraint). On a server that
+  has not run `setup.sql` yet, a product by the ounce waits in the outbox (`serverBehind` in `sync/engine.js`) and
+  uploads by itself afterwards — **run `supabase/setup.sql` after releasing 1.8.0**.
 - Staff (`src/domain/staff.js`), offers (`offers.js`), supplier due dates (`dues.js`) and the daily report settings
   live in `cashier_shops.settings` — no new synced tables. Invoices/payments carry the employee id in `created_by`.
 - Android: `InvoiceSharePlugin` opens WhatsApp (or WhatsApp Business) on the customer's chat with the
