@@ -51,14 +51,15 @@ export function createAccountingRepo({ db, store, getContext, clock, getSettings
     /** الدفاتر كلها: { entries, chart, at }. تُحسب مرة وتبقى حتى invalidate(). */
     async books() {
       if (cache) return cache;
-      const [invoices, payments, customerEntries, supplierEntries, movements, expenses, sessions, vouchers, cheques, chart, stock] = await Promise.all([
+      const [invoices, payments, customerEntries, supplierEntries, movements, expenses, sessions, vouchers, cheques, chart, stock, cs, ss] = await Promise.all([
         db.invoices.toArray(), db.payments.toArray(), db.customer_entries.toArray(), db.supplier_entries.toArray(), db.movements.toArray(),
         db.expenses.toArray(), db.cash_sessions.toArray(), db.vouchers.toArray(), db.cheques.toArray(), repo.chart(), stockNow(),
+        db.customers.toArray(), db.suppliers.toArray(),
       ]);
       const now = clock(); // ساعة التطبيق (لا تسبقها سجلاته أبدًا)
       const entries = buildJournal({
         invoices, payments, customerEntries, supplierEntries, movements, expenses, sessions, vouchers, cheques,
-        boxes: repo.boxes(), stockValue: stock, now,
+        boxes: repo.boxes(), stockValue: stock, now, customerNames: new Map(cs.map((c) => [c.id, c.name])), supplierNames: new Map(ss.map((s) => [s.id, s.name])),
       }, chart);
       cache = { entries, chart, at: now };
       return cache;
@@ -244,6 +245,7 @@ export function createAccountingRepo({ db, store, getContext, clock, getSettings
       if (!contra) return null;
       if (contra === 'customer') return 'دفعة من دين زبون';
       if (contra === 'supplier') return 'دفعة لتاجر';
+      if (contra === 'capital') return 'رصيد كان موجودًا (أول المدة)';
       if (contra.startsWith('exp:')) return `مصروف: ${categoryName(contra.slice(4))}`;
       const c = contraChoices(type, repo.accounts()).find((x) => x.key === contra);
       return c ? c.label : null;
@@ -334,6 +336,23 @@ export function createAccountingRepo({ db, store, getContext, clock, getSettings
     /** الشيكات التي حان موعدها أو اقترب. */
     async chequesDue(today) {
       return chequesDue(await repo.cheques(), today);
+    },
+
+    /**
+     * تصحيح رصيد صندوق أو حساب بنك برقم واحد: «كم فيه فعلًا الآن؟» — يُكتب سند قبض أو صرف بالفرق.
+     * reason: 'opening' رصيد كان موجودًا قبل استعمال التطبيق (رأس مال) | 'diff' رسوم بنك أو فرق (مصروف/إيراد آخر).
+     * يرجع السند، أو null إن كان الرصيد مطابقًا.
+     */
+    async correctBalance(accountId, actual, reason = 'opening') {
+      if (!Number.isSafeInteger(actual)) throw invalid('اكتب الرصيد الموجود فعلًا');
+      const m = (await repo.money()).find((x) => x.id === accountId);
+      if (!m || m.kind === 'drawer') throw invalid('الدرج يُصحَّح بإغلاق الصندوق');
+      const diff = actual - m.balance;
+      if (diff === 0) return null;
+      return repo.saveVoucher({
+        type: diff > 0 ? 'receipt' : 'payment', amount: Math.abs(diff), account: accountId,
+        contra: reason === 'opening' ? 'capital' : diff > 0 ? 'other_income' : 'other_expense', note: 'تصحيح الرصيد',
+      });
     },
 
     /** رصيد حساب واحد الآن (مدين موجب). */

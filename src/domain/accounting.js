@@ -238,10 +238,22 @@ export function simulateDrawer({ flows, sessions = [], now }) {
   return { steps, balance: bal };
 }
 
+/** بيان قيد شيك في كشف زبون أو تاجر: استلام، رجوع، تجيير، إصدار، إلغاء. */
+function chequeMemo(c, entry, name, supplierSide = false) {
+  const label = `شيك ${c.number || ''}`.trim();
+  if (isVoidEntry(entry)) return `تصحيح ${label} — ${name}`;
+  if (c.direction === 'in') {
+    if (supplierSide) return entry.amount < 0 ? `تجيير ${label} إلى ${name}` : `رجوع ${label} المجيَّر إلى ${name}`;
+    return entry.amount < 0 ? `استلام ${label} من ${name}` : `رجوع ${label} من ${name}`;
+  }
+  return entry.amount < 0 ? `إصدار ${label} إلى ${name}` : `إلغاء ${label} إلى ${name}`;
+}
+
 // ---------- بناء قيود اليومية ----------
 /**
  * data: { invoices, payments, customerEntries, supplierEntries, movements, expenses, sessions, vouchers, cheques,
- *         boxes, stockValue (قيمة المخزون الآن بالتكلفة، أو null), now (ISO) }
+ *         boxes, stockValue (قيمة المخزون الآن بالتكلفة، أو null), now (ISO),
+ *         customerNames / supplierNames: Map(id → اسم) لبيان القيد (اختياري) }
  * يرجع القيود مرتبة بالتاريخ: [{ id, date, kind, memo, number, ref: { type, id } | null, lines: [{ account, debit, credit }] }]
  * كل قيد متوازن دائمًا: ما لا يجد مقابله (سجل لم يصل من جهاز آخر بعد) يذهب إلى «فروقات تحتاج مراجعة».
  */
@@ -249,7 +261,10 @@ export function buildJournal(data, chart) {
   const {
     invoices = [], payments = [], customerEntries = [], supplierEntries = [], movements = [], expenses = [],
     sessions = [], vouchers = [], cheques = [], boxes = [], stockValue = null, now = null,
+    customerNames = new Map(), supplierNames = new Map(),
   } = data;
+  const cn = (id) => customerNames.get(id) || 'زبون';
+  const sn = (id) => supplierNames.get(id) || 'تاجر';
   const entries = [];
   function entry(id, date, kind, memo, { number = null, ref = null } = {}) {
     const e = { id, date, kind, memo, number, ref, lines: [] };
@@ -346,7 +361,8 @@ export function buildJournal(data, chart) {
     const se = supp.byPayment.get(p.id) || [];
     const who = ce.length || p.customer_id ? 'customer' : se.length || p.supplier_id ? 'supplier' : null;
     const fix = [...ce, ...se].some(isVoidEntry);
-    const memo = who === 'customer' ? (fix ? 'تصحيح دفعة زبون' : 'دفعة من زبون') : who === 'supplier' ? (fix ? 'تصحيح دفعة لتاجر' : 'دفعة لتاجر') : 'دفعة بلا مرجع';
+    const cid = p.customer_id || ce[0]?.customer_id, sid = p.supplier_id || se[0]?.supplier_id;
+    const memo = who === 'customer' ? `${fix ? 'تصحيح دفعة' : 'دفعة'} من ${cn(cid)}` : who === 'supplier' ? `${fix ? 'تصحيح دفعة' : 'دفعة'} إلى ${sn(sid)}` : p.direction === 'in' ? 'استلام بلا فاتورة (محفظة)' : 'دفعة بلا مرجع';
     const e = entry(`pay:${p.id}`, p.created_at, who === 'supplier' ? 'supplier_payment' : who === 'customer' ? 'customer_payment' : 'payment', memo,
       { number: p.number || null, ref: who === 'customer' ? { type: 'customer', id: p.customer_id || ce[0]?.customer_id } : who === 'supplier' ? { type: 'supplier', id: p.supplier_id || se[0]?.supplier_id } : null });
     money(e, p, p.fee || 0);
@@ -363,7 +379,8 @@ export function buildJournal(data, chart) {
     const cheque = x.payment_id ? chequeById.get(x.payment_id) : null;
     const contra = cheque ? (cheque.direction === 'in' ? 'cheques_in' : 'cheques_out')
       : x.type === 'opening' || x.type === 'import' ? 'capital' : x.type === 'adjustment' && !x.invoice_id ? 'sales' : 'suspense';
-    const memo = cheque ? `شيك ${cheque.number || ''}`.trim() : x.type === 'opening' ? 'رصيد سابق لزبون' : x.type === 'import' ? 'رصيد مستورد من دفترة' : x.type === 'adjustment' ? (isVoidEntry(x) ? 'تصحيح دين زبون' : 'دين على زبون بلا فاتورة') : 'قيد زبون';
+    const memo = cheque ? chequeMemo(cheque, x, cn(x.customer_id)) : x.type === 'opening' ? `رصيد سابق على ${cn(x.customer_id)}` : x.type === 'import' ? `رصيد مستورد من دفترة: ${cn(x.customer_id)}`
+      : x.type === 'adjustment' ? `${isVoidEntry(x) ? 'تصحيح دين' : 'دين بلا فاتورة'} على ${cn(x.customer_id)}${x.note && !isVoidEntry(x) ? ` (${x.note})` : ''}` : `قيد على ${cn(x.customer_id)}`;
     const e = entry(`ce:${x.id}`, x.created_at, cheque ? 'cheque' : 'customer_entry', memo, { ref: cheque ? { type: 'cheque', id: cheque.id } : { type: 'customer', id: x.customer_id } });
     e.dr('ar', x.amount).cr(contra, x.amount);
     e.done();
@@ -372,7 +389,8 @@ export function buildJournal(data, chart) {
     const cheque = x.payment_id ? chequeById.get(x.payment_id) : null;
     const contra = cheque ? (cheque.direction === 'in' ? 'cheques_in' : 'cheques_out')
       : x.type === 'opening' ? 'capital' : x.type === 'adjustment' && !x.invoice_id ? 'purchases_misc' : 'suspense';
-    const memo = cheque ? `شيك ${cheque.number || ''}`.trim() : x.type === 'opening' ? 'رصيد سابق لتاجر' : x.type === 'adjustment' ? (isVoidEntry(x) ? 'تصحيح دين لتاجر' : 'بضاعة بالدين بلا فاتورة') : 'قيد تاجر';
+    const memo = cheque ? chequeMemo(cheque, x, sn(x.supplier_id), true) : x.type === 'opening' ? `رصيد سابق لـ ${sn(x.supplier_id)}`
+      : x.type === 'adjustment' ? `${isVoidEntry(x) ? 'تصحيح دين' : 'بضاعة بالدين بلا فاتورة'} — ${sn(x.supplier_id)}${x.note && !isVoidEntry(x) ? ` (${x.note})` : ''}` : `قيد لـ ${sn(x.supplier_id)}`;
     const e = entry(`se:${x.id}`, x.created_at, cheque ? 'cheque' : 'supplier_entry', memo, { ref: cheque ? { type: 'cheque', id: cheque.id } : { type: 'supplier', id: x.supplier_id } });
     e.cr('ap', x.amount).dr(contra, x.amount);
     e.done();
@@ -623,6 +641,7 @@ export function moneyAccounts(entries, chart, bal = balances(entries)) {
     const balance = bal.get(a.key) || 0;
     const box = a.key.startsWith('box:');
     if ((a.deleted || a.closed) && !balance) continue; // طريقة محذوفة أو صندوق مغلق بلا رصيد لا يظهر
+    if (!box && !balance && !bal.has(a.key)) continue;  // محفظة لم تُستعمل قط لا تزحم القائمة
     out.push({ key: a.key, id: a.key.slice(a.key.indexOf(':') + 1), name: a.name, kind: a.money, balance, custom: box, closed: !!a.closed });
   }
   for (const [key, balance] of bal) {

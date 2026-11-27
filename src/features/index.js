@@ -22,6 +22,11 @@ import { renderWarehouses, renderWarehouse, renderTransfer } from './inventory/w
 import { renderExpenses } from './expenses/expenses.js';
 import { renderPayroll } from './expenses/payroll.js';
 import { renderChat } from './chat/chat.js';
+import { renderAccounting } from './accounting/hub.js';
+import { renderBoxes } from './accounting/boxes.js';
+import { renderVouchers } from './accounting/vouchers.js';
+import { renderCheques } from './accounting/cheques.js';
+import { renderTrial, renderLedger, renderJournal, renderStatements } from './accounting/books.js';
 import { renderMore } from './more/more.js';
 import { renderHelp, renderHelpTopic } from './help/help.js';
 import { renderSubscribe } from './subscribe/subscribe.js';
@@ -92,6 +97,20 @@ export const MODULES = [
     ],
   },
   { id: 'chat', routes: [{ path: '/chat', tab: 'settings', chrome: false, render: renderChat }] },
+  {
+    // المحاسبة: الصناديق والسندات والشيكات (من له الصندوق)، والدفاتر (من له التقارير ويرى الأرباح — تتحقق الشاشة نفسها)
+    id: 'accounting',
+    routes: [
+      { path: '/accounting', perm: 'cash', tab: 'settings', chrome: false, render: renderAccounting },
+      { path: '/accounting/boxes', perm: 'cash', tab: 'settings', chrome: false, render: renderBoxes },
+      { path: '/accounting/vouchers', perm: 'cash', tab: 'settings', chrome: false, render: renderVouchers },
+      { path: '/accounting/cheques', perm: 'cash', tab: 'settings', chrome: false, render: renderCheques },
+      { path: '/accounting/trial', perm: 'reports', tab: 'settings', chrome: false, render: renderTrial },
+      { path: '/accounting/ledger', tab: 'settings', chrome: false, render: renderLedger },
+      { path: '/accounting/journal', perm: 'reports', tab: 'settings', chrome: false, render: renderJournal },
+      { path: '/accounting/statements', perm: 'reports', tab: 'settings', chrome: false, render: renderStatements },
+    ],
+  },
   { id: 'wallet', routes: [{ path: '/wallet', perm: 'sell', write: true, chrome: false, render: renderWallet }] },
   { id: 'cash', routes: [{ path: '/cash', perm: 'cash', tab: 'settings', chrome: false, render: renderCash }] },
   { id: 'invoices', routes: [{ path: '/invoices', tab: 'settings', chrome: false, render: renderInvoices }] },

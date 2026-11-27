@@ -122,7 +122,10 @@ export function renderHome(el) {
     // رواتب الموظفين: ما حان موعده أو تأخر (لصاحب المحل)
     const salaries = await app.payroll.due();
     const cur0 = app.shop?.base_currency || 'ILS';
+    // الشيكات: ما حان موعده أو اقترب (لك أو عليك)
+    const cheques = app.feature('accounting') && app.can('cash') ? await app.accounting.chequesDue(localDay()) : [];
     const items = [
+      ...cheques.slice(0, 3).map((x) => row({ icon: 'cheque', title: `${x.cheque.direction === 'in' ? 'شيك لك' : 'شيك عليك'}${x.cheque.party_name ? ` — ${x.cheque.party_name}` : ''}: ${formatMoney(x.cheque.amount, cur0)}`, sub: `موعده ${dueText(x.days)}`, tone: x.state === 'soon' ? 'warn' : 'danger', onclick: () => navigate(`/accounting/cheques${x.cheque.direction === 'out' ? '?dir=out' : ''}`) })),
       ...salaries.slice(0, 3).map((st) => row({ icon: 'users', title: `راتب ${st.employee.name}: ${formatMoney(st.remaining, cur0)}`, sub: `موعده ${dueText(st.days)}`, tone: st.state === 'soon' ? 'warn' : 'danger', onclick: () => navigate('/payroll') })),
       ...dues.slice(0, 3).map((d) => row({ icon: 'truck', title: `ادفع لـ ${d.supplier.name}: ${formatMoney(d.supplier.balance, app.shop?.base_currency || 'ILS')}`, sub: `موعد الدفع ${dueText(d.days)}`, tone: d.state === 'overdue' || d.state === 'today' ? 'danger' : 'warn', onclick: () => navigate(`/suppliers/view?id=${d.supplier.id}`) })),
       ...soon.map((x) => row({ icon: 'bulb', title: x.p.name, sub: `${daysLeftText(x.daysLeft)} — اطلب ${formatQty(x.qty)}`, tone: 'warn', onclick: () => navigate('/inventory/assistant') })),

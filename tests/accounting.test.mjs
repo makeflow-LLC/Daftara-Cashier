@@ -29,6 +29,13 @@ import { formatInvoiceNumber, matchesInvoiceNumber } from '../src/domain/numberi
 import { sessionSummary } from '../src/domain/cash.js';
 import { buildReport } from '../src/domain/reports.js';
 import { uuid } from '../src/core/ids.js';
+import { createSyncEngine } from '../src/sync/engine.js';
+import { HttpError } from '../src/sync/supabase.js';
+import { TABLE, SYNCED } from '../src/sync/tables.js';
+import { createFakeServer } from './helpers/fake-server.mjs';
+import { validateBackup, makeBackup } from '../src/domain/tools.js';
+import { resolveFeatures, presetFor } from '../src/domain/features.js';
+import { SIDE } from '../src/domain/nav.js';
 
 let n = 0;
 async function setup() {
@@ -537,4 +544,52 @@ test('books: a closed drawer session posts the shortage and hands the cash to th
   assert.equal(bal(b, DRAWER), 1000);
   // صاحب المحل وضع 2000 أول اليوم وأخذ 4900 عند الإغلاق
   assert.equal(bal(b, 'owner'), -2000 + 4900);
+});
+
+// ---------- المزامنة والنسخ الاحتياطي ----------
+test('sync: a server that has not run 0010 yet keeps vouchers and cheques waiting, and takes the rest', async () => {
+  assert.equal(TABLE.vouchers.mode, 'lww');
+  assert.equal(TABLE.cheques.remote, 'cashier_cheques');
+  const server = createFakeServer();
+  const t = await setup();
+  const ctx = { shopId: (await t.db.payment_methods.toArray())[0].shop_id, deviceId: uuid(), prefix: 'A', userId: null, deviceName: 'A' };
+  const real = server.api({ current: null });
+  const old = { ...real, rest: { ...real.rest, async upsert(name, rows, opts) {
+    if (name === 'cashier_vouchers' || name === 'cashier_cheques') throw new HttpError(404, { code: 'PGRST205', message: `Could not find the table 'public.${name}' in the schema cache` }, name);
+    return real.rest.upsert(name, rows, opts);
+  } } };
+  await t.store.put('shops', { id: ctx.shopId, name: 'بقالة', shop_type: 'grocery' });
+  const customer = await t.customers.create({ name: 'أم أحمد' });
+  await t.customers.addDebt(customer.id, 5000);
+  await t.accounting.saveCheque({ direction: 'in', number: '7', amount: 5000, due_date: '2026-12-01', party_type: 'customer', party_id: customer.id, party_name: 'أم أحمد' });
+  await t.accounting.saveVoucher({ type: 'payment', amount: 300, account: 'drawer', contra: 'owner' });
+  const r = await createSyncEngine({ db: t.db, api: old, getContext: () => ctx, emit: () => {} }).run();
+  assert.ok(!r.error, String(r.error));
+  // كشف الزبون (ومعه قيد الشيك) وصل الخادم؛ السند والشيك ينتظران تحديثه بلا رفض
+  assert.equal(server.tables.get('cashier_customer_entries').size, 2);
+  assert.deepEqual((await t.db.outbox.toArray()).map((e) => [e.table, !!e.dead]).sort(), [['cheques', false], ['vouchers', false]]);
+  // بعد تشغيل setup.sql يُرفعان وحدهما، وجهاز آخر يسحبهما
+  await createSyncEngine({ db: t.db, api: real, getContext: () => ctx, emit: () => {} }).run();
+  assert.equal(await t.db.outbox.count(), 0);
+  assert.equal(server.tables.get('cashier_vouchers').size, 1);
+  assert.equal([...server.tables.get('cashier_cheques').values()][0].due_date, '2026-12-01');
+});
+
+test('backup: old files without vouchers and cheques still restore, and new ones carry them', async () => {
+  assert.ok(SYNCED.includes('vouchers') && SYNCED.includes('cheques'));
+  const shopId = uuid();
+  const old = makeBackup({ tables: { shops: [{ id: shopId, name: 'بقالة' }] }, meta: { shopId }, exportedAt: '2026-01-01T00:00:00.000Z' });
+  const info = validateBackup(old, SYNCED);
+  assert.equal(info.counts.vouchers, 0);
+  assert.equal(info.counts.cheques, 0);
+});
+
+test('feature: accounting is on for every shop type, existing shops get it, and it can be switched off', () => {
+  assert.equal(presetFor('grocery').accounting, true);
+  assert.equal(presetFor('pharmacy').accounting, true);
+  // محل قديم: إعداداته المحفوظة لا تذكر الميزة ← تأخذ قيمة نوع المحل
+  assert.equal(resolveFeatures('clothing', { units: false }).accounting, true);
+  assert.equal(resolveFeatures('clothing', { accounting: false }).accounting, false);
+  const item = SIDE.find((i) => i.path === '/accounting');
+  assert.deepEqual([item.perm, item.feature], ['cash', 'accounting']);
 });

@@ -38,7 +38,8 @@ export async function expenseSheet(expense = null, { onSaved = null } = {}) {
   const amt = input({ dir: 'ltr', inputmode: 'decimal', class: 'input input-xl', placeholder: '0', value: expense ? formatDecimal(expense.amount, minor, { trim: true, group: false }) : '' });
   const note = input({ maxlength: 120, placeholder: 'مثال: فاتورة شهر 10 (اختياري)', value: expense ? expense.note || '' : '' });
   const date = input({ type: 'date', dir: 'ltr', value: expense ? localDay(new Date(expense.spent_at)) : localDay(), max: localDay() });
-  const methods = await app.sales.paymentMethods();
+  // طرق الدفع، ومعها صناديق المحل الإضافية (خزنة، حساب بنك) إن وُجدت
+  const methods = [...await app.sales.paymentMethods(), ...(app.feature('accounting') ? (await app.accounting.moneyChoices()).filter((m) => m.box) : [])];
   const pick = methodPicker(methods, expense ? expense.method_id : undefined);
   let category = expense ? expense.category : null;
   const cats = h('div', { class: 'chips' });
@@ -122,7 +123,7 @@ export function renderExpenses(el) {
     const [items, methods] = await Promise.all([app.expenses.list(from, to), app.db.payment_methods.toArray()]);
     const shown = seeSalaries ? items : items.filter((e) => e.category !== SALARY);
     const t = expenseTotals(shown);
-    const mName = new Map(methods.map((m) => [m.id, m.kind === 'cash' ? 'من الدرج' : m.name]));
+    const mName = new Map([...methods.map((m) => [m.id, m.kind === 'cash' ? 'من الدرج' : m.name]), ...app.accounting.boxes().map((b) => [b.id, b.name])]);
     const isNow = period === periodOf(localDay());
     fill(top,
       h('div', { class: 'month-nav' },

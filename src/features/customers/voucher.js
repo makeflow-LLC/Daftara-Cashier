@@ -16,7 +16,9 @@ import { sendFile } from '../invoices/share.js';
 async function load(paymentId) {
   const r = await app.customers.receipt(paymentId);
   if (!r) return null;
-  const model = voucherModel({ payment: r.payment, customer: r.customer, shop: app.shop || {}, methodName: r.methodName, balanceAfter: r.balanceAfter });
+  // الدفعة دخلت صندوقًا إضافيًا (خزنة، حساب بنك): اسمه بدل «تحويل»
+  const box = r.methodName ? null : app.accounting.boxes().find((b) => b.id === r.payment.method_id);
+  const model = voucherModel({ payment: r.payment, customer: r.customer, shop: app.shop || {}, methodName: r.methodName || (box ? box.name : null), balanceAfter: r.balanceAfter });
   return { ...r, model, logoUrl: await app.media.logoUrl() };
 }
 

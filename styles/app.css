@@ -1369,3 +1369,43 @@ body{font-weight:500}
 .rc-void-info{text-align:center;margin:var(--space-2) 0 0}
 .picker-hint{padding:var(--space-2) var(--space-3);margin:0}
 .pay-name{margin-bottom:var(--space-3)}
+
+/* ===== المحاسبة: الصناديق، السندات، الشيكات، والدفاتر ===== */
+.notice-row{display:flex;align-items:center;gap:var(--space-3);width:100%;padding:var(--space-3);border-radius:var(--radius-lg);margin-bottom:var(--space-3);border:2px solid;text-align:right;font-weight:700}
+.notice-row.warn{background:var(--amber-100);border-color:#f3c77a;color:var(--amber-700)}
+.notice-row.danger{background:var(--pink-100);border-color:#f4a9c6;color:var(--pink-700)}
+.notice-row .row-sub{color:inherit;opacity:.8}
+.row-split{padding:0;gap:0;align-items:stretch}
+.row-split > .row-body{flex:1;min-width:0;display:flex;align-items:center;gap:var(--space-3);min-height:60px;padding:10px var(--space-3);text-align:right}
+.row-split > .icon-btn{align-self:center;flex:none;margin-left:6px;color:var(--color-muted)}
+.acc-bal{display:flex;flex-direction:column;align-items:flex-end;line-height:1.25;color:var(--color-text)}
+.acc-totals .rc-kv{font-size:15px;color:var(--color-text);font-weight:700;gap:var(--space-3)}
+.row-total{background:var(--brand-100)}
+.row-total .row-title{font-weight:700}
+.stmt-title{font-size:19px;margin-top:var(--space-4)}
+.hub-pro{margin-top:var(--space-3)}
+.big-btn.box-add{background:linear-gradient(135deg,#14a3b0 0%,#0b6b63 100%);box-shadow:0 8px 20px rgba(11,95,99,.25)}
+.picked-party{border:2px solid var(--frame);border-radius:var(--radius-md);margin-bottom:var(--space-3);background:#fff}
+.picked-party:disabled{opacity:1}
+.acc-filter{margin-top:var(--space-3);margin-bottom:var(--space-3)}
+.chips-scroll.acc-filter{margin-bottom:var(--space-2)}
+.acc-body{margin-top:var(--space-3)}
+.row-end .owed{color:var(--danger-700)}
+.je{padding:0;overflow:hidden}
+.je-head{display:flex;justify-content:space-between;align-items:baseline;gap:var(--space-2);width:100%;padding:10px var(--space-3);background:var(--neutral-200);text-align:right;font-weight:700}
+.je-date{flex:none;color:var(--color-muted);font-weight:500;font-size:13px;white-space:nowrap}
+.je-lines{width:100%;border-collapse:collapse}
+.je-lines td{padding:7px var(--space-3);font-size:14.5px;border-top:1px solid var(--color-hairline)}
+.je-num{width:24%;text-align:left;white-space:nowrap;font-weight:600}
+.je-acc{width:52%}
+.je-cr .je-acc{padding-right:30px;color:var(--color-muted)}
+.jl{padding:var(--space-2) 0;border-bottom:1px solid var(--color-hairline)}
+.jl-row{display:flex;align-items:center;gap:var(--space-2);margin-top:var(--space-2)}
+.jl-row .chips{flex:none;flex-wrap:nowrap}
+.jl-row .chip{min-height:44px;padding:0 14px}
+.jl-row .input{flex:1;min-width:0}
+select.input{appearance:auto;min-height:48px}
+@media (min-width:1000px){
+  .acc-cols{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-6);align-items:start}
+  .hub-pro{grid-template-columns:repeat(4,1fr)}
+}

@@ -91,6 +91,28 @@ function loadScript(src) {
   });
 }
 
+/**
+ * يصدّر أقسامًا (عناوين + صفوف نصية) ملف PDF أو Excel ويفتح المشاركة. تستعمله التقارير والدفاتر المحاسبية.
+ * type: 'pdf' | 'xlsx'. name: بداية اسم الملف.
+ */
+export async function exportSections({ type, title, sub, sections, name = 'report' }) {
+  const file0 = `${name}-${new Date().toLocaleDateString('en-CA')}`;
+  try {
+    let file;
+    if (type === 'pdf') {
+      const canvas = renderDoc(title, sub, sections);
+      const jpeg = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.9));
+      const bytes = new Uint8Array(await jpeg.arrayBuffer());
+      file = { blob: new Blob([pdfFromJpeg(bytes, canvas.width, canvas.height)], { type: 'application/pdf' }), name: `${file0}.pdf`, mime: 'application/pdf' };
+    } else {
+      await loadScript('vendor/xlsx.js');
+      const mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      file = { blob: new Blob([globalThis.Xlsx.build(reportSheets(sections))], { type: mime }), name: `${file0}.xlsx`, mime };
+    }
+    await sendFile(file, '', `${title} — ${sub}`, { chooser: true });
+  } catch (e) { console.error(e); feedback.error(); toast('تعذّر التصدير', { kind: 'error' }); }
+}
+
 export function renderReports(el) {
   let kind = 'today';
   const today = new Date().toLocaleDateString('en-CA');
@@ -177,22 +199,7 @@ export function renderReports(el) {
 
   async function exportFile(type) {
     if (!current) return;
-    const name = `report-${new Date().toLocaleDateString('en-CA')}`;
-    const sub = `${app.shop.name} — ${current.label}`;
-    try {
-      let file;
-      if (type === 'pdf') {
-        const canvas = renderDoc('تقرير المبيعات', sub, current.sections);
-        const jpeg = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.9));
-        const bytes = new Uint8Array(await jpeg.arrayBuffer());
-        file = { blob: new Blob([pdfFromJpeg(bytes, canvas.width, canvas.height)], { type: 'application/pdf' }), name: `${name}.pdf`, mime: 'application/pdf' };
-      } else {
-        await loadScript('vendor/xlsx.js');
-        const mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-        file = { blob: new Blob([globalThis.Xlsx.build(reportSheets(current.sections))], { type: mime }), name: `${name}.xlsx`, mime };
-      }
-      await sendFile(file, '', `تقرير ${sub}`, { chooser: true });
-    } catch (e) { console.error(e); feedback.error(); toast('تعذّر التصدير', { kind: 'error' }); }
+    await exportSections({ type, title: 'تقرير المبيعات', sub: `${app.shop.name} — ${current.label}`, sections: current.sections, name: 'report' });
   }
 
   fromIn.addEventListener('change', load);

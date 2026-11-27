@@ -16,6 +16,7 @@ import { navigate } from '../../core/router.js';
 import { showReceipt } from '../sale/receipt.js';
 import { debtTabs } from './tabs.js';
 import { showVoucher } from './voucher.js';
+import { newChequeSheet, openCheque } from '../accounting/cheques.js';
 
 const cur = () => app.shop?.base_currency || 'ILS';
 // من يبيع أو يسجّل ديونًا يضيف زبونًا ويستلم دفعة؛ المراقب يرى فقط
@@ -97,6 +98,8 @@ export function renderCustomers(el) {
 export async function renderCustomer(el, params) {
   let c = await app.customers.get(params.id);
   if (!c) { navigate('/customers', { replace: true }); return undefined; }
+  // قيود الشيكات (payment_id = رقم الشيك) تُفتح على الشيك نفسه ولا تُعدَّل من الكشف
+  let chequeIds = await app.accounting.chequeIds();
   const top = h('div');
   const list = h('div');
   const titleEl = h('h1', null, c.name);
@@ -137,6 +140,7 @@ export async function renderCustomer(el, params) {
     // دفعة: الضغط يفتح سند القبض (ومنه التعديل والحذف لمن يملك الصلاحية)
     const tapOf = (e) => {
       if (e.cancelled) return null;
+      if (e.payment_id && chequeIds.has(e.payment_id)) return () => openCheque(e.payment_id, load);
       const canEdit = editableEntry(e) && app.can('delete');
       return e.invoice_id ? () => showReceipt(e.invoice_id, { doneLabel: 'إغلاق', doneIcon: 'x', manage: true, onChanged: load })
         : e.type === 'payment' && e.payment_id ? () => showVoucher(e.payment_id, { doneLabel: 'إغلاق', onEdit: canEdit ? () => entrySheet(e) : null })
@@ -238,7 +242,8 @@ export async function renderCustomer(el, params) {
     const minor = CURRENCIES[cur()].minor;
     const amt = input({ dir: 'ltr', inputmode: 'decimal', class: 'input input-xl', placeholder: '0' });
     const note = input({ maxlength: 80, placeholder: 'مثال: خضار، سجائر (اختياري)' });
-    const methods = isPay ? (await app.sales.paymentMethods()).filter((m) => m.kind !== 'credit') : [];
+    // طرق الدفع، ومعها صناديق المحل الإضافية (خزنة، حساب بنك) إن وُجدت: الدفعة تدخل حيث وُضعت
+    const methods = isPay ? [...(await app.sales.paymentMethods()).filter((m) => m.kind !== 'credit'), ...(app.feature('accounting') ? (await app.accounting.moneyChoices()).filter((m) => m.box) : [])] : [];
     let method = methods.find((m) => m.kind === 'cash') || methods[0] || null;
     const chips = h('div', { class: 'chips' });
     const paintChips = () => fill(chips, ...methods.map((m) => h('button', { class: `chip ${method === m ? 'on' : ''}`, type: 'button', onclick: () => { method = m; paintChips(); } }, m.name)));
@@ -267,6 +272,12 @@ export async function renderCustomer(el, params) {
       isPay && c.balance > 0 ? h('div', { class: 'chips pay-quick' }, h('button', { class: 'chip', type: 'button', onclick: () => { amt.value = formatDecimal(c.balance, minor, { trim: true, group: false }); } }, 'كامل المبلغ ', num(formatMoney(c.balance, cur())))) : null,
       isPay ? (methods.length > 1 ? h('div', { class: 'field' }, chips) : null) : field('ملاحظة', note),
       button(isPay ? 'حفظ الدفعة' : 'حفظ الدين', { type: 'submit', block: true, size: 'lg', icon: 'check' }),
+      // دفع بشيك: دينه ينزل الآن، والمال يدخل حين يُصرف الشيك (المحاسبة ← الشيكات)
+      isPay && app.feature('accounting') && app.can('cash') ? button('استلمت شيكًا', { kind: 'outline', block: true, icon: 'cheque', onclick: () => {
+        const v = parseMoney(amt.value || '', cur());
+        close();
+        newChequeSheet({ direction: 'in', party: c, partyType: 'customer', amount: v > 0 ? v : null, onSaved: load });
+      } }) : null,
       // الزبون يدفع من محفظته: رمز QR بالمبلغ المكتوب، والدفعة تُسجَّل على حسابه بعد التأكد من وصولها
       isPay ? button('ادفع بالمحفظة (QR)', { kind: 'outline', block: true, icon: 'wallet', onclick: () => {
         const v = parseMoney(amt.value || '', cur());
@@ -279,6 +290,7 @@ export async function renderCustomer(el, params) {
 
   async function load() {
     const next = await app.customers.get(params.id);
+    chequeIds = await app.accounting.chequeIds();
     if (next) { c = next; paint(); }
   }
   paint();

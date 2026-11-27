@@ -21,6 +21,7 @@ const cart = async () => {
   const pick = (n, qty) => { const p = all.find((x) => x.name.startsWith(n)); return makeLine(p, { qty: qty * 1000, avgCost: p.cost_price }); };
   await app.sales.saveCurrent({ lines: [pick('حليب', 2), pick('تونة', 3), pick('خبز', 4), pick('سائل جلي', 1)], discount: null });
 };
+const proTools = async () => { const { app } = await import('/src/core/app.js'); await app.meta.set('acc:advanced', true); };
 const SHOTS = [
   { name: 'home', path: '/' }, { name: 'more', path: '/more' },
   { name: 'sale', path: '/sale', before: cart },
@@ -42,6 +43,12 @@ const SHOTS = [
   { name: 'currencies', path: '/settings/currencies' }, { name: 'payments', path: '/settings/payments' }, { name: 'printer', path: '/settings/printer' },
   { name: 'scale', path: '/settings/scale' }, { name: 'appearance', path: '/settings/appearance' }, { name: 'about', path: '/settings/about' },
   { name: 'help-sheet', path: '/customers', steps: [{ click: '.topbar .help-btn' }] },
+  { name: 'accounting', path: '/accounting', before: proTools },
+  { name: 'boxes', path: '/accounting/boxes' }, { name: 'box-transfer', path: '/accounting/boxes', steps: [{ click: '.big-btn.pay' }] },
+  { name: 'vouchers', path: '/accounting/vouchers' }, { name: 'voucher-new', path: '/accounting/vouchers', steps: [{ click: '.big-btn.debt' }, { text: 'لصاحب المحل' }] },
+  { name: 'cheques', path: '/accounting/cheques' }, { name: 'cheque', path: '/accounting/cheques', steps: [{ click: '.page .list .row' }] },
+  { name: 'trial', path: '/accounting/trial' }, { name: 'ledger', path: '/accounting/ledger?account=ar' }, { name: 'chart', path: '/accounting/ledger' },
+  { name: 'journal', path: '/accounting/journal' }, { name: 'statements', path: '/accounting/statements' },
 ];
 const only = process.argv.slice(2);
 const PORT = 8097;
@@ -72,7 +79,7 @@ try {
   await page.fill('#shop-name', 'سوبرماركت الأمل');
   await page.fill('#shop-phone', '0599123456');
   await idle();
-  if (!only.length || only.includes('setup')) await shoot('setup');
+  if (!process.env.SHOTS_HOOK && (!only.length || only.includes('setup'))) await shoot('setup');
   await page.click('button[type=submit]');
   await page.click('[data-type=grocery]');
   await page.waitForSelector('.tabbar', { state: 'attached' });
@@ -211,5 +218,16 @@ async function seed() {
     ] },
   });
   await app.chat.send(app.chat.GROUP, 'صباح الخير، وصلت بضاعة الألبان — رتّبوها في الثلاجة.');
+
+  // المحاسبة: خزنة، تحويل النقد إليها، سندات، وشيكات بمواعيدها
+  const safe = await app.accounting.saveBox({ name: 'الخزنة', kind: 'cash', opening: 250000 });
+  const drawer = (await app.accounting.moneyChoices())[0];
+  await app.accounting.saveVoucher({ type: 'transfer', amount: 20000, account: drawer.id, to_account: safe.id, note: 'نقد آخر اليوم' });
+  await app.accounting.saveVoucher({ type: 'payment', amount: 15000, account: safe.id, contra: 'owner', party_name: 'صاحب المحل', note: 'مصروف البيت' });
+  await app.accounting.saveVoucher({ type: 'receipt', amount: 10000, account: drawer.id, contra: 'other_income', party_name: 'شركة المشروبات', note: 'إيجار ثلاجة العرض' });
+  const inDays = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  await app.accounting.saveCheque({ direction: 'in', number: '100245', bank: 'بنك فلسطين', amount: 8500, due_date: inDays(2), party_type: 'customer', party_id: c3.id, party_name: c3.name });
+  await app.accounting.saveCheque({ direction: 'in', number: '100312', bank: 'البنك الإسلامي', amount: 6000, due_date: inDays(25), party_type: 'customer', party_id: c1.id, party_name: c1.name });
+  await app.accounting.saveCheque({ direction: 'out', number: '000781', bank: 'بنك فلسطين', amount: 60000, due_date: inDays(12), party_type: 'supplier', party_id: s1.id, party_name: s1.name });
   return { customer: c1.id, supplier: s1.id, warehouse: wh.id, product: P['حليب طازج 1 لتر'].id };
 }

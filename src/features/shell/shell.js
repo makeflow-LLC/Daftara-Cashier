@@ -44,7 +44,7 @@ export function mountShell(root) {
   const side = h('nav', { class: 'sidebar', 'aria-label': 'القائمة الرئيسية' });
   let visible = [];
   function paintSide() {
-    visible = SIDE.filter((it) => !it.perm || app.can(it.perm));
+    visible = SIDE.filter((it) => (!it.perm || app.can(it.perm)) && (!it.feature || app.feature(it.feature)));
     const current = sideItemFor(here(), visible);
     fill(side,
       h('div', { class: 'side-shop' }, h('span', { class: 'side-logo' }, (app.shop?.name || '؟').trim().charAt(0)), h('strong', null, app.shop?.name || 'دفترة كاشير')),

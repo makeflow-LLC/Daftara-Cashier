@@ -9,6 +9,7 @@ export const SIDE = [
   { path: '/reports', icon: 'chart', label: 'التقارير', match: ['/reports'], perm: 'reports' },
   { path: '/cash', icon: 'cash', label: 'الصندوق', match: ['/cash'], perm: 'cash' },
   { path: '/expenses', icon: 'coins', label: 'المصاريف', match: ['/expenses', '/payroll'], perm: 'cash' },
+  { path: '/accounting', icon: 'scale', label: 'المحاسبة', match: ['/accounting'], perm: 'cash', feature: 'accounting' },
   { path: '/more', icon: 'more', label: 'المزيد', match: ['/more', '/settings', '/account', '/subscribe', '/chat', '/wallet'] },
   { path: '/help', icon: 'help', label: 'المساعدة', match: ['/help'] },
 ];
