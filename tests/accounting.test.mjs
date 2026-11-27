@@ -233,9 +233,9 @@ test('books: a period trial balance carries the earlier balance forward', async 
   const chart = makeChart({ methods: [{ id: 'c', kind: 'cash', name: 'نقدًا' }] });
   const entries = buildJournal({
     vouchers: [
-      { id: 'v1', type: 'receipt', status: 'final', amount: 1000, account: 'x', contra: 'owner', voucher_date: '2026-01-10T10:00:00.000Z', created_at: '2026-01-10T10:00:00.000Z' },
-      { id: 'v2', type: 'payment', status: 'final', amount: 300, account: 'x', contra: 'other_expense', voucher_date: '2026-02-05T10:00:00.000Z', created_at: '2026-02-05T10:00:00.000Z' },
-      { id: 'v3', type: 'payment', status: 'void', amount: 999, account: 'x', contra: 'other_expense', voucher_date: '2026-02-06T10:00:00.000Z', created_at: '2026-02-06T10:00:00.000Z' },
+      { id: 'v1', type: 'receipt', status: 'final', amount: 1000, account: 'x', contra: 'owner', voucher_at: '2026-01-10T10:00:00.000Z', created_at: '2026-01-10T10:00:00.000Z' },
+      { id: 'v2', type: 'payment', status: 'final', amount: 300, account: 'x', contra: 'other_expense', voucher_at: '2026-02-05T10:00:00.000Z', created_at: '2026-02-05T10:00:00.000Z' },
+      { id: 'v3', type: 'payment', status: 'void', amount: 999, account: 'x', contra: 'other_expense', voucher_at: '2026-02-06T10:00:00.000Z', created_at: '2026-02-06T10:00:00.000Z' },
     ],
     boxes: [{ id: 'x', name: 'الخزنة', kind: 'cash', opening: 0 }],
   }, makeChart({ boxes: [{ id: 'x', name: 'الخزنة', kind: 'cash' }] }));
@@ -592,4 +592,40 @@ test('feature: accounting is on for every shop type, existing shops get it, and 
   assert.equal(resolveFeatures('clothing', { accounting: false }).accounting, false);
   const item = SIDE.find((i) => i.path === '/accounting');
   assert.deepEqual([item.perm, item.feature], ['cash', 'accounting']);
+});
+
+test('books: an edited invoice, a cash return and a removed cheque leave nothing in suspense', async () => {
+  const t = await setup();
+  const { product } = await t.products.save({ name: 'سكر', sell_price: 1000, cost_price: 600 });
+  await t.products.save({ ...product }, { qty: 50000 });
+  const customer = await t.customers.create({ name: 'أم أحمد' });
+  // بيع بتحويل برسوم ثم تعديل الفاتورة إلى نقد وآجل: الأصلية تُلغى والجديدة برقمها
+  const line = (qty) => makeLine(product, { qty, avgCost: 600 });
+  const first = await t.sales.checkout({ lines: [line(3000)], payments: [{ kind: 'transfer', method_id: t.wallet.id, amount: 3000, fee_bp: 150 }] });
+  const edited = await t.sales.checkout({
+    replaces: first.invoice.id, lines: [line(4000)], customerId: customer.id,
+    payments: [{ kind: 'cash', method_id: t.cashMethod.id, amount: 1500 }, { kind: 'credit', amount: 2500 }],
+  });
+  assert.equal(edited.invoice.number, first.invoice.number);
+  // مرتجع نقدي من فاتورة أخرى، وشيك سُجّل خطأ ثم حُذف
+  const cashSale = await sellCash(t, product, 2000);
+  const ret = await t.sales.returnable(cashSale.invoice.id);
+  await t.sales.processReturn(cashSale.invoice.id, [{ line: ret.rows[0].line, qty: 1000 }], 'cash');
+  const ch = await t.accounting.saveCheque({ direction: 'in', amount: 900, due_date: '2026-12-01', party_type: 'customer', party_id: customer.id, party_name: 'أم أحمد' });
+  await t.accounting.removeCheque(ch.id);
+  const b = await t.accounting.books();
+  assertBalanced(b);
+  assert.ok(!b.entries.some((e) => e.lines.some((l) => l.account === 'suspense')), 'no entry touches suspense');
+  assert.equal(bal(b, 'ar'), (await t.customers.get(customer.id)).balance);
+  assert.equal(bal(b, 'ar'), 2500);
+  assert.equal(bal(b, DRAWER), (await t.cash.summary()).expectedCash);
+  assert.equal(bal(b, DRAWER), 1500 + 2000 - 1000);
+  // الفاتورة الملغاة بالتعديل: المحفظة والرسوم تعودان صفرًا
+  assert.equal(bal(b, `method:${t.wallet.id}`), 0);
+  assert.equal(bal(b, 'fees'), 0);
+  assert.equal(bal(b, 'cheques_in'), 0);
+  assert.equal(-bal(b, 'sales'), 4000 + 2000);
+  assert.equal(bal(b, 'sales_returns'), 1000);
+  const stock = (await t.inventory.productsWithStock()).reduce((a, p) => a + stockValue(p.qty, p.avg_cost), 0);
+  assert.equal(bal(b, 'inventory'), stock);
 });

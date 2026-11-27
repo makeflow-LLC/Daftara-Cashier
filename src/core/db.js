@@ -45,6 +45,6 @@ export function createDb(Dexie, name = DB_NAME) {
   // 3: المحادثة الداخلية والتعميمات، ومخزون المخازن الخارجية
   db.version(3).stores({ messages: 'id, created_at, kind', wh_stock: '[branch_id+product_id], branch_id, product_id' });
   // 4: السندات (قبض، صرف، تحويل، قيد) والشيكات
-  db.version(4).stores({ vouchers: 'id, type, voucher_date', cheques: 'id, due_date, status' });
+  db.version(4).stores({ vouchers: 'id, type, voucher_at', cheques: 'id, due_date, status' });
   return db;
 }

@@ -147,7 +147,7 @@ export function createAccountingRepo({ db, store, getContext, clock, getSettings
         contra: v.type === 'receipt' || v.type === 'payment' ? v.contra || null : null,
         party_name: v.party_name ? String(v.party_name).trim().slice(0, 80) || null : null,
         note: v.note ? String(v.note).trim().slice(0, 200) || null : null,
-        voucher_date: v.date || clock(),
+        voucher_at: v.date || clock(),
         lines: v.type === 'journal' ? (v.lines || []).map((l) => ({ account: l.account, debit: l.debit || 0, credit: l.credit || 0 })) : null,
       };
       const err = voucherProblem(row);
@@ -176,7 +176,7 @@ export function createAccountingRepo({ db, store, getContext, clock, getSettings
         const { seq, number } = await nextNumber('payment');
         return w.put('vouchers', {
           type: 'payment', seq, number, status: 'final', amount, account: method ? method.id : null, contra: `exp:${exp.category}`,
-          party_name: party_name ? String(party_name).trim().slice(0, 80) || null : null, note: exp.note, voucher_date: exp.spent_at,
+          party_name: party_name ? String(party_name).trim().slice(0, 80) || null : null, note: exp.note, voucher_at: exp.spent_at,
           ref_table: 'expenses', ref_id: e.id, device_id: getContext().deviceId ?? null,
         });
       });
@@ -225,7 +225,7 @@ export function createAccountingRepo({ db, store, getContext, clock, getSettings
       for (const v of vs) {
         if (v.deleted) continue;
         out.push({
-          key: `v:${v.id}`, source: 'voucher', id: v.id, type: v.type, number: v.number, date: v.voucher_date || v.created_at, amount: v.amount,
+          key: `v:${v.id}`, source: 'voucher', id: v.id, type: v.type, number: v.number, date: v.voucher_at || v.created_at, amount: v.amount,
           party: v.party_name || null, accountId: v.account, toId: v.to_account, contra: v.contra, note: v.note, lines: v.lines, ref_table: v.ref_table,
           cancelled: v.status === 'void' || (v.ref_table === 'expenses' && deadExp.has(v.ref_id)), partyId: null,
         });

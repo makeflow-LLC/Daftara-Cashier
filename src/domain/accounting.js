@@ -287,6 +287,8 @@ export function buildJournal(data, chart) {
 
   const invById = new Map(invoices.filter((i) => !i.deleted).map((i) => [i.id, i]));
   const chequeById = new Map(cheques.filter((c) => !c.deleted).map((c) => [c.id, c]));
+  // شيك حُذف (سُجّل خطأ): قيوده وقيودها العكسية تبقى في كشف الزبون، ومقابلها حساب الشيكات نفسه فتتصافى
+  const chequeAny = new Map(cheques.map((c) => [c.id, c]));
   const paysOf = new Map();   // invoice_id → دفعات (غير الآجل)
   const loose = [];           // دفعات بلا فاتورة
   for (const p of payments) {
@@ -376,7 +378,7 @@ export function buildJournal(data, chart) {
 
   // ----- قيود الزبائن والتجار بلا فاتورة ولا دفعة: شيك، رصيد سابق، دين يدوي -----
   for (const x of cust.rest) {
-    const cheque = x.payment_id ? chequeById.get(x.payment_id) : null;
+    const cheque = x.payment_id ? chequeAny.get(x.payment_id) : null;
     const contra = cheque ? (cheque.direction === 'in' ? 'cheques_in' : 'cheques_out')
       : x.type === 'opening' || x.type === 'import' ? 'capital' : x.type === 'adjustment' && !x.invoice_id ? 'sales' : 'suspense';
     const memo = cheque ? chequeMemo(cheque, x, cn(x.customer_id)) : x.type === 'opening' ? `رصيد سابق على ${cn(x.customer_id)}` : x.type === 'import' ? `رصيد مستورد من دفترة: ${cn(x.customer_id)}`
@@ -386,7 +388,7 @@ export function buildJournal(data, chart) {
     e.done();
   }
   for (const x of supp.rest) {
-    const cheque = x.payment_id ? chequeById.get(x.payment_id) : null;
+    const cheque = x.payment_id ? chequeAny.get(x.payment_id) : null;
     const contra = cheque ? (cheque.direction === 'in' ? 'cheques_in' : 'cheques_out')
       : x.type === 'opening' ? 'capital' : x.type === 'adjustment' && !x.invoice_id ? 'purchases_misc' : 'suspense';
     const memo = cheque ? chequeMemo(cheque, x, sn(x.supplier_id), true) : x.type === 'opening' ? `رصيد سابق لـ ${sn(x.supplier_id)}`
@@ -439,7 +441,7 @@ export function buildJournal(data, chart) {
   for (const v of vouchers) {
     if (!liveVoucher(v)) continue;
     const ref = { type: 'voucher', id: v.id };
-    const date = v.voucher_date || v.created_at;
+    const date = v.voucher_at || v.created_at;
     if (v.type === 'journal') {
       const e = entry(`v:${v.id}`, date, 'journal', v.note || 'قيد يومية', { number: v.number, ref });
       for (const l of Array.isArray(v.lines) ? v.lines : []) { e.dr(l.account, l.debit || 0); e.cr(l.account, l.credit || 0); }

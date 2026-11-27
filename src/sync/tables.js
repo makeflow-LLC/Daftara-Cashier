@@ -70,7 +70,7 @@ export const TABLES = [
   // السندات: قبض وصرف وتحويل بين الصناديق وقيد يومية. تُكتب مرة؛ بعدها الإلغاء فقط (status = void)
   { name: 'vouchers', remote: 'cashier_vouchers', mode: 'lww', columns: {
     id: null, shop_id: null, number: '', seq: 0, type: 'receipt', status: 'final', amount: 0, account: null, to_account: null,
-    contra: null, party_name: null, ref_table: null, ref_id: null, lines: null, note: null, voucher_date: null,
+    contra: null, party_name: null, ref_table: null, ref_id: null, lines: null, note: null, voucher_at: null,
     device_id: null, created_by: null, ...LWW } },
   // الشيكات: واردة (in) وصادرة (out). أثرها على كشف الزبون/التاجر قيود تحمل payment_id = رقم الشيك
   { name: 'cheques', remote: 'cashier_cheques', mode: 'lww', columns: {

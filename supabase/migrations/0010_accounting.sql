@@ -19,7 +19,7 @@ create table if not exists public.cashier_vouchers (
   ref_table text, ref_id uuid,                    -- سند أثره المالي في سجل آخر (مصروف): expenses + رقمه
   lines jsonb,                                    -- لقيد اليومية: [{"account":"…","debit":0,"credit":0,"note":"…"}]
   note text check (note is null or length(note) <= 500),
-  voucher_date timestamptz not null default now(),
+  voucher_at timestamptz not null default now(),
   device_id uuid, created_by uuid,
   created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
   deleted boolean not null default false, server_seq bigint, server_at timestamptz
