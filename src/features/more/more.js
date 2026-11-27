@@ -32,6 +32,7 @@ export function renderMore(el) {
       tile('cash', 'الصندوق', 'amber', go('/cash'), can('cash')),
       tile('coins', 'المصاريف', 'pink', go('/expenses'), can('cash')),
       tile('users', 'الرواتب', 'violet', go('/payroll'), isOwner),
+      tile('scale', 'المحاسبة والشيكات', 'green', go('/accounting'), can('cash') && app.feature('accounting')),
       tile('box', 'المخزون', 'violet', go('/inventory'), can('purchases')),
       tile('truck', 'ديون التجار', 'teal', go('/suppliers'), can('purchases')),
       tile('warehouse', 'المخازن والنقل', 'blue', go('/inventory/warehouses'), can('purchases')),

@@ -54,6 +54,11 @@ const P = {
   rocket: '<path d="M12 15c-1.5-1-3-3-3-3s1-6 7-9c1 5-1 9-4 12Z"/><path d="M9 12 5 13l-1 4 4-1M12 15l-1 4 4-1 1-4"/><circle cx="14.5" cy="8.5" r="1.3"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   coins: '<ellipse cx="9" cy="7" rx="6" ry="3"/><path d="M3 7v5c0 1.7 2.7 3 6 3s6-1.3 6-3V7"/><path d="M9 15v2c0 1.7 2.7 3 6 3s6-1.3 6-3v-5c0-1.7-2.7-3-6-3"/>',
+  scale: '<path d="M12 4v16M8 20h8M5 7h14"/><path d="m5 7-2.5 6a2.7 2.7 0 0 0 5 0L5 7ZM19 7l-2.5 6a2.7 2.7 0 0 0 5 0L19 7Z"/>',
+  bank: '<path d="M3 9.5 12 4l9 5.5"/><path d="M4.5 9.5h15M6.5 10v7M10.5 10v7M13.5 10v7M17.5 10v7M3.5 20h17M5 17h14"/>',
+  cheque: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h6M6 14h3.5M13.5 14.5c.8-1.6 1.7-1.6 2.3 0s1.6 1 2.7-.6"/>',
+  book: '<path d="M5 4.5h11a3 3 0 0 1 3 3v12H8a3 3 0 0 1-3-3v-12Z"/><path d="M5 16.5a3 3 0 0 1 3-3h11M9 8.5h6"/>',
+  safe: '<rect x="3.5" y="4" width="17" height="15" rx="2.5"/><circle cx="12" cy="11.5" r="3"/><path d="M12 8.5v-1M12 15.5v-1M7 19v2M17 19v2"/>',
   wallet: '<path d="M3 7a2 2 0 0 1 2-2h13v4"/><path d="M3 7v11a2 2 0 0 0 2 2h15V9H5a2 2 0 0 1-2-2Z"/><circle cx="16" cy="14.5" r="1.2"/>',
 };
 

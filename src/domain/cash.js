@@ -7,9 +7,9 @@ import { dateTimeText } from './invoice.js';
 /**
  * payments: دفعات الفترة. methodNames: Map(id → اسم).
  * expenses: مجموع المصاريف التي دُفعت نقدًا من الدرج في الفترة (domain/expenses.js).
- * يرجع { opening, cashIn, cashOut, expenses, expectedCash, methods: [{ key, name, kind, total }], credit }.
+ * يرجع { opening, cashIn, cashOut, expenses, extraIn, extraOut, expectedCash, methods: [{ key, name, kind, total }], credit }.
  */
-export function sessionSummary({ opening = 0, payments = [], methodNames = new Map(), expenses = 0 }) {
+export function sessionSummary({ opening = 0, payments = [], methodNames = new Map(), expenses = 0, extraIn = 0, extraOut = 0 }) {
   const cash = payments.filter((p) => p.method_kind === 'cash');
   const cashIn = sum(cash.filter((p) => p.direction === 'in'), (p) => p.amount);
   const cashOut = sum(cash.filter((p) => p.direction === 'out'), (p) => p.amount);
@@ -22,7 +22,8 @@ export function sessionSummary({ opening = 0, payments = [], methodNames = new M
     by.set(key, row);
   }
   const credit = sum(payments.filter((p) => p.method_kind === 'credit' && p.direction === 'in'), (p) => p.amount);
-  return { opening, cashIn, cashOut, expenses, expectedCash: opening + cashIn - cashOut - expenses, methods: [...by.values()], credit };
+  // extraIn / extraOut: ما دخل الدرج وخرج منه بالسندات والتحويلات بين الصناديق والشيكات (domain/accounting.js)
+  return { opening, cashIn, cashOut, expenses, extraIn, extraOut, expectedCash: opening + cashIn - cashOut - expenses + extraIn - extraOut, methods: [...by.values()], credit };
 }
 
 /** نتيجة العدّ: الفرق موجب = زيادة، سالب = عجز. */
@@ -40,6 +41,8 @@ export function closingText({ shopName, session, summary, currency = 'ILS' }) {
   const out = [`*إغلاق صندوق ${shopName}*`, `من ${dateTimeText(session.opened_at)} إلى ${dateTimeText(session.closed_at)}`,
     `نقد أول اليوم: ${m(summary.opening)}`, `دخل نقدًا: ${m(summary.cashIn)}`, `خرج نقدًا: ${m(summary.cashOut)}`,
     ...(summary.expenses ? [`مصاريف من الدرج: ${m(summary.expenses)}`] : []),
+    ...(summary.extraIn ? [`سندات قبض وتحويلات إلى الدرج: ${m(summary.extraIn)}`] : []),
+    ...(summary.extraOut ? [`سندات صرف وتحويلات من الدرج: ${m(summary.extraOut)}`] : []),
     `المتوقع في الدرج: ${m(summary.expectedCash)}`, `المعدود فعلًا: ${m(session.counted_cash)}`,
     `*${STATE_LABEL[r.state]}${r.difference ? `: ${m(Math.abs(r.difference))}` : ''}*`];
   for (const x of summary.methods) out.push(`${x.name}: ${m(x.total)}`);

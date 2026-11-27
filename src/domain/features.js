@@ -11,21 +11,22 @@ export const FEATURES = Object.freeze({
   labels:       { name: 'ملصقات الباركود', hint: 'طباعة باركود داخلي للأصناف بلا باركود' },
   stockCount:   { name: 'جرد المخزون', hint: 'عدّ البضاعة ومقارنتها بالمسجّل' },
   quickItems:   { name: 'أزرار البيع السريع', hint: 'أصناف بلا باركود بضغطة واحدة' },
+  accounting:   { name: 'المحاسبة والصناديق والشيكات', hint: 'سندات قبض وصرف، خزنة وحسابات بنك، شيكات بمواعيدها، وميزان المراجعة للمحاسب' },
 });
 
 export const SHOP_TYPES = Object.freeze({
   grocery:     { name: 'بقالة وسوبرماركت', icon: 'basket',
-                 on: ['units', 'expiry', 'images', 'splitPayment', 'labels', 'stockCount', 'quickItems'] },
+                 on: ['units', 'expiry', 'images', 'splitPayment', 'labels', 'stockCount', 'quickItems', 'accounting'] },
   clothing:    { name: 'ملابس وأحذية', icon: 'shirt',
-                 on: ['images', 'splitPayment', 'labels', 'stockCount'] },
+                 on: ['images', 'splitPayment', 'labels', 'stockCount', 'accounting'] },
   fabrics:     { name: 'أقمشة', icon: 'ruler',
-                 on: ['units', 'images', 'splitPayment', 'labels', 'stockCount', 'quickItems'] },
+                 on: ['units', 'images', 'splitPayment', 'labels', 'stockCount', 'quickItems', 'accounting'] },
   accessories: { name: 'إكسسوارات جوالات', icon: 'phone',
-                 on: ['images', 'multiCurrency', 'splitPayment', 'labels', 'stockCount'] },
+                 on: ['images', 'multiCurrency', 'splitPayment', 'labels', 'stockCount', 'accounting'] },
   pharmacy:    { name: 'صيدلية', icon: 'pill',
-                 on: ['units', 'expiry', 'splitPayment', 'stockCount'] },
+                 on: ['units', 'expiry', 'splitPayment', 'stockCount', 'accounting'] },
   other:       { name: 'محل آخر', icon: 'store',
-                 on: ['units', 'images', 'splitPayment', 'labels', 'stockCount', 'quickItems'] },
+                 on: ['units', 'images', 'splitPayment', 'labels', 'stockCount', 'quickItems', 'accounting'] },
 });
 
 /** خريطة الميزات الافتراضية لنوع محل: { units: true, expiry: false, ... } */

@@ -14,6 +14,7 @@ import { app } from '../../core/app.js';
 import { bus } from '../../core/bus.js';
 import { navigate } from '../../core/router.js';
 import { openLink } from '../customers/customers.js';
+import { newChequeSheet, openCheque } from '../accounting/cheques.js';
 import { debtTabs } from '../customers/tabs.js';
 import { showReceipt } from '../sale/receipt.js';
 import { dueStatus, supplierDues } from '../../domain/dues.js';
@@ -158,6 +159,8 @@ export function renderSuppliers(el) {
 export async function renderSupplier(el, params) {
   let s = await app.inventory.supplier(params.id);
   if (!s) { navigate('/suppliers', { replace: true }); return undefined; }
+  // قيود الشيكات (payment_id = رقم الشيك) تُفتح على الشيك نفسه ولا تُعدَّل من الكشف
+  let chequeIds = await app.accounting.chequeIds();
   const top = h('div'); const list = h('div'); const title = h('h1', null, s.name);
   el.append(
     h('header', { class: 'topbar' }, h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'رجوع', onclick: () => history.back() }, icon('back')),
@@ -192,7 +195,7 @@ export async function renderSupplier(el, params) {
         miniBtn('clipboard', 'طلبية', () => navigate('/inventory?reorder=1'))));
     if (isWide() && s.entries.length) {
       const amt = (v) => num(formatMoney(v, cur(), { symbol: false }));
-      const tapOf = (e) => (e.cancelled ? null : e.invoice_id ? (e.type === 'purchase' ? () => showReceipt(e.invoice_id, { doneLabel: 'إغلاق', doneIcon: 'x' }) : null) : editableEntry(e) && app.can('delete') ? () => entrySheet(e) : null);
+      const tapOf = (e) => (e.cancelled ? null : e.payment_id && chequeIds.has(e.payment_id) ? () => openCheque(e.payment_id, load) : e.invoice_id ? (e.type === 'purchase' ? () => showReceipt(e.invoice_id, { doneLabel: 'إغلاق', doneIcon: 'x' }) : null) : editableEntry(e) && app.can('delete') ? () => entrySheet(e) : null);
       fill(list, h('div', { class: 'section' }, h('h2', { class: 'section-title' }, 'كشف الحساب'), dataTable({
         rows: s.entries,
         onRow: (e) => { const t = tapOf(e); if (t) t(); },
@@ -218,7 +221,7 @@ export async function renderSupplier(el, params) {
               h('span', { class: 'row-sub' }, num(dateText(e.created_at)))),
             h('span', { class: 'row-end' }, num(formatMoney(Math.abs(e.amount), cur(), { symbol: false }))));
         }
-        const tap = e.invoice_id ? (e.type === 'purchase' ? () => showReceipt(e.invoice_id, { doneLabel: 'إغلاق', doneIcon: 'x' }) : null) : editableEntry(e) && app.can('delete') ? () => entrySheet(e) : null;
+        const tap = e.payment_id && chequeIds.has(e.payment_id) ? () => openCheque(e.payment_id, load) : e.invoice_id ? (e.type === 'purchase' ? () => showReceipt(e.invoice_id, { doneLabel: 'إغلاق', doneIcon: 'x' }) : null) : editableEntry(e) && app.can('delete') ? () => entrySheet(e) : null;
         return h(tap ? 'button' : 'div', { class: `row ${tap ? 'row-tap' : ''}`, type: tap ? 'button' : null, onclick: tap },
           h('span', { class: `row-ic ${e.amount > 0 ? 'ic-debt' : ''}` }, icon(e.amount > 0 ? (e.type === 'purchase' ? 'truck' : 'plus') : 'check', 20)),
           h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, label, e.note ? h('span', { class: 'muted' }, ` · ${e.note}`) : null),
@@ -264,7 +267,8 @@ export async function renderSupplier(el, params) {
   async function paySheet() {
     const amt = input({ dir: 'ltr', inputmode: 'decimal', class: 'input input-xl', placeholder: '0' });
     const note = input({ maxlength: 80, placeholder: 'مثال: سند 55 (اختياري)' });
-    const methods = (await app.sales.paymentMethods()).filter((m) => m.kind !== 'credit');
+    // طرق الدفع، ومعها صناديق المحل الإضافية (خزنة، حساب بنك) إن وُجدت: الدفعة تخرج من حيث دُفعت
+    const methods = [...(await app.sales.paymentMethods()).filter((m) => m.kind !== 'credit'), ...(app.feature('accounting') ? (await app.accounting.moneyChoices()).filter((m) => m.box) : [])];
     let method = methods.find((m) => m.kind === 'cash') || methods[0] || null;
     const chips = h('div', { class: 'chips' });
     const hint = h('p', { class: 'muted small' });
@@ -292,7 +296,13 @@ export async function renderSupplier(el, params) {
       s.balance > 0 ? h('div', { class: 'chips pay-quick' }, h('button', { class: 'chip', type: 'button', onclick: () => { amt.value = plain(s.balance); } }, 'كامل المبلغ ', num(formatMoney(s.balance, cur())))) : null,
       methods.length > 1 ? h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'دفعت'), chips, hint) : null,
       field('ملاحظة', note),
-      button('حفظ الدفعة', { type: 'submit', block: true, size: 'lg', icon: 'check' })), { title: `دفعة إلى ${s.name}` });
+      button('حفظ الدفعة', { type: 'submit', block: true, size: 'lg', icon: 'check' }),
+      // دفع بشيك: ما عليك له ينزل الآن، والمال يخرج حين يصرف الشيك (المحاسبة ← الشيكات)
+      app.feature('accounting') && app.can('cash') ? button('دفعت بشيك', { kind: 'outline', block: true, icon: 'cheque', onclick: () => {
+        const v = parseMoney(amt.value || '', cur());
+        close();
+        newChequeSheet({ direction: 'out', party: s, partyType: 'supplier', amount: v > 0 ? v : null, onSaved: async () => { await load(); await afterPayment(); } });
+      } }) : null), { title: `دفعة إلى ${s.name}` });
     setTimeout(() => amt.focus(), 150);
   }
 
@@ -346,7 +356,7 @@ export async function renderSupplier(el, params) {
     setTimeout(() => { amt.focus(); amt.select(); }, 150);
   }
 
-  async function load() { const n = await app.inventory.supplier(params.id); if (n) { s = n; paint(); } }
+  async function load() { const n = await app.inventory.supplier(params.id); chequeIds = await app.accounting.chequeIds(); if (n) { s = n; paint(); } }
   paint();
   return bus.on('data', (e) => { if (e.source === 'remote' && (e.tables.includes('suppliers') || e.tables.includes('supplier_entries'))) load(); });
 }

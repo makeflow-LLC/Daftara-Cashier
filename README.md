@@ -250,6 +250,41 @@ payments and backup stay open.
   Until then the app keeps working: unknown columns are dropped from uploads and messages wait in the outbox
   (`schemaGap` in `sync/engine.js`), but voucher numbers and salary links uploaded in that window stay device-only.
 
+## Accounting: cashboxes, vouchers, cheques and the books
+
+Nobody posts a journal entry to sell. The books are **derived** from what the shop already records, so they can never
+drift from the rest of the app, and nothing is stored as a balance.
+
+- `src/domain/accounting.js` — pure. `makeChart` (fixed numbered accounts + one per transfer payment method, cashbox,
+  expense category and custom account), `buildJournal` (every invoice, payment, expense, stock movement, cheque, voucher
+  and drawer session becomes a balanced double-entry; a row whose counterpart has not synced yet lands in «فروقات تحتاج
+  مراجعة» instead of unbalancing anything), `trialBalance`, `accountLedger`, `incomeStatement`, `balanceSheet`, `position`
+  («where is my money»), `simulateDrawer` (mirrors the cash screen: without a session each day starts from zero, a session
+  starts from its opening cash, closing compares the count and hands the cash to the owner's current account).
+  Guaranteed by `tests/accounting.test.mjs`: AR = customer statements, AP = supplier statements, drawer = «يجب أن يكون في
+  الدرج الآن», inventory = stock value (a dated revaluation entry absorbs cost edits and rounding), net income = the
+  profit report.
+- `src/domain/cheques.js` — pure: received (`in`) and issued (`out`) cheques, what can be done with one (`clear`,
+  `bounce`, `endorse` to a supplier, `cancel`), due list and reminder texts. A cheque's effect on a customer or supplier
+  statement is append-only entries carrying `payment_id = cheque.id` — the statement screens open the cheque for them
+  instead of the edit sheet.
+- Tables (migration `0010_accounting.sql`): `vouchers` (receipt / payment / transfer / journal; written once, then only
+  `status = void`) and `cheques` (status changes). Cashboxes and custom accounts live in `cashier_shops.settings`
+  (`boxes`, `accounts`). A cashbox is used as a payment method (`method_id = box id`, `method_kind = 'transfer'`), so
+  customer payments, supplier payments and expenses can go to or from a box with no schema change.
+  Supplier payments now get a voucher number in `payments.number` (`A-S0001`, counter `seq:payment`).
+- An expense voucher is an ordinary `expenses` row plus a `vouchers` row with `ref_table = 'expenses'` (the document:
+  number, payee); its money effect is counted once, from the expense.
+- `src/features/accounting/` — `repo.js` (books cached until any data change), `hub.js` (`/accounting`: net worth, where
+  the money is, three big actions; «أدوات المحاسب» is a per-device switch), `boxes.js`, `vouchers.js`, `cheques.js`,
+  `books.js` (trial balance, chart + ledger, journal with manual entries, statements; PDF/Excel through
+  `exportSections` in `features/reports/reports.js`).
+- The cash screen adds voucher, transfer and cashed-cheque flows to the expected drawer (`drawerExtras`).
+- Feature flag `accounting` (on for every shop type; off hides the tile and the sidebar item). Books need `reports` +
+  `see_profit`; boxes, vouchers and cheques need `cash`.
+- **Run `supabase/setup.sql` after releasing 1.9.0.** Until then vouchers and cheques wait in the outbox (missing table →
+  `schemaGap`), while the statement entries they wrote sync normally.
+
 ## Windows (desktop) and releases
 
 - `desktop/` — Electron wrapper (same `www`, flavor `desktop`): pages served from `app://cashier` (ES modules,
@@ -306,6 +341,7 @@ restored if the pull fails (`core/backup.js`).
    `node scripts/build-setup-sql.mjs`) → Run. Safe to re-run after every update.
    (1.1.0 adds `0006_shop_catalog.sql`: the WhatsApp catalog link shows "not available" until this is run.)
    (1.4.0 adds `0007_expenses_chat_warehouses.sql`: chat, announcements, salary links and voucher numbers sync only after this is run.)
+   (1.9.0 adds `0010_accounting.sql`: vouchers and cheques sync only after this is run.)
 2. Auth settings: enable **anonymous sign-ins** (`GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED=true`).
 3. GitHub → Settings → Secrets and variables → Actions: add `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
    Without them the app builds and works fully on the device, with sync off.

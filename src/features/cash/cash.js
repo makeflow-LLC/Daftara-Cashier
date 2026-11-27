@@ -34,11 +34,14 @@ export function renderCash(el) {
       h('div', { class: 'card' },
         kv('نقد أول اليوم', money(s.opening)), kv('دخل نقدًا (بيع ودفعات زبائن)', money(s.cashIn)), kv('خرج نقدًا (مشتريات، دفعات للتجار، مرتجع)', money(s.cashOut)),
         s.expenses ? kv('مصاريف من الدرج', money(s.expenses)) : null,
+        s.extraIn ? kv('سندات قبض وتحويلات إلى الدرج', money(s.extraIn)) : null,
+        s.extraOut ? kv('سندات صرف وتحويلات من الدرج', money(s.extraOut)) : null,
         ...s.methods.map((m) => kv(m.name, money(m.total))),
         s.credit ? kv('بيع آجل', money(s.credit)) : null),
       button('أغلق الصندوق', { block: true, size: 'lg', icon: 'check', onclick: () => closeSheet(s) }),
       s.virtual ? button('ابدأ اليوم بنقد في الدرج', { kind: 'outline', icon: 'cash', block: true, onclick: openSheetDay }) : null,
       button('المصاريف (كهرباء، إيجار، مواصلات…)', { kind: 'outline', icon: 'coins', block: true, onclick: () => navigate('/expenses') }),
+      app.feature('accounting') ? button('الصناديق: حوّل النقد إلى الخزنة أو البنك', { kind: 'outline', icon: 'safe', block: true, onclick: () => navigate('/accounting/boxes') }) : null,
     );
     const list = await app.cash.history();
     fill(hist, list.length ? h('div', { class: 'section' }, h('h2', { class: 'section-title' }, 'الإغلاقات السابقة'),
