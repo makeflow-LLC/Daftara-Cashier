@@ -113,6 +113,12 @@ on conflict (id) do update set status = excluded.status, updated_at = excluded.u
 update cashier_cheques set status = 'cleared', status_at = now(), account = 'drawer', updated_at = '2026-01-03T10:00:00Z';
 do $$ begin assert (select status from cashier_cheques) = 'cleared', 'cheque status changes'; end $$;
 do $$ begin assert (select heads ? 'cashier_vouchers' and heads ? 'cashier_cheques' from cashier_shop_heads where shop_id = '11111111-1111-1111-1111-111111111111'), 'voucher and cheque heads tracked for pull'; end $$;
+-- الضريبة ومركز التكلفة (0011)
+insert into cashier_invoices (id, shop_id, number, seq, type, total, tax, updated_at)
+values ('00000000-0000-0000-0000-0000000000c3', :S1, 'A-0001', 1, 'sale', 11600, 1600, '2026-01-01T10:00:00Z') on conflict (id) do nothing;
+update cashier_expenses set cost_center = '00000000-0000-0000-0000-0000000000c9', updated_at = '2026-01-04T10:00:00Z';
+update cashier_vouchers set cost_center = '00000000-0000-0000-0000-0000000000c9', updated_at = '2026-01-04T10:00:00Z';
+do $$ begin assert (select tax from cashier_invoices where number = 'A-0001') = 1600 and (select cost_center from cashier_expenses) is not null and (select cost_center from cashier_vouchers) is not null, 'invoice tax and cost centres stored'; end $$;
 select pg_temp.expect_error($q$delete from cashier_vouchers$q$, 'voucher hard delete');
 select pg_temp.expect_error($q$delete from cashier_cheques$q$, 'cheque hard delete');
 select pg_temp.expect_error($q$insert into cashier_vouchers (id, shop_id, number, seq, type, amount) values (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'A-X1', 1, 'gift', 1)$q$, 'bad voucher type');

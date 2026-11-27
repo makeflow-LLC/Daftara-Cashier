@@ -12,7 +12,7 @@ import { showReceipt } from '../sale/receipt.js';
 import { showVoucher } from '../customers/voucher.js';
 import { matchesInvoiceNumber } from '../../domain/numbering.js';
 
-const TYPES = [['', 'الكل'], ['sale', 'بيع'], ['sale_return', 'مرتجع'], ['purchase', 'شراء'], ['receipt', 'سندات القبض'], ['void', 'الملغاة']];
+const TYPES = [['', 'الكل'], ['sale', 'بيع'], ['sale_return', 'مرتجع'], ['purchase', 'شراء'], ['purchase_return', 'مرتجع شراء'], ['receipt', 'سندات القبض'], ['void', 'الملغاة']];
 const RANGES = [['today', 'اليوم'], ['week', 'آخر 7 أيام'], ['month', 'آخر 30 يومًا'], ['all', 'كل الوقت']];
 const ICON = { sale: 'receipt', sale_return: 'undo', purchase: 'truck', purchase_return: 'undo' };
 

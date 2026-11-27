@@ -285,6 +285,32 @@ drift from the rest of the app, and nothing is stored as a balance.
 - **Run `supabase/setup.sql` after releasing 1.9.0.** Until then vouchers and cheques wait in the outbox (missing table →
   `schemaGap`), while the statement entries they wrote sync normally.
 
+## Purchase returns, direct sale, tax and cost centres (1.10.0)
+
+- **Purchase returns** — `buildPurchaseReturn` / `purchaseReturnable` in `domain/inventory.js`, `returnPurchase` in the
+  inventory repo, screen `features/inventory/purchase-return.js` (`/inventory/purchase-return`, also a button on every
+  purchase receipt). Invoice type `purchase_return` (`A-Q0001`), movements `purchase_return` from where the goods entered
+  (shop or warehouse), limited to what was bought and is still in stock. Refund `credit` writes a supplier entry of type
+  `return`; `cash` writes an incoming cash payment and leaves the statement alone.
+- **Direct sale** — feature `directSale` (off by default): a «نقدًا» button on the sale screen checks out in cash for the
+  exact total with no pay sheet and no receipt sheet (F5 on desktop); a «آخر بيع» line reopens the receipt. Edits,
+  exchanges and zero totals still go through the pay sheet. Device preference `openSale` opens the app on `/sale`.
+- **Tax (VAT)** — `domain/tax.js`; shop setting `settings.tax = { enabled, rate (bp), inclusive, number, name }`,
+  screen `/settings/tax`. `cartTotals(lines, discount, fees, tax)` returns `tax`; inclusive tax is part of the total,
+  exclusive tax is added on top; `invoices.tax` (migration `0011`) stores it. Returns give back the proportional share.
+  Purchases: `purchaseTax` — «prices include tax» converts unit costs to net, so stock enters at cost before tax and
+  `invoice.total` stays what the supplier is owed. Tax is never profit: reports, today's summary and the sale screen
+  subtract it. Books: one liability account `vat` (credited by sales, debited by purchases and by a payment voucher with
+  contra `vat`); `taxReport` and `/accounting/tax`.
+- **Cost centres** — `domain/centers.js`; `settings.costCenters = [{ id, name, categories, active }]`. A category belongs
+  to one centre: its sales (after invoice discount and inclusive tax) and cost of goods go to that centre. Expenses and
+  vouchers carry `cost_center` (migration `0011`). transfer fees go to «بلا مركز» and damaged goods to their category's centre, so `centerReport` rows add up to the
+  profit report's net profit plus voucher income and expenses (`/accounting/centers`). The picker only appears once a centre exists.
+- **Sync** — a column an older server does not know is still stripped on upload, but rows that carried a value in it
+  are remembered (`meta stripped:<table>`) and re-sent with a fresh `updated_at` as soon as the server accepts full rows
+  (LWW tables). On pull, a row from an older server no longer wipes local values of columns it does not return.
+- **Run `supabase/setup.sql` after releasing 1.10.0** (`0011_tax_cost_centers.sql`).
+
 ## Windows (desktop) and releases
 
 - `desktop/` — Electron wrapper (same `www`, flavor `desktop`): pages served from `app://cashier` (ES modules,
@@ -342,6 +368,7 @@ restored if the pull fails (`core/backup.js`).
    (1.1.0 adds `0006_shop_catalog.sql`: the WhatsApp catalog link shows "not available" until this is run.)
    (1.4.0 adds `0007_expenses_chat_warehouses.sql`: chat, announcements, salary links and voucher numbers sync only after this is run.)
    (1.9.0 adds `0010_accounting.sql`: vouchers and cheques sync only after this is run.)
+   (1.10.0 adds `0011_tax_cost_centers.sql`: invoice tax and cost centres reach the server only after this is run; the app re-sends them by itself.)
 2. Auth settings: enable **anonymous sign-ins** (`GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED=true`).
 3. GitHub → Settings → Secrets and variables → Actions: add `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
    Without them the app builds and works fully on the device, with sync off.

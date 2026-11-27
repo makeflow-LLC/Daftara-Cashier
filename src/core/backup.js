@@ -5,7 +5,7 @@ import { makeBackup, validateBackup } from '../domain/tools.js';
 import { foldByLocation } from '../domain/stock.js';
 import { LICENSE_META } from './license.js';
 
-const META_KEYS = ['shopId', 'devicePrefix', 'internalSeq', 'seq:sale', 'seq:sale_return', 'seq:purchase', 'seq:receipt', 'seq:payment', 'seq:transfer', 'seq:journal'];
+const META_KEYS = ['shopId', 'devicePrefix', 'internalSeq', 'seq:sale', 'seq:sale_return', 'seq:purchase', 'seq:purchase_return', 'seq:receipt', 'seq:payment', 'seq:transfer', 'seq:journal'];
 
 export async function exportBackup(db) {
   const tables = {};

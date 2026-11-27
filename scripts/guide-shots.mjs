@@ -22,6 +22,15 @@ const cart = async () => {
   await app.sales.saveCurrent({ lines: [pick('حليب', 2), pick('تونة', 3), pick('خبز', 4), pick('سائل جلي', 1)], discount: null });
 };
 const proTools = async () => { const { app } = await import('/src/core/app.js'); await app.meta.set('acc:advanced', true); };
+const taxOn = async () => { const { app } = await import('/src/core/app.js'); await app.updateShopSettings({ tax: { enabled: true, rate: 1600, inclusive: true, number: '562481357' } }); };
+const directOn = async () => {
+  const { app } = await import('/src/core/app.js');
+  const { makeLine } = await import('/src/domain/cart.js');
+  await app.updateShopSettings({ tax: { enabled: false }, features: { ...app.features, directSale: true } });
+  const all = await app.products.list();
+  const pick = (n, qty) => { const p = all.find((x) => x.name.startsWith(n)); return makeLine(p, { qty: qty * 1000, avgCost: p.cost_price }); };
+  await app.sales.saveCurrent({ lines: [pick('حليب', 1), pick('خبز', 2)], discount: null });
+};
 const SHOTS = [
   { name: 'home', path: '/' }, { name: 'more', path: '/more' },
   { name: 'sale', path: '/sale', before: cart },
@@ -49,6 +58,10 @@ const SHOTS = [
   { name: 'cheques', path: '/accounting/cheques' }, { name: 'cheque', path: '/accounting/cheques', steps: [{ click: '.page .list .row' }] },
   { name: 'trial', path: '/accounting/trial' }, { name: 'ledger', path: '/accounting/ledger?account=ar' }, { name: 'chart', path: '/accounting/ledger' },
   { name: 'journal', path: '/accounting/journal' }, { name: 'statements', path: '/accounting/statements' },
+  { name: 'centers', path: '/accounting/centers' },
+  { name: 'purchase-return', path: '/inventory/purchase-return', steps: [{ click: '.page .list .row' }, { click: '.sheet .stepper button:last-child' }, { click: '.sheet .stepper button:last-child' }] },
+  { name: 'tax-settings', path: '/settings/tax', before: taxOn },
+  { name: 'sale-direct', path: '/sale', before: directOn },
 ];
 const only = process.argv.slice(2);
 const PORT = 8097;
@@ -228,6 +241,11 @@ async function seed() {
   const inDays = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
   await app.accounting.saveCheque({ direction: 'in', number: '100245', bank: 'بنك فلسطين', amount: 8500, due_date: inDays(2), party_type: 'customer', party_id: c3.id, party_name: c3.name });
   await app.accounting.saveCheque({ direction: 'in', number: '100312', bank: 'البنك الإسلامي', amount: 6000, due_date: inDays(25), party_type: 'customer', party_id: c1.id, party_name: c1.name });
+  // مراكز التكلفة: قسمان بتصنيفاتهما وسيارة توزيع لها مصاريفها
+  await app.accounting.saveCenter({ name: 'قسم الألبان', categories: [cats['ألبان']] });
+  await app.accounting.saveCenter({ name: 'قسم المنظفات', categories: [cats['منظفات']] });
+  const van = await app.accounting.saveCenter({ name: 'سيارة التوزيع' });
+  await app.expenses.save({ category: 'maintenance', amount: 6000, method: cash, note: 'غيار زيت', cost_center: van.id });
   await app.accounting.saveCheque({ direction: 'out', number: '000781', bank: 'بنك فلسطين', amount: 60000, due_date: inDays(12), party_type: 'supplier', party_id: s1.id, party_name: s1.name });
   return { customer: c1.id, supplier: s1.id, warehouse: wh.id, product: P['حليب طازج 1 لتر'].id };
 }

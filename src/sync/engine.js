@@ -114,6 +114,34 @@ export function createSyncEngine({ db, api, getContext, emit = () => {}, now = (
     return pushed;
   }
 
+  /**
+   * عمود لا يعرفه الخادم بعد (لم يُشغَّل setup.sql الجديد) يُرفع السجل بدونه. حتى لا تضيع قيمته هناك:
+   * نتذكر السجلات التي حملت فيه قيمة (meta stripped:<جدول>)، وحين يقبل الخادم السجلات كاملة نعيدها إلى الطابور
+   * فتُرفع بقيمتها. لجداول «آخر تعديل يفوز» فقط (الإضافة لا تُحدَّث).
+   */
+  async function rememberStripped(name, t, live) {
+    const key = `stripped:${name}`;
+    const miss = missingCols.get(name);
+    if (miss && miss.size) {
+      const ids = live.filter(([, r]) => [...miss].some((c) => r[c] !== undefined && JSON.stringify(r[c]) !== JSON.stringify(t.columns[c]))).map(([e]) => e.id);
+      if (!ids.length) return;
+      const old = await meta.get(key, []);
+      await meta.set(key, [...new Set([...old, ...ids])].slice(-5000));
+      return;
+    }
+    const waiting = await meta.get(key, null);
+    if (!waiting || !waiting.length) return;
+    await db.meta.delete(key);
+    for (const id of waiting) {
+      if (await db.outbox.where('key').equals(`${name}:${id}`).first()) continue;
+      const row = await db.table(name).get(id);
+      if (!row) continue;
+      // وقت تعديل جديد: حتى تفوز النسخة الكاملة على كل الأجهزة التي سحبت الناقصة
+      await db.table(name).put({ ...row, updated_at: now() });
+      await db.outbox.add({ key: `${name}:${id}`, table: name, id, rev: 1, tries: 0 });
+    }
+  }
+
   async function pushGroup(name, entries) {
     const t = TABLE[name];
     if (!t) { await db.outbox.bulkDelete(entries.map((e) => e.seq)); return 0; }
@@ -129,6 +157,7 @@ export function createSyncEngine({ db, api, getContext, emit = () => {}, now = (
       try {
         await api.rest.upsert(t.remote, live.map(([, r]) => strip(name, r)), opts);
         await db.outbox.bulkDelete(live.map(([e]) => e.seq));
+        if (t.mode === 'lww') await rememberStripped(name, t, live);
         return live.length;
       } catch (err) {
         if (!(err instanceof HttpError) || err.transient) throw err;
@@ -210,7 +239,10 @@ export function createSyncEngine({ db, api, getContext, emit = () => {}, now = (
           const pending = await db.outbox.where('key').equals(`${t.name}:${row.id}`).first();
           if (pending) await db.outbox.delete(pending.seq);
         }
-        await db.table(t.name).put(row);
+        // خادم أقدم من التطبيق يرجع السجل بلا أعمدته الجديدة: قيمها على الجهاز تبقى (لا تُمحى بنسخة ناقصة)
+        let put = row;
+        if (local) for (const col of Object.keys(t.columns)) if (!(col in row) && local[col] !== undefined) { if (put === row) put = { ...row }; put[col] = local[col]; }
+        await db.table(t.name).put(put);
         if (t.name === 'movements') touched.add(row.product_id);
         n++;
       }

@@ -18,8 +18,9 @@ export async function todaySummary(db) {
   const sales = inv.filter((i) => i.type === 'sale');
   const returns = inv.filter((i) => i.type === 'sale_return');
   const salesTotal = sum(sales, (i) => i.total) - sum(returns, (i) => i.total);
-  const profit = sum(sales, (i) => i.total - i.cost_total - i.fee_total)
-    - sum(returns, (i) => i.total - i.cost_total);
+  // الضريبة ليست ربحًا: يحصّلها المحل للدولة
+  const profit = sum(sales, (i) => i.total - (i.tax || 0) - i.cost_total - i.fee_total)
+    - sum(returns, (i) => i.total - (i.tax || 0) - i.cost_total);
 
   // النقد في الدرج: افتتاح الوردية المفتوحة + الداخل نقدًا − الخارج نقدًا منذ فتحها (أو منذ بداية اليوم)
   const sessions = (await db.cash_sessions.orderBy('opened_at').reverse().limit(5).toArray()).filter((s) => !s.deleted);

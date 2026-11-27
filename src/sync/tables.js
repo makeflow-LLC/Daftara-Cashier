@@ -36,7 +36,7 @@ export const TABLES = [
   { name: 'invoices', remote: 'cashier_invoices', mode: 'lww', columns: {
     id: null, shop_id: null, branch_id: null, device_id: null, number: '', seq: 0, type: 'sale', status: 'final',
     customer_id: null, supplier_id: null, original_invoice_id: null, currency: 'ILS', subtotal: 0, discount: 0,
-    total: 0, cost_total: 0, fee_total: 0, paid: 0, note: null, attachment_path: null, created_by: null, ...LWW } },
+    total: 0, cost_total: 0, fee_total: 0, paid: 0, tax: 0, note: null, attachment_path: null, created_by: null, ...LWW } },
   { name: 'invoice_lines', remote: 'cashier_invoice_lines', mode: 'append', columns: {
     id: null, shop_id: null, invoice_id: null, product_id: null, unit_id: null, name: '', unit: null,
     unit_factor: 1000, qty: 0, unit_price: 0, discount: 0, total: 0, unit_cost: 0, position: 0, ...APPEND } },
@@ -60,7 +60,7 @@ export const TABLES = [
     expected: null, counted: null, difference: null, note: null, closed_by: null, ...LWW } },
   { name: 'expenses', remote: 'cashier_expenses', mode: 'lww', columns: {
     id: null, shop_id: null, branch_id: null, category: null, amount: 0, method_id: null, cash_session_id: null,
-    note: null, attachment_path: null, spent_at: null, employee_id: null, period: null, created_by: null, ...LWW } },
+    note: null, attachment_path: null, spent_at: null, employee_id: null, period: null, cost_center: null, created_by: null, ...LWW } },
   { name: 'audit_log', remote: 'cashier_audit_log', mode: 'append', columns: {
     id: null, shop_id: null, user_id: null, device_id: null, action: '', entity: null, entity_id: null, data: null, ...APPEND } },
   // المحادثة الداخلية والتعميمات: kind = chat (رسالة) | announce (تعميم) | read (إشعار قراءة تعميم، ref_id = التعميم)
@@ -70,7 +70,7 @@ export const TABLES = [
   // السندات: قبض وصرف وتحويل بين الصناديق وقيد يومية. تُكتب مرة؛ بعدها الإلغاء فقط (status = void)
   { name: 'vouchers', remote: 'cashier_vouchers', mode: 'lww', columns: {
     id: null, shop_id: null, number: '', seq: 0, type: 'receipt', status: 'final', amount: 0, account: null, to_account: null,
-    contra: null, party_name: null, ref_table: null, ref_id: null, lines: null, note: null, voucher_at: null,
+    contra: null, party_name: null, ref_table: null, ref_id: null, lines: null, note: null, voucher_at: null, cost_center: null,
     device_id: null, created_by: null, ...LWW } },
   // الشيكات: واردة (in) وصادرة (out). أثرها على كشف الزبون/التاجر قيود تحمل payment_id = رقم الشيك
   { name: 'cheques', remote: 'cashier_cheques', mode: 'lww', columns: {

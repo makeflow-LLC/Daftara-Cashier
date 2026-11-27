@@ -63,14 +63,16 @@ export function renderAccounting(el) {
     const on = !!(await app.meta.get(ADVANCED_KEY, false));
     fill(pro,
       h('div', { class: 'list' }, switchRow({
-        title: 'أدوات المحاسب', sub: 'ميزان المراجعة، دفتر الأستاذ، قيود اليومية، الميزانية — الدفاتر تُكتب وحدها من عملك اليومي',
+        title: 'أدوات المحاسب', sub: 'ميزان المراجعة، دفتر الأستاذ، قيود اليومية، الميزانية، مراكز التكلفة، الضريبة — الدفاتر تُكتب وحدها من عملك اليومي',
         checked: on, onchange: async (v) => { await app.meta.set(ADVANCED_KEY, v); paintPro(); },
       })),
       on ? h('div', { class: 'hub hub-pro' },
         tile('scale', 'ميزان المراجعة', 'green', go('/accounting/trial')),
         tile('book', 'دفتر الأستاذ ودليل الحسابات', 'blue', go('/accounting/ledger')),
         tile('clipboard', 'قيود اليومية', 'violet', go('/accounting/journal')),
-        tile('chart', 'قائمة الدخل والميزانية', 'amber', go('/accounting/statements'))) : null,
+        tile('chart', 'قائمة الدخل والميزانية', 'amber', go('/accounting/statements')),
+        tile('tag', 'مراكز التكلفة', 'teal', go('/accounting/centers')),
+        tile('receipt', 'تقرير الضريبة', 'pink', go('/accounting/tax'))) : null,
     );
   }
 

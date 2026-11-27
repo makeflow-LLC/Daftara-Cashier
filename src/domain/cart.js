@@ -4,6 +4,7 @@ import { divRound, percentOf, allocate, sum, assertInt } from './money.js';
 import { lineAmount, packToBase, QTY_SCALE } from './units.js';
 import { signedQty, knownCost } from './stock.js';
 import { formatInvoiceNumber } from './numbering.js';
+import { taxOn, taxShare, taxOnTop } from './tax.js';
 
 // ---------- السطور ----------
 /**
@@ -66,18 +67,20 @@ export function addLine(lines, line) {
 // ---------- الإجماليات ----------
 /**
  * discount: { type: 'amount'|'percent', value } — percent بنقاط الأساس (1000 = 10%).
- * يرجع { subtotal, discount, total, cost, profit, count }.
+ * tax: إعداد الضريبة { rate, inclusive } أو null — الشاملة جزء من الإجمالي، والمضافة تُزاد عليه. ولا تدخل الربح.
+ * يرجع { subtotal, discount, tax, total, cost, profit, count }.
  */
-export function cartTotals(lines, discount = null, fees = 0) {
+export function cartTotals(lines, discount = null, fees = 0, tax = null) {
   const subtotal = sum(lines, lineTotal);
   let d = 0;
   if (discount && discount.value > 0) {
     d = discount.type === 'percent' ? percentOf(subtotal, Math.min(discount.value, 10000)) : discount.value;
   }
   d = Math.min(Math.max(0, d), subtotal);
-  const total = subtotal - d;
+  const t = tax ? taxOn(subtotal - d, tax.rate, tax.inclusive !== false) : { tax: 0, gross: subtotal - d };
+  const total = t.gross;
   const cost = sum(lines, lineCost);
-  return { subtotal, discount: d, total, cost, profit: total - cost - fees, count: lines.length };
+  return { subtotal, discount: d, tax: t.tax, total, cost, profit: total - t.tax - cost - fees, count: lines.length };
 }
 
 // ---------- الدفع ----------
@@ -120,16 +123,16 @@ export function cleanNote(v) {
  * يحوّل السلة والدفع إلى سجلات جاهزة للحفظ في معاملة واحدة (نقي: المعرّفات والوقت من الخارج).
  * env: { newId, now, prefix, seq, currency, cashSessionId, deviceId, userId }
  */
-export function buildSale({ lines, discount = null, payments, customerId = null, note = null }, env) {
+export function buildSale({ lines, discount = null, payments, customerId = null, note = null, tax = null }, env) {
   // env.replaces: فاتورة تُعدَّل — الجديدة تأخذ رقمها وتاريخها وتشير إليها (الأصلية تُلغى في المعاملة نفسها)
   const replaces = env.replaces || null;
   if (!lines.length) throw new Error('السلة فارغة');
   for (const l of lines) assertInt(l.qty, 'qty');
-  const pre = cartTotals(lines, discount);
+  const pre = cartTotals(lines, discount, 0, tax);
   const err = validatePayment(pre.total, payments, customerId);
   if (err) throw new Error(err);
   const pay = paymentSummary(pre.total, payments);
-  const totals = cartTotals(lines, discount, pay.fees);
+  const totals = cartTotals(lines, discount, pay.fees, tax);
   const invoiceId = env.newId();
   const invoice = {
     id: invoiceId,
@@ -143,6 +146,7 @@ export function buildSale({ lines, discount = null, payments, customerId = null,
     subtotal: totals.subtotal,
     discount: totals.discount,
     total: totals.total,
+    tax: totals.tax,
     cost_total: totals.cost,
     fee_total: pay.fees,
     paid: totals.total - pay.credit,
@@ -249,13 +253,17 @@ export function buildReturn(original, originalLines, picks, refund, env) {
       created_at: env.now,
     };
   });
-  const total = sum(lines, (l) => l.total);
+  // ضريبة الفاتورة الأصلية تعود بحصة ما رُجع: الشاملة جزء من المبلغ، والمضافة تُرد فوقه
+  const net = sum(lines, (l) => l.total);
+  const base = (original.subtotal || 0) - (original.discount || 0);
+  const tax = taxShare(original.tax || 0, net, base);
+  const total = net + taxShare(taxOnTop(original), net, base);
   const cost = sum(lines, (l) => lineAmount(l.unit_cost, l.qty));
   const split = refundSplit(total, refund, original.customer_id ? env.creditLeft || 0 : 0);
   const invoice = {
     id: invoiceId, number: formatInvoiceNumber(env.prefix, 'sale_return', env.seq), seq: env.seq, type: 'sale_return', status: 'final',
     customer_id: original.customer_id || null, original_invoice_id: original.id, currency: original.currency,
-    subtotal: total, discount: 0, total, cost_total: cost, fee_total: 0, paid: split.cash,
+    subtotal: net, discount: 0, total, tax, cost_total: cost, fee_total: 0, paid: split.cash,
     note: `مرتجع من ${original.number}`, device_id: env.deviceId ?? null, created_at: env.now,
   };
   const movements = lines.filter((l) => l.product_id).map((l) => ({

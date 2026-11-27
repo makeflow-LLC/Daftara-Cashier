@@ -130,7 +130,7 @@ export function statementText({ shopName, customerName, entries, currency = 'ILS
 // ---------- دفتر التاجر (ما على المحل لتجار الجملة والموردين): نفس القيود بإشارة معكوسة المعنى ----------
 // amount موجب = يزيد ما عليك للتاجر (بضاعة بالدين، رصيد سابق)، سالب = ينقصه (دفعة له، مرتجع).
 export const SUPPLIER_ENTRY_LABELS = Object.freeze({
-  opening: 'رصيد سابق', purchase: 'فاتورة شراء', payment: 'دفعة له', return: 'مرتجع', adjustment: 'بضاعة بالدين',
+  opening: 'رصيد سابق', purchase: 'فاتورة شراء', payment: 'دفعة له', return: 'مرتجع له', adjustment: 'بضاعة بالدين',
 });
 
 /** كشف حسابك عند التاجر نصًا (آخر limit قيدًا) لترسله له على واتساب وتطابقا الحساب. */

@@ -33,6 +33,7 @@ const FIXED = Object.freeze({
   inventory: ['1401', 'البضاعة (المخزون)', 'asset'],
   ap: ['2101', 'التجار (عليك لهم)', 'liability'],
   cheques_out: ['2201', 'شيكات عليك لم تُصرف', 'liability'],
+  vat: ['2301', 'ضريبة القيمة المضافة (للدولة)', 'liability'],
   capital: ['3101', 'رأس المال والأرصدة الافتتاحية', 'equity'],
   owner: ['3201', 'جاري صاحب المحل (مسحوبات وإيداعات)', 'equity'],
   suspense: ['3901', 'فروقات تحتاج مراجعة', 'equity'],
@@ -320,7 +321,8 @@ export function buildJournal(data, chart) {
       const normal = pays.filter((p) => p.direction === 'in');
       const back = pays.filter((p) => p.direction !== 'in');
       const e = entry(`inv:${inv.id}`, inv.created_at, 'sale', `فاتورة بيع ${inv.number}`, { number: inv.number, ref });
-      e.cr('sales', inv.total);
+      const tax = inv.tax || 0; // الضريبة ليست إيرادًا: تُحصَّل للدولة
+      e.cr('sales', inv.total - tax).cr('vat', tax);
       const feeOf = new Map();
       for (const p of normal) { money(e, p, p.fee || 0); e.dr('fees', p.fee || 0); if (p.fee) feeOf.set(p.method_id, (feeOf.get(p.method_id) || 0) + p.fee); }
       for (const x of ce) if (!isVoidEntry(x)) e.dr('ar', x.amount);
@@ -329,7 +331,7 @@ export function buildJournal(data, chart) {
       const undo = ce.filter(isVoidEntry);
       if (inv.status === 'void' || back.length || undo.length) {
         const v = entry(`inv:${inv.id}:void`, last([...back, ...undo], inv.updated_at || inv.created_at), 'void', `إلغاء فاتورة ${inv.number}`, { number: inv.number, ref });
-        if (inv.status === 'void') { v.dr('sales', inv.total); v.dr('inventory', inv.cost_total || 0).cr('cogs', inv.cost_total || 0); }
+        if (inv.status === 'void') { v.dr('sales', inv.total - tax).dr('vat', tax); v.dr('inventory', inv.cost_total || 0).cr('cogs', inv.cost_total || 0); }
         for (const p of back) {
           const fee = Math.min(feeOf.get(p.method_id) || 0, p.amount);
           if (fee) feeOf.set(p.method_id, feeOf.get(p.method_id) - fee);
@@ -341,7 +343,7 @@ export function buildJournal(data, chart) {
     } else if (inv.type === 'sale_return') {
       if (inv.status === 'void') continue;
       const e = entry(`inv:${inv.id}`, inv.created_at, 'sale_return', `مرتجع ${inv.number}`, { number: inv.number, ref });
-      e.dr('sales_returns', inv.total);
+      e.dr('sales_returns', inv.total - (inv.tax || 0)).dr('vat', inv.tax || 0);
       for (const p of pays) money(e, p);
       for (const x of ce) e.dr('ar', x.amount);
       e.dr('inventory', inv.cost_total || 0).cr('cogs', inv.cost_total || 0);
@@ -350,7 +352,9 @@ export function buildJournal(data, chart) {
       if (inv.status === 'void') continue;
       const buy = inv.type === 'purchase';
       const e = entry(`inv:${inv.id}`, inv.created_at, inv.type, `${buy ? 'فاتورة شراء' : 'مرتجع شراء'} ${inv.number}`, { number: inv.number, ref });
-      if (buy) e.dr('inventory', inv.total); else e.cr('inventory', inv.total);
+      // ضريبة المشتريات تُسترد: تنقص ما على المحل للدولة، والبضاعة تدخل بتكلفتها قبل الضريبة
+      const tax = inv.tax || 0;
+      if (buy) e.dr('inventory', inv.total - tax).dr('vat', tax); else e.cr('inventory', inv.total - tax).cr('vat', tax);
       for (const p of pays) money(e, p);
       for (const x of se) e.cr('ap', x.amount);
       e.done();
@@ -657,10 +661,11 @@ export function moneyAccounts(entries, chart, bal = balances(entries)) {
 export const VOUCHER_TITLES = Object.freeze({ receipt: 'سند قبض', payment: 'سند صرف', transfer: 'تحويل بين الصناديق', journal: 'قيد يومية' });
 
 /** لمن / ممن: الحسابات المقابلة الجاهزة لسند بلا زبون ولا تاجر. */
-export function contraChoices(type, accounts = []) {
+export function contraChoices(type, accounts = [], { tax = false } = {}) {
   const base = type === 'receipt'
     ? [{ key: 'owner', label: 'من صاحب المحل', hint: 'وضع مالًا من جيبه في المحل' }, { key: 'other_income', label: 'إيراد آخر', hint: 'إيجار رفّ، عمولة، خدمة…' }]
-    : [{ key: 'owner', label: 'لصاحب المحل', hint: 'مسحوبات شخصية: أخذ مالًا لنفسه أو لبيته' }, { key: 'other_expense', label: 'صرف آخر', hint: 'ما ليس مصروفًا له بند' }];
+    : [{ key: 'owner', label: 'لصاحب المحل', hint: 'مسحوبات شخصية: أخذ مالًا لنفسه أو لبيته' }, { key: 'other_expense', label: 'صرف آخر', hint: 'ما ليس مصروفًا له بند' },
+      ...(tax ? [{ key: 'vat', label: 'ضريبة للدائرة', hint: 'دفع ضريبة القيمة المضافة المستحقة' }] : [])];
   return [...base, ...accounts.map((a) => ({ key: `acc:${a.id}`, label: a.name, hint: ACCOUNT_TYPES[a.type].name, custom: true }))];
 }
 
@@ -721,4 +726,30 @@ export function voucherDoc(v, shop = {}, currency = 'ILS') {
     rows: [], totals,
     foot: v.type === 'payment' ? 'توقيع المستلم: ________________' : v.type === 'receipt' ? 'شكرًا لكم' : '',
   };
+}
+
+/**
+ * تقرير الضريبة لفترة [from, to): ضريبة المبيعات (بعد المرتجعات)، ضريبة المشتريات (بعد مرتجعاتها)، وما دُفع للدائرة.
+ * يرجع { output, input, net: المستحق عن الفترة, paid, balance: ما على المحل للدولة الآن (كل المدة) , months: [{ month, output, input, net }] }.
+ */
+export function taxReport(entries, { from = null, to = null } = {}) {
+  const r = { output: 0, input: 0, paid: 0, balance: 0, months: [] };
+  const months = new Map();
+  for (const e of entries) {
+    let d = 0, c = 0;
+    for (const l of e.lines) if (l.account === 'vat') { d += l.debit; c += l.credit; }
+    if (!d && !c) continue;
+    r.balance += c - d;
+    if ((from && e.date < from) || (to && e.date >= to)) continue;
+    const key = dayKey(e.date).slice(0, 7);
+    const m = months.get(key) || { month: key, output: 0, input: 0, net: 0 };
+    if (e.kind === 'sale' || e.kind === 'void' || e.kind === 'sale_return') { r.output += c - d; m.output += c - d; }
+    else if (e.kind === 'purchase' || e.kind === 'purchase_return') { r.input += d - c; m.input += d - c; }
+    else r.paid += d - c;
+    m.net = m.output - m.input;
+    months.set(key, m);
+  }
+  r.net = r.output - r.input;
+  r.months = [...months.values()].sort((a, b) => (a.month < b.month ? -1 : 1));
+  return r;
 }

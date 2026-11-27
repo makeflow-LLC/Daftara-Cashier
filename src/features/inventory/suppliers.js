@@ -195,7 +195,7 @@ export async function renderSupplier(el, params) {
         miniBtn('clipboard', 'طلبية', () => navigate('/inventory?reorder=1'))));
     if (isWide() && s.entries.length) {
       const amt = (v) => num(formatMoney(v, cur(), { symbol: false }));
-      const tapOf = (e) => (e.cancelled ? null : e.payment_id && chequeIds.has(e.payment_id) ? () => openCheque(e.payment_id, load) : e.invoice_id ? (e.type === 'purchase' ? () => showReceipt(e.invoice_id, { doneLabel: 'إغلاق', doneIcon: 'x' }) : null) : editableEntry(e) && app.can('delete') ? () => entrySheet(e) : null);
+      const tapOf = (e) => (e.cancelled ? null : e.payment_id && chequeIds.has(e.payment_id) ? () => openCheque(e.payment_id, load) : e.invoice_id ? (e.type === 'purchase' || e.type === 'return' ? () => showReceipt(e.invoice_id, { doneLabel: 'إغلاق', doneIcon: 'x' }) : null) : editableEntry(e) && app.can('delete') ? () => entrySheet(e) : null);
       fill(list, h('div', { class: 'section' }, h('h2', { class: 'section-title' }, 'كشف الحساب'), dataTable({
         rows: s.entries,
         onRow: (e) => { const t = tapOf(e); if (t) t(); },
@@ -221,7 +221,7 @@ export async function renderSupplier(el, params) {
               h('span', { class: 'row-sub' }, num(dateText(e.created_at)))),
             h('span', { class: 'row-end' }, num(formatMoney(Math.abs(e.amount), cur(), { symbol: false }))));
         }
-        const tap = e.payment_id && chequeIds.has(e.payment_id) ? () => openCheque(e.payment_id, load) : e.invoice_id ? (e.type === 'purchase' ? () => showReceipt(e.invoice_id, { doneLabel: 'إغلاق', doneIcon: 'x' }) : null) : editableEntry(e) && app.can('delete') ? () => entrySheet(e) : null;
+        const tap = e.payment_id && chequeIds.has(e.payment_id) ? () => openCheque(e.payment_id, load) : e.invoice_id ? (e.type === 'purchase' || e.type === 'return' ? () => showReceipt(e.invoice_id, { doneLabel: 'إغلاق', doneIcon: 'x' }) : null) : editableEntry(e) && app.can('delete') ? () => entrySheet(e) : null;
         return h(tap ? 'button' : 'div', { class: `row ${tap ? 'row-tap' : ''}`, type: tap ? 'button' : null, onclick: tap },
           h('span', { class: `row-ic ${e.amount > 0 ? 'ic-debt' : ''}` }, icon(e.amount > 0 ? (e.type === 'purchase' ? 'truck' : 'plus') : 'check', 20)),
           h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, label, e.note ? h('span', { class: 'muted' }, ` · ${e.note}`) : null),

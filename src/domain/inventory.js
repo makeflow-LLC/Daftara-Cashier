@@ -4,6 +4,7 @@ import { lineAmount, packToBase, formatQty, unit as unitOf, QTY_SCALE } from './
 import { signedQty, stockLevel, stockValue } from './stock.js';
 import { formatInvoiceNumber } from './numbering.js';
 import { DEFAULT_LOW_STOCK_THRESHOLD, EXPIRY_WARNING_DAYS, DEAD_STOCK_DAYS } from './features.js';
+import { netOfTax, taxShare } from './tax.js';
 
 const DAY = 86400000;
 
@@ -23,21 +24,38 @@ export function purchaseTotal(lines) {
 }
 
 /**
+ * ضريبة فاتورة شراء. tax: { rate, mode } — mode: 'inclusive' أسعار فاتورة التاجر شاملة الضريبة، 'exclusive' قبلها، أو null بلا ضريبة.
+ * يرجع { lines: السطور بتكلفة الوحدة قبل الضريبة, subtotal: قبل الضريبة, tax, total: ما يُدفع للتاجر }.
+ */
+export function purchaseTax(lines, tax = null) {
+  const entered = purchaseTotal(lines);
+  if (!tax || !tax.rate || (tax.mode !== 'inclusive' && tax.mode !== 'exclusive')) return { lines, subtotal: entered, tax: 0, total: entered };
+  if (tax.mode === 'exclusive') { const t = divRound(entered * tax.rate, 10000); return { lines, subtotal: entered, tax: t, total: entered + t }; }
+  const net = lines.map((l) => ({ ...l, unit_cost: netOfTax(l.unit_cost, tax.rate) }));
+  const subtotal = purchaseTotal(net);
+  return { lines: net, subtotal, tax: entered - subtotal, total: entered };
+}
+
+/**
  * يحوّل الشراء إلى سجلات: فاتورة شراء، سطورها، حركات دخول بتكلفة الوحدة الأساسية (تدخل في متوسط التكلفة)،
  * قيد على حساب المورّد، ودفعة خارجة إن دُفع نقدًا. paid: 'cash' | 'credit'.
  */
-export function buildPurchase({ lines, supplierId = null, paid = 'cash', note = null, attachmentPath = null, branchId = null }, env) {
-  if (!lines.length) throw new Error('أضف صنفًا واحدًا على الأقل');
+export function buildPurchase({ lines: entered, supplierId = null, paid = 'cash', note = null, attachmentPath = null, branchId = null, tax = null }, env) {
+  if (!entered.length) throw new Error('أضف صنفًا واحدًا على الأقل');
   if (paid === 'credit' && !supplierId) throw new Error('اختر التاجر للشراء على الحساب');
-  for (const l of lines) {
+  for (const l of entered) {
     if (!Number.isSafeInteger(l.qty) || l.qty <= 0) throw new Error(`كمية «${l.name}» غير صحيحة`);
     if (!Number.isSafeInteger(l.unit_cost) || l.unit_cost < 0) throw new Error(`تكلفة «${l.name}» غير صحيحة`);
   }
-  const total = purchaseTotal(lines);
+  // الضريبة: البضاعة تدخل المخزون بتكلفتها قبل الضريبة، والضريبة تُسترد من ضريبة المبيعات. total = ما يُدفع للتاجر
+  const px = purchaseTax(entered, tax);
+  const lines = px.lines;
+  const subtotal = px.subtotal;
+  const total = px.total;
   const invoiceId = env.newId();
   const invoice = {
     id: invoiceId, number: formatInvoiceNumber(env.prefix, 'purchase', env.seq), seq: env.seq, type: 'purchase', status: 'final',
-    supplier_id: supplierId, branch_id: branchId || null, currency: env.currency || 'ILS', subtotal: total, discount: 0, total, cost_total: total, fee_total: 0,
+    supplier_id: supplierId, branch_id: branchId || null, currency: env.currency || 'ILS', subtotal, discount: 0, total, tax: px.tax, cost_total: subtotal, fee_total: 0,
     paid: paid === 'cash' ? total : 0, note, attachment_path: attachmentPath, device_id: env.deviceId ?? null, created_at: env.now,
   };
   const invoiceLines = lines.map((l, position) => ({
@@ -57,6 +75,70 @@ export function buildPurchase({ lines, supplierId = null, paid = 'cash', note = 
     if (supplierId) supplierEntries.push({ id: env.newId(), supplier_id: supplierId, type: 'payment', amount: -total, invoice_id: invoiceId, payment_id: pid, created_at: env.now });
   }
   return { invoice, lines: invoiceLines, movements, supplierEntries, payments, total };
+}
+
+// ---------- مرتجع المشتريات: بضاعة تعيدها للتاجر ----------
+/** ما اشتُري وما أُعيد من كل سطر: [{ line, bought, returned, returnable }]. previous: سطور مرتجعات الشراء السابقة. */
+export function purchaseReturnable(originalLines, previousReturnLines = []) {
+  const key = (l) => `${l.product_id}:${l.unit_id || ''}`;
+  const back = new Map();
+  for (const r of previousReturnLines) back.set(key(r), (back.get(key(r)) || 0) + r.qty);
+  return originalLines.map((l) => {
+    const k = key(l);
+    const already = Math.min(l.qty, back.get(k) || 0);
+    back.set(k, (back.get(k) || 0) - already);
+    return { line: l, bought: l.qty, returned: already, returnable: l.qty - already };
+  });
+}
+
+/**
+ * مرتجع شراء من فاتورة: picks = [{ line, qty }] (الكمية بالألف بوحدة السطر).
+ * refund: 'credit' يُخصم مما عليك للتاجر (يلزم تاجر) | 'cash' ردّ لك ثمنها نقدًا (يدخل الدرج).
+ * البضاعة تخرج من حيث دخلت (المحل أو المخزن) بتكلفة شرائها. stockOf(product_id) → الموجود بالوحدة الأساسية (اختياري).
+ * env: { newId, now, prefix, seq, cashSessionId, cashMethodId, deviceId, stockOf }
+ */
+export function buildPurchaseReturn(original, originalLines, picks, refund, env) {
+  const chosen = picks.filter((p) => p.qty > 0);
+  if (!chosen.length) throw new Error('اختر ما تعيده للتاجر');
+  if (!original || original.type !== 'purchase' || original.deleted) throw new Error('المرتجع يكون من فاتورة شراء');
+  if (original.status === 'void') throw new Error('هذه الفاتورة ملغاة');
+  if (refund === 'credit' && !original.supplier_id) throw new Error('الفاتورة بلا تاجر: المرتجع نقدًا فقط');
+  const invoiceId = env.newId();
+  const need = new Map();
+  const lines = chosen.map((p, position) => {
+    if (!originalLines.includes(p.line)) throw new Error('سطر غير موجود في الفاتورة');
+    if (!Number.isSafeInteger(p.qty) || p.qty > p.line.qty) throw new Error('الكمية أكبر من المشتراة');
+    const total = p.qty === p.line.qty ? p.line.total : divRound(p.line.total * p.qty, p.line.qty);
+    need.set(p.line.product_id, (need.get(p.line.product_id) || 0) + packToBase(p.qty, p.line.unit_factor));
+    return {
+      id: env.newId(), invoice_id: invoiceId, position, product_id: p.line.product_id, unit_id: p.line.unit_id, name: p.line.name, unit: p.line.unit,
+      unit_factor: p.line.unit_factor, qty: p.qty, unit_price: p.line.unit_price, discount: 0, total, unit_cost: p.line.unit_cost, created_at: env.now,
+    };
+  });
+  // لا يُعاد ما بِيع: الموجود في مكانه يجب أن يكفي
+  if (env.stockOf) for (const l of lines) if (need.get(l.product_id) > env.stockOf(l.product_id)) throw new Error(`«${l.name}»: الموجود أقل مما تعيده`);
+  // ضريبة الشراء تعود بحصة ما أُعيد: التاجر يردّ ثمن البضاعة مع ضريبتها
+  const net = sum(lines, (l) => l.total);
+  const tax = taxShare(original.tax || 0, net, original.subtotal || 0);
+  const total = net + tax;
+  const cash = refund === 'cash' ? total : 0;
+  const invoice = {
+    id: invoiceId, number: formatInvoiceNumber(env.prefix, 'purchase_return', env.seq), seq: env.seq, type: 'purchase_return', status: 'final',
+    supplier_id: original.supplier_id || null, branch_id: original.branch_id || null, original_invoice_id: original.id, currency: original.currency || 'ILS',
+    subtotal: net, discount: 0, total, tax, cost_total: net, fee_total: 0, paid: cash,
+    note: `مرتجع من ${original.number}`, device_id: env.deviceId ?? null, created_at: env.now,
+  };
+  const movements = lines.map((l) => ({
+    id: env.newId(), product_id: l.product_id, branch_id: original.branch_id || null, type: 'purchase_return', qty: signedQty('purchase_return', packToBase(l.qty, l.unit_factor)),
+    unit_cost: divRound(l.unit_cost * QTY_SCALE, l.unit_factor), ref_type: 'invoice', ref_id: invoiceId, created_at: env.now,
+  }));
+  // على الحساب: ينزل مما عليك له. نقدًا: دخل الدرج، وكشفه لا يتغير (ما عليك من الفاتورة باقٍ كما هو)
+  const supplierEntries = refund === 'credit' ? [{ id: env.newId(), supplier_id: original.supplier_id, type: 'return', amount: -total, invoice_id: invoiceId, note: invoice.number, created_at: env.now }] : [];
+  const payments = cash > 0 ? [{
+    id: env.newId(), invoice_id: invoiceId, supplier_id: original.supplier_id || null, cash_session_id: env.cashSessionId ?? null,
+    direction: 'in', method_id: env.cashMethodId ?? null, method_kind: 'cash', amount: cash, created_at: env.now,
+  }] : [];
+  return { invoice, lines, movements, supplierEntries, payments, total, credit: refund === 'credit' ? total : 0, cash };
 }
 
 // ---------- النقل بين المخزن والمحل ----------

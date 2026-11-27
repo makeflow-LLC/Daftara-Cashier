@@ -8,7 +8,8 @@ import { header, iconButton, money, emptyState, input, button, field } from '../
 import { toast, openSheet } from '../../ui/overlay.js';
 import { feedback } from '../../ui/feedback.js';
 import { startInlineScanner } from '../../ui/scanner.js';
-import { purchaseLine, purchaseTotal } from '../../domain/inventory.js';
+import { purchaseLine, purchaseTotal, purchaseTax } from '../../domain/inventory.js';
+import { taxConfig, rateText } from '../../domain/tax.js';
 import { searchProducts, normalizeBarcode } from '../../domain/product.js';
 import { formatQty, parseQty, lineAmount, QTY_SCALE, packQtyText, unit as unitOf } from '../../domain/units.js';
 import { parseMoney, formatMoney, CURRENCIES } from '../../domain/currency.js';
@@ -174,9 +175,23 @@ export async function renderPurchase(el, params) {
 
   function finish() {
     if (!draft.lines.length) return;
-    const total = purchaseTotal(draft.lines);
     if (scanner) scanner.pause();
     let busy = false;
+    // الضريبة (لمن يعمل بها): أسعار فاتورة التاجر شاملة الضريبة، قبلها، أو بلا ضريبة. البضاعة تدخل بتكلفتها قبل الضريبة
+    const taxCfg = taxConfig(app.shop?.settings);
+    let taxMode = taxCfg ? (localStorage.getItem('cashier-purchase-tax') || 'inclusive') : 'none';
+    const taxOf = () => (taxCfg && taxMode !== 'none' ? { rate: taxCfg.rate, mode: taxMode } : null);
+    const totalBox = h('div');
+    const taxChips = h('div', { class: 'chips due-chips' });
+    const paintTax = () => {
+      const px = purchaseTax(draft.lines, taxOf());
+      fill(totalBox,
+        h('div', { class: 'pay-total' }, h('span', null, 'إجمالي الشراء'), money(px.total, base)),
+        px.tax ? h('div', { class: 'rc-kv' }, h('span', null, `منها ${taxCfg.name} ${rateText(taxCfg.rate)} (تُسترد)`), money(px.tax, base)) : null);
+      if (taxCfg) fill(taxChips, h('span', { class: 'muted small' }, 'أسعار فاتورة التاجر:'),
+        ...[['inclusive', 'شاملة الضريبة'], ['exclusive', 'قبل الضريبة'], ['none', 'بلا ضريبة']].map(([k, l]) => h('button', { class: `chip ${taxMode === k ? 'on' : ''}`, type: 'button', onclick: () => { taxMode = k; try { localStorage.setItem('cashier-purchase-tax', k); } catch { /* */ } paintTax(); } }, l)));
+    };
+    paintTax();
     let dueDays = null; // «على الحساب»: متى تدفع (اختياري)
     const dueChips = h('div', { class: 'chips due-chips' });
     const paintDue = () => fill(dueChips, h('span', { class: 'muted small' }, 'موعد الدفع:'),
@@ -198,7 +213,7 @@ export async function renderPurchase(el, params) {
             attachmentPath = `${app.ctx.shopId}/purchases/${id}.webp`;
             await app.db.files.put({ id, kind: 'purchase', path: attachmentPath, blob: photo.blob, thumb: photo.thumb, state: 'pending' });
           }
-          const r = await app.inventory.savePurchase({ lines: draft.lines, supplierId: draft.supplier ? draft.supplier.id : null, paid, attachmentPath, branchId: dest });
+          const r = await app.inventory.savePurchase({ lines: draft.lines, supplierId: draft.supplier ? draft.supplier.id : null, paid, attachmentPath, branchId: dest, tax: taxOf() });
           if (paid === 'credit' && draft.supplier && dueDays) await setSupplierDue(draft.supplier.id, addDays(localDay(), dueDays));
           draft = { lines: [], supplier: null }; photo = null;
           feedback.ok(); close(); paint();
@@ -206,7 +221,7 @@ export async function renderPurchase(el, params) {
         } catch (e) { busy = false; feedback.error(); toast(e.message || 'تعذّر الحفظ', { kind: 'error' }); }
       }
       return h('div', null,
-        h('div', { class: 'pay-total' }, h('span', null, 'إجمالي الشراء'), money(total, base)),
+        totalBox, taxCfg ? taxChips : null,
         draft.supplier ? h('div', { class: 'pay-cust' }, icon('truck', 18), h('span', null, draft.supplier.name)) : null,
         warehouses.length ? destChips : null,
         h('div', { class: 'pay-methods' },
