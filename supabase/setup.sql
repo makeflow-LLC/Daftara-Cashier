@@ -1,4 +1,4 @@
--- دفترة كاشير — إعداد الخادم كاملًا (0001_init.sql + 0002_invoice_line_position.sql + 0003_licensing.sql + 0004_accounts.sql + 0005_scale_code.sql + 0006_shop_catalog.sql + 0007_expenses_chat_warehouses.sql + 0008_admin_panel.sql + 0009_ounce_catalog_images.sql + 0010_accounting.sql)
+-- دفترة كاشير — إعداد الخادم كاملًا (0001_init.sql + 0002_invoice_line_position.sql + 0003_licensing.sql + 0004_accounts.sql + 0005_scale_code.sql + 0006_shop_catalog.sql + 0007_expenses_chat_warehouses.sql + 0008_admin_panel.sql + 0009_ounce_catalog_images.sql + 0010_accounting.sql + 0011_tax_cost_centers.sql)
 -- يُبنى تلقائيًا من supabase/migrations — لا تعدّله هنا. آمن لإعادة التشغيل.
 -- Supabase Studio ← SQL Editor ← New query ← الصق كل الملف ← Run
 
@@ -251,6 +251,7 @@ create table if not exists public.cashier_invoices (
   cost_total bigint not null default 0,
   fee_total bigint not null default 0,
   paid bigint not null default 0,
+  tax bigint not null default 0,                  -- ضريبة القيمة المضافة ضمن total (0011)
   note text, attachment_path text,
   created_by uuid,
   created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
@@ -331,6 +332,7 @@ create table if not exists public.cashier_expenses (
   branch_id uuid, category text, amount bigint not null, method_id uuid, cash_session_id uuid,
   note text, attachment_path text, spent_at timestamptz not null default now(),
   employee_id uuid, period text,                   -- للرواتب: الموظف وشهر الراتب (YYYY-MM)
+  cost_center uuid,                                -- مركز التكلفة (0011)
   created_by uuid,
   created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
   deleted boolean not null default false, server_seq bigint, server_at timestamptz
@@ -1445,6 +1447,7 @@ create table if not exists public.cashier_vouchers (
   lines jsonb,                                    -- لقيد اليومية: [{"account":"…","debit":0,"credit":0,"note":"…"}]
   note text check (note is null or length(note) <= 500),
   voucher_at timestamptz not null default now(),
+  cost_center uuid,                               -- مركز التكلفة (0011)
   device_id uuid, created_by uuid,
   created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
   deleted boolean not null default false, server_seq bigint, server_at timestamptz
@@ -1512,5 +1515,16 @@ begin
                     using (public.cashier_is_member(shop_id)) with check (public.cashier_can_write(shop_id))', t.tbl);
   end loop;
 end $$;
+
+-- ===== 0011_tax_cost_centers.sql =====
+-- الضريبة ومراكز التكلفة. آمن لإعادة التشغيل.
+--  * tax: ضريبة القيمة المضافة في الفاتورة (بيع، مرتجع، شراء، مرتجع شراء). جزء من total؛ صفر لمن لا يعمل بالضريبة.
+--    إعداد الضريبة نفسه (النسبة، شاملة أم مضافة، رقم المشتغل المرخّص) في cashier_shops.settings.tax.
+--  * cost_center: مركز التكلفة (قسم، فرع، سيارة، مشروع) لمصروف أو سند. المراكز نفسها في cashier_shops.settings.costCenters،
+--    وإيراد كل مركز من تصنيفات الأصناف المربوطة به — فلا عمود في الفواتير.
+
+alter table public.cashier_invoices add column if not exists tax bigint not null default 0;
+alter table public.cashier_expenses add column if not exists cost_center uuid;
+alter table public.cashier_vouchers add column if not exists cost_center uuid;
 
 select 'دفترة كاشير: تم تجهيز الخادم ✓' as result;

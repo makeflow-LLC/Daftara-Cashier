@@ -22,13 +22,14 @@ export function createExpenseRepo({ db, store, clock }) {
      * يحفظ مصروفًا جديدًا أو يعدّله (id).
      * method: طريقة الدفع { id, kind } — نقدًا تخرج من الدرج؛ null = من خارج الصندوق.
      */
-    async save({ id = null, category, amount, method = null, note = null, spent_at = null, employee_id = null, period = null }) {
+    async save({ id = null, category, amount, method = null, note = null, spent_at = null, employee_id = null, period = null, cost_center = undefined }) {
       const row = {
         category: String(category || '').trim() || null, amount,
         method_id: method ? method.id : null,
         note: note ? String(note).trim().slice(0, 200) || null : null,
         spent_at: spent_at || clock(),
         employee_id: employee_id || null, period: period && isPeriod(period) ? period : null,
+        ...(cost_center === undefined ? {} : { cost_center: cost_center || null }), // مركز التكلفة (اختياري)
       };
       const err = expenseProblem(row);
       if (err) throw invalid(err);

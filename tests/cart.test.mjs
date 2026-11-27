@@ -34,7 +34,7 @@ test('totals with line and invoice discounts, profit after fees', () => {
   const lines = [{ ...makeLine(milk, { qty: 3000, avgCost: 400 }), discount: 100 }, makeLine(cloth, { qty: 1500 })];
   // 3×5 − 1 = 14 ؛ 1.5×12 = 18 → 32
   let t = cartTotals(lines);
-  assert.deepEqual(t, { subtotal: 3200, discount: 0, total: 3200, cost: 2400, profit: 800, count: 2 });
+  assert.deepEqual(t, { subtotal: 3200, discount: 0, tax: 0, total: 3200, cost: 2400, profit: 800, count: 2 });
   t = cartTotals(lines, { type: 'percent', value: 1000 }, 50);
   assert.equal(t.discount, 320);
   assert.equal(t.total, 2880);

@@ -10,6 +10,7 @@ import { formatMoney } from '../../domain/currency.js';
 import { contraChoices, VOUCHER_TITLES } from '../../domain/accounting.js';
 import { EXPENSE_CATEGORIES, SALARY, customCategories, categoryName } from '../../domain/expenses.js';
 import { matchesInvoiceNumber } from '../../domain/numbering.js';
+import { taxConfig } from '../../domain/tax.js';
 import { normalizeArabic } from '../../domain/product.js';
 import { app } from '../../core/app.js';
 import { bus } from '../../core/bus.js';
@@ -17,6 +18,7 @@ import { pickCustomer } from '../customers/picker.js';
 import { pickSupplier } from '../inventory/suppliers.js';
 import { showVoucher } from '../customers/voucher.js';
 import { cur, dateText, amountInput, dateInput, moneyPicker, showMoneyVoucher } from './common.js';
+import { centerPicker } from './centers.js';
 
 const TONE = { receipt: 'credit', payment: 'owed', transfer: '', journal: '' };
 const ICON = { receipt: 'plus', payment: 'minus', transfer: 'swap', journal: 'book' };
@@ -36,7 +38,7 @@ export async function voucherSheet(type, { onSaved = null, preset = {} } = {}) {
   const targets = [
     isIn ? { key: 'customer', label: 'زبون', hint: 'دفعة من دينه', ic: 'user' } : { key: 'supplier', label: 'تاجر', hint: 'دفعة مما عليك له', ic: 'truck' },
     ...(isIn ? [] : [{ key: 'expense', label: 'مصروف', hint: 'كهرباء، إيجار، مواصلات…', ic: 'coins' }]),
-    ...contraChoices(type, app.accounting.accounts()).map((c) => ({ ...c, ic: c.key === 'owner' ? 'user' : c.custom ? 'book' : 'tag' })),
+    ...contraChoices(type, app.accounting.accounts(), { tax: !!taxConfig(app.shop?.settings) }).map((c) => ({ ...c, ic: c.key === 'owner' ? 'user' : c.custom ? 'book' : 'tag' })),
   ];
   let target = targets.find((t) => t.key === preset.party) || targets[0];
   let party = preset.customer || preset.supplier || null;
@@ -44,11 +46,16 @@ export async function voucherSheet(type, { onSaved = null, preset = {} } = {}) {
   const picker = moneyPicker(choices, { outside: null });
   const targetChips = h('div', { class: 'chips' });
   const detail = h('div');
+  // مركز التكلفة: لما يدخل الأرباح والخسائر فقط (مصروف، صرف آخر، إيراد آخر، حساب خاص) — لا لدفعات الزبائن والتجار والمسحوبات
+  const center = centerPicker(null);
+  const centerBox = h('div');
+  const wantsCenter = () => center.el && !['customer', 'supplier', 'owner', 'vat'].includes(target.key);
   const hint = h('span', { class: 'field-hint' });
 
   function paint() {
     fill(targetChips, ...targets.map((t) => h('button', { class: `chip ${target === t ? 'on' : ''}`, type: 'button', onclick: () => { target = t; party = null; paint(); if (t.key === 'customer' || t.key === 'supplier') choose(); } }, icon(t.ic, 16), t.label)));
     hint.textContent = target.hint || '';
+    fill(centerBox, wantsCenter() ? center.el : null);
     if (target.key === 'customer' || target.key === 'supplier') {
       fill(detail, h('button', { class: 'row row-tap picked-party', type: 'button', onclick: choose },
         h('span', { class: 'row-ic' }, icon(target.ic, 20)),
@@ -91,11 +98,11 @@ export async function voucherSheet(type, { onSaved = null, preset = {} } = {}) {
           done(close, `دُفع ${formatMoney(v, cur())} لـ ${party.name}`);
           await openSaved((x) => x.source === 'supplier' && x.id === entry.payment_id);
         } else if (target.key === 'expense') {
-          const saved = await app.accounting.saveExpenseVoucher({ category, amount: v, method: box, note: note.value, party_name: who.value, date: date.get() });
+          const saved = await app.accounting.saveExpenseVoucher({ category, amount: v, method: box, note: note.value, party_name: who.value, date: date.get(), cost_center: wantsCenter() ? center.get() : null });
           done(close, `سُجّل مصروف ${categoryName(category)}: ${formatMoney(v, cur())}`);
           await openSaved((x) => x.source === 'voucher' && x.id === saved.id);
         } else {
-          const saved = await app.accounting.saveVoucher({ type, amount: v, account: box.id, contra: target.key, party_name: who.value, note: note.value, date: date.get() });
+          const saved = await app.accounting.saveVoucher({ type, amount: v, account: box.id, contra: target.key, party_name: who.value, note: note.value, date: date.get(), cost_center: wantsCenter() ? center.get() : null });
           done(close, `${VOUCHER_TITLES[type]} ${saved.number}: ${formatMoney(v, cur())}`);
           await openSaved((x) => x.source === 'voucher' && x.id === saved.id);
         }
@@ -106,6 +113,7 @@ export async function voucherSheet(type, { onSaved = null, preset = {} } = {}) {
     detail,
     field('المبلغ', amount.el),
     h('div', { class: 'field' }, h('span', { class: 'field-label' }, isIn ? 'أين دخل المال؟' : 'من أين دُفع؟'), picker.el),
+    centerBox,
     h('div', { class: 'grid-2' }, field('التاريخ', date.el), field('ملاحظة', note)),
     button(isIn ? 'حفظ سند القبض' : 'حفظ سند الصرف', { type: 'submit', block: true, size: 'lg', icon: 'check' }),
   ), { title: isIn ? 'سند قبض — مال دخل' : 'سند صرف — مال خرج' });

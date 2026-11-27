@@ -67,6 +67,8 @@ async function start() {
   } else {
     registerAll();
     await render();
+    // جهاز الكاشير (القفل والأصوات وشاشة البيع ← «افتح التطبيق على شاشة البيع»): من الرئيسية إلى البيع مباشرة
+    if (prefs.openSale === true && (!location.hash || location.hash === '#/' || location.hash === '#') && !app.locked && app.can('sell')) navigate('/sale');
   }
   appLock.start(); // قفل البصمة (إن شغّله صاحب المحل): شاشة القفل تظهر قبل أن تُرى أي بيانات
   hideSplash();

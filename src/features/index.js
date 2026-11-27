@@ -16,6 +16,7 @@ import { renderTools, renderImport, renderPrices, renderLabels } from './tools/t
 import { renderInventory } from './inventory/hub.js';
 import { renderPurchase } from './inventory/purchase.js';
 import { renderSuppliers, renderSupplier } from './inventory/suppliers.js';
+import { renderPurchaseReturn } from './inventory/purchase-return.js';
 import { renderCount } from './inventory/count.js';
 import { renderAssistant } from './inventory/assistant.js';
 import { renderWarehouses, renderWarehouse, renderTransfer } from './inventory/warehouses.js';
@@ -27,6 +28,8 @@ import { renderBoxes } from './accounting/boxes.js';
 import { renderVouchers } from './accounting/vouchers.js';
 import { renderCheques } from './accounting/cheques.js';
 import { renderTrial, renderLedger, renderJournal, renderStatements } from './accounting/books.js';
+import { renderCenters } from './accounting/centers.js';
+import { renderTaxSettings, renderTaxReport } from './accounting/tax.js';
 import { renderMore } from './more/more.js';
 import { renderHelp, renderHelpTopic } from './help/help.js';
 import { renderSubscribe } from './subscribe/subscribe.js';
@@ -109,6 +112,8 @@ export const MODULES = [
       { path: '/accounting/ledger', tab: 'settings', chrome: false, render: renderLedger },
       { path: '/accounting/journal', perm: 'reports', tab: 'settings', chrome: false, render: renderJournal },
       { path: '/accounting/statements', perm: 'reports', tab: 'settings', chrome: false, render: renderStatements },
+      { path: '/accounting/centers', perm: 'reports', tab: 'settings', chrome: false, render: renderCenters },
+      { path: '/accounting/tax', perm: 'reports', tab: 'settings', chrome: false, render: renderTaxReport },
     ],
   },
   { id: 'wallet', routes: [{ path: '/wallet', perm: 'sell', write: true, chrome: false, render: renderWallet }] },
@@ -119,6 +124,7 @@ export const MODULES = [
     routes: [
       { path: '/inventory', perm: 'purchases', tab: 'settings', chrome: false, render: renderInventory },
       { path: '/inventory/purchase', perm: 'purchases', write: true, chrome: false, render: renderPurchase },
+      { path: '/inventory/purchase-return', perm: 'purchases', write: true, chrome: false, render: renderPurchaseReturn },
       { path: '/inventory/assistant', perm: 'purchases', chrome: false, render: renderAssistant },
       { path: '/inventory/count', perm: 'purchases', write: true, chrome: false, render: renderCount },
       { path: '/inventory/warehouses', perm: 'purchases', tab: 'settings', chrome: false, render: renderWarehouses },
@@ -143,6 +149,7 @@ export const MODULES = [
       { path: '/settings/catalog', perm: 'settings', tab: 'settings', chrome: false, render: renderCatalog },
       { path: '/settings/printer', perm: 'settings', tab: 'settings', chrome: false, render: renderPrinterSettings },
       { path: '/settings/scale', perm: 'settings', tab: 'settings', chrome: false, render: renderScaleSettings },
+      { path: '/settings/tax', perm: 'settings', tab: 'settings', chrome: false, render: renderTaxSettings },
       { path: '/settings/wallets', perm: 'settings', tab: 'settings', chrome: false, render: renderWalletSettings },
       { path: '/settings', perm: 'settings', tab: 'settings', chrome: false, render: renderSettings },
       { path: '/settings/shop', perm: 'settings', tab: 'settings', chrome: false, render: renderShopProfile },

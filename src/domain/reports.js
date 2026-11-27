@@ -69,7 +69,14 @@ export function buildReport({ invoices, lines, payments, products = [], categori
   const costTotal = sum(sales, costOf) - sum(returns, costOf);
   const feeTotal = sum(sales, (i) => i.fee_total || 0);
   const net = salesTotal - returnsTotal;
-  const profit = net - costTotal - feeTotal;
+  // الضريبة يحصّلها المحل للدولة: تظهر في المبيعات (ما دفعه الزبائن) ولا تدخل الربح
+  const taxOf = (i) => i.tax || 0;
+  const taxTotal = sum(sales, taxOf) - sum(returns, taxOf);
+  const purchaseTax = sum(purchases, taxOf) - sum(inPeriod.filter((i) => i.type === 'purchase_return'), taxOf);
+  const profit = net - taxTotal - costTotal - feeTotal;
+  // حصة كل سطر من ضريبة فاتورته (للربح حسب الصنف والتصنيف)
+  const invTax = new Map([...sales, ...returns].filter((i) => i.tax).map((i) => [i.id, [i.tax, Math.max(1, (i.subtotal || 0) - (i.discount || 0))]]));
+  const lineTax = (l) => { const x = invTax.get(l.invoice_id); return x ? Math.round((l.total * x[0]) / x[1]) : 0; };
 
   // حسب اليوم
   const days = new Map();
@@ -78,7 +85,7 @@ export function buildReport({ invoices, lines, payments, products = [], categori
     const d = days.get(k) || { day: k, sales: 0, profit: 0, count: 0 };
     const sign = i.type === 'sale' ? 1 : -1;
     d.sales += sign * i.total;
-    d.profit += sign * (i.total - costOf(i) - (i.type === 'sale' ? i.fee_total || 0 : 0));
+    d.profit += sign * (i.total - taxOf(i) - costOf(i) - (i.type === 'sale' ? i.fee_total || 0 : 0));
     if (i.type === 'sale') d.count += 1;
     days.set(k, d);
   }
@@ -94,7 +101,7 @@ export function buildReport({ invoices, lines, payments, products = [], categori
     const it = items.get(key) || { product_id: l.product_id, name: p ? p.name : l.name, unit: p ? p.unit : 'piece', category_id: p ? p.category_id : null, qty: 0, amount: 0, profit: 0 };
     it.qty += s * packToBase(l.qty, l.unit_factor || 1000);
     it.amount += s * l.total;
-    it.profit += s * (l.total - lineAmount(l.unit_cost || 0, l.qty) - missingCost(l, prod));
+    it.profit += s * (l.total - lineTax(l) - lineAmount(l.unit_cost || 0, l.qty) - missingCost(l, prod));
     items.set(key, it);
   }
   const sold = [...items.values()].filter((x) => x.qty > 0);
@@ -143,20 +150,21 @@ export function buildReport({ invoices, lines, payments, products = [], categori
   for (const i of [...sales, ...returns]) {
     const m = month(i.created_at), sg = i.type === 'sale' ? 1 : -1;
     m.sales += sg * i.total;
-    m.profit += sg * (i.total - costOf(i) - (i.type === 'sale' ? i.fee_total || 0 : 0));
+    m.profit += sg * (i.total - taxOf(i) - costOf(i) - (i.type === 'sale' ? i.fee_total || 0 : 0));
   }
   for (const e of exp) month(e.spent_at).expenses += e.amount;
   for (const m of damaged) month(m.created_at).damage += damageOf(m);
   for (const m of months.values()) m.net = m.profit - m.expenses - m.damage;
 
   return {
-    costTotal, feeTotal, expensesTotal: et.total, expensesByCategory: et.byCategory, damageTotal,
+    costTotal, feeTotal, taxTotal, purchaseTax, expensesTotal: et.total, expensesByCategory: et.byCategory, damageTotal,
     netProfit: profit - et.total - damageTotal,
     byMonth: [...months.values()].sort((a, b) => (a.month < b.month ? -1 : 1)),
     salesTotal, returnsTotal, net, profit, invoiceCount: sales.length, returnCount: returns.length,
     byStaff: [...staff.values()].sort((a, b) => b.sales - a.sales),
     avgInvoice: sales.length ? Math.round(salesTotal / sales.length) : 0,
-    purchasesTotal: sum(purchases, (i) => i.total),
+    // المشتريات بعد طرح ما أُعيد للتجار
+    purchasesTotal: sum(purchases, (i) => i.total) - sum(inPeriod.filter((i) => i.type === 'purchase_return'), (i) => i.total),
     byDay: [...days.values()].sort((a, b) => (a.day < b.day ? -1 : 1)),
     best, least,
     byCategory: [...cats.values()].sort((a, b) => b.amount - a.amount),
@@ -174,12 +182,13 @@ export function reportSections(r, snapshot, { currency = 'ILS', showProfit = tru
   const sections = [
     { title: 'الملخص', head: ['البند', 'القيمة'], rows: [
       ['المبيعات', m(r.salesTotal)], ['المرتجعات', m(r.returnsTotal)], ['صافي المبيعات', m(r.net)],
+      ...(r.taxTotal ? [['منها ضريبة المبيعات', m(r.taxTotal)]] : []),
       ...(showProfit ? [['الربح', m(r.profit)]] : []),
       ['عدد الفواتير', String(r.invoiceCount)], ['متوسط الفاتورة', m(r.avgInvoice)], ['المشتريات', m(r.purchasesTotal)],
     ] },
     // الأرباح والخسائر: «شو ربحت وشو خسرت» — لصاحب المحل ومن يرى الأرباح فقط
     ...(showProfit ? [{ title: 'الأرباح والخسائر', head: ['البند', 'القيمة'], rows: [
-      ['صافي المبيعات', m(r.net)], ['تكلفة البضاعة المباعة', m(-(r.costTotal || 0))],
+      ['صافي المبيعات', m(r.net)], ...(r.taxTotal ? [['ضريبة المبيعات (للدولة)', m(-r.taxTotal)]] : []), ['تكلفة البضاعة المباعة', m(-(r.costTotal || 0))],
       ...(r.feeTotal ? [['رسوم التحويل', m(-r.feeTotal)]] : []),
       ['ربح البضاعة', m(r.profit)], ['المصاريف', m(-(r.expensesTotal || 0))],
       ...(r.damageTotal ? [['بضاعة تالفة', m(-r.damageTotal)]] : []),

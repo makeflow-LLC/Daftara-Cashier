@@ -1409,3 +1409,9 @@ select.input{appearance:auto;min-height:48px}
   .acc-cols{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-6);align-items:start}
   .hub-pro{grid-template-columns:repeat(4,1fr)}
 }
+
+/* ===== البيع المباشر: زر «نقدًا» بجانب «ادفع»، وسطر آخر بيع ===== */
+.paybar-main .cashbtn{flex:none;min-width:0;padding:0 16px;background:#fff}
+.paybar-main .cashbtn[hidden]{display:none}
+.sale-last:empty{display:none}
+.last-chip{justify-content:flex-start;text-align:right;min-height:40px;padding:4px 12px;background:var(--amber-100);color:var(--amber-700)}

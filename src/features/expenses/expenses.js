@@ -16,6 +16,7 @@ import { localDay } from '../../domain/offers.js';
 import { app } from '../../core/app.js';
 import { bus } from '../../core/bus.js';
 import { navigate } from '../../core/router.js';
+import { centerPicker } from '../accounting/centers.js';
 
 const cur = () => app.shop?.base_currency || 'ILS';
 const dayText = (iso) => new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' });
@@ -66,6 +67,8 @@ export async function expenseSheet(expense = null, { onSaved = null } = {}) {
     setTimeout(() => name.focus(), 150);
   }
   paintCats();
+  // مركز التكلفة (المحاسبة ← مراكز التكلفة): يظهر فقط إن أنشأ صاحب المحل مراكز
+  const center = app.feature('accounting') ? centerPicker(expense ? expense.cost_center : null) : { el: null, get: () => null };
   let busy = false;
   openSheet((close) => h('form', {
     onsubmit: async (e) => {
@@ -81,6 +84,7 @@ export async function expenseSheet(expense = null, { onSaved = null } = {}) {
         const saved = await app.expenses.save({
           id: expense ? expense.id : null, category, amount: v, method: pick.get(), note: note.value, spent_at: spent,
           employee_id: expense ? expense.employee_id : null, period: expense ? expense.period : null,
+          ...(center.el ? { cost_center: center.get() } : {}),
         });
         feedback.ok(); close();
         toast(expense ? 'عُدّل المصروف' : `سُجّل مصروف ${categoryName(category)}: ${formatMoney(v, cur())}`, { kind: 'ok' });
@@ -92,6 +96,7 @@ export async function expenseSheet(expense = null, { onSaved = null } = {}) {
     h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'البند'), cats),
     h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'من أين دُفع؟'), pick.el,
       h('span', { class: 'field-hint' }, '«من الدرج» ينقص النقد المتوقع في الصندوق.')),
+    center.el,
     h('div', { class: 'grid-2' }, field('التاريخ', date), field('ملاحظة', note)),
     button(expense ? 'حفظ التعديل' : 'حفظ المصروف', { type: 'submit', block: true, size: 'lg', icon: 'check' }),
     expense ? h('button', {

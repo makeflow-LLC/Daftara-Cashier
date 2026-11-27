@@ -19,6 +19,7 @@ import { app } from '../../core/app.js';
 import { bus } from '../../core/bus.js';
 import { navigate } from '../../core/router.js';
 import { productThumb } from '../products/thumb.js';
+import { taxConfig } from '../../domain/tax.js';
 import { openPay } from './pay.js';
 import { showReceipt, printReceipt } from './receipt.js';
 import { unknownBarcode } from '../products/link.js';
@@ -32,6 +33,8 @@ export function renderSale(el, params = {}) {
   const base = app.shop?.base_currency || 'ILS';
   // الربح خاص بصاحب المحل: لا يظهر في شاشة البيع إلا إن فعّله من الإعدادات (الزبون قد يرى الشاشة)
   const showProfit = app.can('see_profit') && readPrefs().saleProfit === true;
+  // الضريبة (الإعدادات ← الضريبة): شاملة في السعر أو تُضاف فوق الإجمالي. null = المحل لا يعمل بها
+  const tax = taxConfig(app.shop?.settings);
   // exchange: تبديل — { amount, number } رصيد مرتجع يُخصم مما يدفعه الزبون في هذه الفاتورة
   // name: اسم زبون عابر يُكتب على الفاتورة (بلا حساب). edit: فاتورة تُعدَّل { id, number, total, prior, credit, customerId }
   const empty = () => ({ lines: [], discount: null, customer: null, exchange: null, name: null, edit: null });
@@ -62,12 +65,17 @@ export function renderSale(el, params = {}) {
   torchBtn.hidden = true;
   const payLabel = h('span', null, 'ادفع');
   const payBtn = h('button', { class: 'btn btn-primary btn-lg paybtn', type: 'button', onclick: pay }, icon('check', 22), payLabel, kbd('F10'));
+  // البيع المباشر (الإعدادات ← الميزات): «نقدًا» يحفظ الفاتورة بالمبلغ كاملًا فورًا، بلا نافذة دفع ولا فاتورة تُغلق
+  const direct = app.feature('directSale');
+  const cashBtn = h('button', { class: 'btn btn-outline btn-lg cashbtn', type: 'button', 'aria-label': 'بيع نقدًا مباشرة', onclick: directCash }, icon('cash', 22), h('span', null, 'نقدًا'), kbd('F5'));
+  cashBtn.hidden = !direct;
+  const lastEl = h('div', { class: 'sale-last' });
 
   el.append(h('div', { class: 'sale' },
     header('بيع', { back: true, actions: [torchBtn, camBtn, heldBtn, app.can('returns') ? labeled('undo', 'مرتجع', 'مرتجع', () => navigate('/sale/returns')) : null].filter(Boolean) }),
     scanBox, camStatus,
     h('div', { class: 'sale-search' }, h('div', { class: 'search-row' }, icon('search', 20), search), results),
-    quickWrap, custEl, cartEl,
+    quickWrap, custEl, lastEl, cartEl,
     h('div', { class: 'paybar paybar-2' },
       h('div', { class: 'paybar-tools' },
         // مبلغ حر = سعر يكتبه البائع: لمن يملك صلاحية «يعطي خصمًا ويغيّر السعر» (وصاحب المحل والمحل بلا موظفين)
@@ -75,7 +83,7 @@ export function renderSale(el, params = {}) {
         app.can('discount') ? labeled('tag', 'خصم', 'خصم على الفاتورة', openDiscount, 'pill', 'F4') : null,
         labeled('user', 'زبون', 'الزبون', chooseCustomer, 'pill', 'F6'),
         labeled('clipboard', 'علّق', 'علّق السلة', holdCart, 'pill', 'F8')),
-      h('div', { class: 'paybar-main' }, totalEl, payBtn)),
+      h('div', { class: 'paybar-main' }, totalEl, cashBtn, payBtn)),
   ));
 
   // ---------- السلة ----------
@@ -96,7 +104,7 @@ export function renderSale(el, params = {}) {
 
   function paint() {
     const pr = priced();
-    const t = cartTotals(pr.lines, cart.discount);
+    const t = cartTotals(pr.lines, cart.discount, 0, tax);
     if (!cart.lines.length) {
       fill(cartEl, emptyState('cart', 'السلة فارغة', cameraOn ? 'امسح باركود الصنف بالكاميرا أو ابحث باسمه.' : 'ابحث باسم الصنف أو اكتب الباركود.'));
     } else {
@@ -120,6 +128,7 @@ export function renderSale(el, params = {}) {
       h('div', { class: 'pt-sub' },
         h('span', null, `${t.count} صنف`),
         t.discount ? h('span', null, ' · خصم ', num(formatMoney(t.discount, base))) : null,
+        t.tax ? h('span', null, tax.inclusive ? ' · منها ضريبة ' : ' · + ضريبة ', num(formatMoney(t.tax, base))) : null,
         pr.saved ? h('span', { class: 'pt-saved' }, ' · العروض وفّرت ', num(formatMoney(pr.saved, base))) : null,
         showProfit && t.count ? h('span', { class: `pt-profit ${t.profit < 0 ? 'neg' : ''}` }, ' · ربح ', num(formatMoney(t.profit, base))) : null,
       ));
@@ -425,7 +434,7 @@ export function renderSale(el, params = {}) {
     const held = await app.sales.listHeld();
     if (!held.length) { toast('لا سلال معلّقة'); return; }
     openSheet((close) => h('div', { class: 'list' }, ...held.map((hd) => {
-      const t = cartTotals(hd.cart.lines, hd.cart.discount);
+      const t = cartTotals(hd.cart.lines, hd.cart.discount, 0, tax);
       return h('button', {
         class: 'row row-tap', type: 'button',
         onclick: async () => {
@@ -444,13 +453,13 @@ export function renderSale(el, params = {}) {
   // ---------- الدفع ----------
   function pay() {
     const pr = priced();
-    const t = cartTotals(pr.lines, cart.discount);
+    const t = cartTotals(pr.lines, cart.discount, 0, tax);
     if (!t.count) return;
     if (scanner) scanner.pause();
     const edit = cart.edit;
     const save = async ({ payments, customer, name = null }) => {
       const r = await app.sales.checkout({
-        lines: pr.lines, discount: cart.discount, payments, customerId: customer ? customer.id : null, currency: base,
+        lines: pr.lines, discount: cart.discount, payments, customerId: customer ? customer.id : null, currency: base, tax,
         note: customer ? null : name, replaces: edit ? edit.id : null,
       });
       if (edit) {
@@ -485,6 +494,35 @@ export function renderSale(el, params = {}) {
       onConfirm: save,
       onClose,
     });
+  }
+
+  // البيع المباشر: نقدًا بالمبلغ كاملًا بضغطة. التبديل والتعديل والمبلغ صفر تمر بنافذة الدفع كالمعتاد.
+  let directBusy = false;
+  async function directCash() {
+    if (!direct || directBusy) return;
+    const pr = priced();
+    const t = cartTotals(pr.lines, cart.discount, 0, tax);
+    if (!t.count) return;
+    if (cart.edit || cart.exchange || t.total <= 0) { pay(); return; }
+    directBusy = true;
+    try {
+      const cash = (await app.sales.paymentMethods()).find((m) => m.kind === 'cash');
+      const customer = cart.customer;
+      const r = await app.sales.checkout({
+        lines: pr.lines, discount: cart.discount, payments: [{ kind: 'cash', method_id: cash ? cash.id : null, amount: t.total }],
+        customerId: customer ? customer.id : null, currency: base, tax, note: customer ? null : cart.name,
+      });
+      cart = empty();
+      changed();
+      feedback.ok();
+      printer.settings().then(async (s) => { if (s.auto && (await printer.ready())) printReceipt(r.invoice.id); });
+      // لا نافذة تُغلق: إشعار قصير، وسطر «آخر بيع» يفتح الفاتورة لمن يريدها (واتساب، طباعة، إلغاء)
+      const open = () => showReceipt(r.invoice.id, { doneLabel: 'إغلاق', doneIcon: 'x', manage: true, onChanged: () => fill(lastEl) });
+      fill(lastEl, h('button', { class: 'cust-chip last-chip', type: 'button', onclick: open }, icon('receipt', 16),
+        h('span', null, 'آخر بيع ', num(r.invoice.number), ': ', money(r.invoice.total), ' — اضغط للفاتورة')));
+      toast(`بِيع نقدًا ${formatMoney(r.invoice.total, base)} — ${r.invoice.number}`, { kind: 'ok', ms: 2200 });
+      search.focus();
+    } catch (e) { feedback.error(); toast(e.message || 'تعذّر الحفظ', { kind: 'error' }); } finally { directBusy = false; }
   }
 
   // تعديل فاتورة آجلة: سطران يقولان ما سيحدث لحساب الزبون، وزر واحد
@@ -565,6 +603,7 @@ export function renderSale(el, params = {}) {
   // لوحة المفاتيح (الحاسوب): البيع كله بلا فأرة
   const offShortcuts = pageShortcuts([
     { key: 'F10', label: 'ادفع', run: pay },
+    ...(direct ? [{ key: 'F5', label: 'بيع نقدًا مباشرة', run: directCash }] : []),
     ...(app.can('discount') ? [{ key: 'F4', label: 'خصم على الفاتورة', run: openDiscount }] : []),
     { key: 'F6', label: 'اختر الزبون', run: chooseCustomer },
     ...(app.can('discount') ? [{ key: 'F7', label: 'مبلغ بلا صنف', run: openCustom }] : []),

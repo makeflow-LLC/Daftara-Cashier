@@ -98,6 +98,7 @@ export function renderInventory(el, params) {
     act('users', 'ديون التجار', () => navigate('/suppliers')),
     app.feature('stockCount') ? act('clipboard', 'جرد', () => navigate('/inventory/count')) : null,
     act('trash', 'تالف', damage),
+    act('undo', 'مرتجع للتاجر', () => navigate('/inventory/purchase-return')),
     act('warehouse', 'المخازن والنقل', () => navigate('/inventory/warehouses')));
 
   function paint() {

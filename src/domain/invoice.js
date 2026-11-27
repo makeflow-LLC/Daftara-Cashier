@@ -26,15 +26,26 @@ export function receiptModel({ invoice, lines, payments = [], methodNames = new 
     totals.push({ label: 'المجموع', value: m(invoice.subtotal) });
     totals.push({ label: 'الخصم', value: m(-invoice.discount) });
   }
+  // الضريبة: المضافة تظهر قبل الإجمالي (المجموع قبلها ثم هي)، والشاملة بعده «منها ضريبة»
+  const tax = invoice.tax || 0;
+  const onTop = tax > 0 && invoice.total > (invoice.subtotal || 0) - (invoice.discount || 0);
+  const taxLabel = (shop.settings && shop.settings.tax && String(shop.settings.tax.name || '').trim()) || 'ضريبة القيمة المضافة';
+  if (onTop) {
+    totals.push({ label: 'قبل الضريبة', value: m(invoice.total - tax) });
+    totals.push({ label: taxLabel, value: m(tax) });
+  }
   totals.push({ label: 'الإجمالي', value: m(invoice.total), strong: true });
+  if (tax > 0 && !onTop) totals.push({ label: `منها ${taxLabel}`, value: m(tax) });
   if (invoice.type === 'purchase' && invoice.paid < invoice.total) totals.push({ label: 'على الحساب', value: m(invoice.total - invoice.paid) });
   // فاتورة بيع ملغاة: ما خرج عند إلغائها (direction = out) ليس طريقة دفع تُعرض للزبون
   for (const p of invoice.type === 'sale' ? payments.filter((x) => x.direction !== 'out') : payments) {
     totals.push({ label: p.method_kind === 'credit' ? 'آجل (على الحساب)' : (methodNames.get(p.method_id) || 'نقدًا'), value: m(p.amount) });
   }
   const voided = invoice.status === 'void';
+  // فاتورة فيها ضريبة تحمل رقم المشتغل المرخّص تحت اسم المحل
+  const taxNo = tax > 0 && shop.settings && shop.settings.tax && String(shop.settings.tax.number || '').trim();
   return {
-    shopName: shop.name || '', shopPhone: shop.phone || '', shopAddress: shop.address || '',
+    shopName: shop.name || '', shopPhone: shop.phone || '', shopAddress: [shop.address || '', taxNo ? `مشتغل مرخّص ${taxNo}` : ''].filter(Boolean).join(' — '),
     // الملغاة تحمل ذلك في عنوانها أينما ظهرت (شاشة، صورة، نص، طباعة)
     title: `${INVOICE_TITLES[invoice.type] || 'فاتورة'}${voided ? ' ملغاة' : ''}`, number: invoice.number, date: dateTimeText(invoice.created_at),
     voided,

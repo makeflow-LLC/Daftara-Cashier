@@ -100,6 +100,7 @@ export async function showReceipt(invoiceId, { doneLabel = 'بيع جديد', do
         printBtn,
         h('button', { class: 'btn btn-outline rc-more', type: 'button', 'aria-label': 'خيارات الإرسال', onclick: () => moreShareOptions(invoiceId) }, icon('more', 22))),
       done(close),
+      invoice.type === 'purchase' && invoice.status !== 'void' && app.can('purchases') ? button('أعِد بضاعة للتاجر (مرتجع)', { kind: 'outline', block: true, icon: 'undo', onclick: () => { close(); navigate(`/inventory/purchase-return?id=${invoiceId}`); } }) : null,
       canManage ? h('div', { class: 'rc-manage' },
         button('عدّل الفاتورة', { kind: 'outline', icon: 'edit', onclick: () => { close(); navigate(`/sale?edit=${invoiceId}`); } }),
         h('button', { class: 'btn btn-outline btn-danger-text', type: 'button', onclick: () => { close(); confirmVoid(invoiceId, onChanged); } }, icon('trash', 22), h('span', null, 'ألغِ الفاتورة'))) : null),

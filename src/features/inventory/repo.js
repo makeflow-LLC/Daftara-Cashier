@@ -1,6 +1,6 @@
 // المخزون على الجهاز: الشراء (يحدّث المخزون ومتوسط التكلفة)، التجار (الموردون) وديونهم، الجرد، التالف، والتنبيهات.
 // كل تغيير في الكمية حركة تُضاف — لا رقم يُعدَّل.
-import { buildPurchase, buildTransfer, transferHistory, stockAlerts, countSummary, reorderPlan, deadStock, VELOCITY_DAYS } from '../../domain/inventory.js';
+import { buildPurchase, buildPurchaseReturn, purchaseReturnable, buildTransfer, transferHistory, stockAlerts, countSummary, reorderPlan, deadStock, VELOCITY_DAYS } from '../../domain/inventory.js';
 import { oldestUnpaidAt, ledgerView, effectiveEntries, balanceOf, editableEntry, VOID_PREFIX } from '../../domain/ledger.js';
 import { signedQty, knownCost, stockValue } from '../../domain/stock.js';
 import { normalizeArabic, normalizeBarcode } from '../../domain/product.js';
@@ -87,6 +87,54 @@ export function createInventoryRepo({ db, store, getContext, clock }) {
         return { invoice: r.invoice, total: r.total };
       });
     },
+    // ---------- مرتجع المشتريات ----------
+    /** فواتير الشراء القائمة، الأحدث أولًا (لاختيار ما يُعاد منه). */
+    async recentPurchases(limit = 100) {
+      return (await db.invoices.where('type').equals('purchase').toArray()).filter((i) => !i.deleted && i.status !== 'void')
+        .sort((a, b) => (a.created_at < b.created_at ? 1 : -1)).slice(0, limit);
+    },
+    /** سطور فاتورة شراء مع ما أُعيد منها سابقًا وما يمكن إعادته والموجود منه الآن في مكانه. */
+    async purchaseReturnable(invoiceId) {
+      const invoice = await db.invoices.get(invoiceId);
+      if (!invoice || invoice.deleted) throw invalid({ invoice: 'الفاتورة غير موجودة' });
+      const lines = (await db.invoice_lines.where('invoice_id').equals(invoiceId).toArray()).sort((a, b) => (a.position || 0) - (b.position || 0));
+      const returns = (await db.invoices.where('type').equals('purchase_return').toArray()).filter((r) => r.original_invoice_id === invoiceId && !r.deleted && r.status !== 'void');
+      const prev = [];
+      for (const r of returns) prev.push(...(await db.invoice_lines.where('invoice_id').equals(r.id).toArray()));
+      const stock = new Map();
+      for (const l of lines) {
+        const s = invoice.branch_id ? await db.wh_stock.get([invoice.branch_id, l.product_id]) : await db.stock.get(l.product_id);
+        stock.set(l.product_id, s ? Math.max(0, s.qty) : 0);
+      }
+      const supplier = invoice.supplier_id ? await db.suppliers.get(invoice.supplier_id) : null;
+      return { invoice, lines, rows: purchaseReturnable(lines, prev), stock, supplier };
+    },
+    /** picks: [{ line, qty }] ؛ refund: 'credit' (ينزل مما عليك له) | 'cash' (ردّ ثمنها نقدًا). */
+    async returnPurchase(invoiceId, picks, refund) {
+      const ctx = getContext();
+      const { invoice, lines, rows, stock } = await repo.purchaseReturnable(invoiceId);
+      for (const p of picks) {
+        const row = rows.find((r) => r.line.id === p.line.id);
+        if (!row || p.qty > row.returnable) throw invalid({ qty: 'الكمية أكبر مما يمكن إعادته' });
+      }
+      const [cashSessionId, cashId] = await Promise.all([openSessionId(), cashMethodId()]);
+      try {
+        return await store.write(async (w) => {
+          const seq = await nextSeq('purchase_return');
+          const r = buildPurchaseReturn(invoice, lines, picks.map((p) => ({ line: lines.find((l) => l.id === p.line.id), qty: p.qty })), refund, {
+            newId: uuid, now: clock(), prefix: ctx.prefix || 'A', seq, cashSessionId, cashMethodId: cashId, deviceId: ctx.deviceId,
+            stockOf: (pid) => stock.get(pid) || 0,
+          });
+          await w.put('invoices', r.invoice);
+          for (const l of r.lines) await w.append('invoice_lines', l);
+          for (const m of r.movements) await w.append('movements', m);
+          for (const p of r.payments) await w.append('payments', p);
+          for (const e of r.supplierEntries) await w.append('supplier_entries', e);
+          return { invoice: r.invoice, total: r.total, credit: r.credit, cash: r.cash };
+        });
+      } catch (e) { throw e.errors ? e : invalid({ qty: e.message }); }
+    },
+
     async loadDraft() { return (await db.meta.get('purchase:current'))?.value || null; },
     saveDraft(d) { return d && d.lines.length ? db.meta.put({ key: 'purchase:current', value: d }) : db.meta.delete('purchase:current'); },
 

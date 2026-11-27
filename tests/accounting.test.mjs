@@ -629,3 +629,55 @@ test('books: an edited invoice, a cash return and a removed cheque leave nothing
   const stock = (await t.inventory.productsWithStock()).reduce((a, p) => a + stockValue(p.qty, p.avg_cost), 0);
   assert.equal(bal(b, 'inventory'), stock);
 });
+
+// ---------- مرتجع المشتريات ----------
+test('purchase return: goods go back to the supplier, off the debt or for cash, never more than bought or in stock', async () => {
+  const t = await setup();
+  const { product: rice } = await t.products.save({ name: 'أرز', sell_price: 1200, cost_price: 900 });
+  const { product: oil } = await t.products.save({ name: 'زيت', sell_price: 2500, cost_price: 2000 });
+  const supplier = await t.inventory.saveSupplier({ name: 'أبو خالد' });
+  const buy = await t.inventory.savePurchase({ lines: [purchaseLine(rice, { qty: 10000, unitCost: 900 }), purchaseLine(oil, { qty: 4000, unitCost: 2000 })], supplierId: supplier.id, paid: 'credit' });
+  assert.equal((await t.inventory.supplier(supplier.id)).balance, 17000);
+  await sellCash(t, rice, 7000); // بقي 3 أرز
+  let r = await t.inventory.purchaseReturnable(buy.invoice.id);
+  assert.deepEqual(r.rows.map((x) => x.returnable), [10000, 4000]);
+  assert.equal(r.stock.get(rice.id), 3000);
+  // لا يُعاد ما بِيع
+  await assert.rejects(t.inventory.returnPurchase(buy.invoice.id, [{ line: r.rows[0].line, qty: 5000 }], 'credit'), /الموجود أقل/);
+  // إعادة 2 أرز و1 زيت على الحساب: ينزل مما عليك، والبضاعة تخرج
+  const back = await t.inventory.returnPurchase(buy.invoice.id, [{ line: r.rows[0].line, qty: 2000 }, { line: r.rows[1].line, qty: 1000 }], 'credit');
+  assert.equal(back.invoice.number, 'A-Q0001');
+  assert.equal(back.invoice.type, 'purchase_return');
+  assert.equal(back.total, 1800 + 2000);
+  assert.equal((await t.inventory.supplier(supplier.id)).balance, 17000 - 3800);
+  assert.equal((await t.db.stock.get(rice.id)).qty, 1000);
+  assert.equal((await t.db.stock.get(oil.id)).qty, 3000);
+  // مرتجع ثانٍ نقدًا: يدخل الدرج وكشف التاجر لا يتغير؛ ولا يُعاد أكثر مما بقي من السطر
+  r = await t.inventory.purchaseReturnable(buy.invoice.id);
+  assert.deepEqual(r.rows.map((x) => [x.returned, x.returnable]), [[2000, 8000], [1000, 3000]]);
+  await assert.rejects(t.inventory.returnPurchase(buy.invoice.id, [{ line: r.rows[1].line, qty: 4000 }], 'cash'), /أكبر/);
+  const before = (await t.cash.summary()).expectedCash;
+  const cashBack = await t.inventory.returnPurchase(buy.invoice.id, [{ line: r.rows[1].line, qty: 1000 }], 'cash');
+  assert.equal(cashBack.cash, 2000);
+  assert.equal((await t.cash.summary()).expectedCash, before + 2000);
+  assert.equal((await t.inventory.supplier(supplier.id)).balance, 13200);
+  // الدفاتر: متوازنة، التجار والدرج والبضاعة كما في شاشاتها، ولا شيء معلّق
+  const b = await t.accounting.books();
+  assertBalanced(b);
+  assert.ok(!b.entries.some((e) => e.lines.some((l) => l.account === 'suspense')));
+  assert.equal(-bal(b, 'ap'), 13200);
+  assert.equal(bal(b, DRAWER), (await t.cash.summary()).expectedCash);
+  const stock = (await t.inventory.productsWithStock()).reduce((a, p) => a + stockValue(p.qty, p.avg_cost), 0);
+  assert.equal(bal(b, 'inventory'), stock);
+  assert.equal(bal(b, 'stock_diff'), 0);
+  // التقرير: المشتريات بعد طرح المرتجع
+  const report = buildReport({
+    invoices: await t.db.invoices.toArray(), lines: await t.db.invoice_lines.toArray(), payments: await t.db.payments.toArray(),
+    products: await t.db.products.toArray(), from: '2000-01-01T00:00:00.000Z', to: '2100-01-01T00:00:00.000Z',
+  });
+  assert.equal(report.purchasesTotal, 17000 - 3800 - 2000);
+  // فاتورة شراء نقدية بلا تاجر: المرتجع نقدًا فقط
+  const cashBuy = await t.inventory.savePurchase({ lines: [purchaseLine(oil, { qty: 2000, unitCost: 2000 })], paid: 'cash' });
+  const rr = await t.inventory.purchaseReturnable(cashBuy.invoice.id);
+  await assert.rejects(t.inventory.returnPurchase(cashBuy.invoice.id, [{ line: rr.rows[0].line, qty: 1000 }], 'credit'), /بلا تاجر/);
+});

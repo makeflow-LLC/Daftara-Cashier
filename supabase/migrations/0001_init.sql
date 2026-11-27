@@ -246,6 +246,7 @@ create table if not exists public.cashier_invoices (
   cost_total bigint not null default 0,
   fee_total bigint not null default 0,
   paid bigint not null default 0,
+  tax bigint not null default 0,                  -- ضريبة القيمة المضافة ضمن total (0011)
   note text, attachment_path text,
   created_by uuid,
   created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
@@ -326,6 +327,7 @@ create table if not exists public.cashier_expenses (
   branch_id uuid, category text, amount bigint not null, method_id uuid, cash_session_id uuid,
   note text, attachment_path text, spent_at timestamptz not null default now(),
   employee_id uuid, period text,                   -- للرواتب: الموظف وشهر الراتب (YYYY-MM)
+  cost_center uuid,                                -- مركز التكلفة (0011)
   created_by uuid,
   created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
   deleted boolean not null default false, server_seq bigint, server_at timestamptz

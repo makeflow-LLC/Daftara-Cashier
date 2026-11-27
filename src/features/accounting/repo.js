@@ -10,6 +10,7 @@ import { cancelledIds, isVoidEntry } from '../../domain/ledger.js';
 import { customCategories, expenseProblem, categoryName } from '../../domain/expenses.js';
 import { formatInvoiceNumber } from '../../domain/numbering.js';
 import { stockValue } from '../../domain/stock.js';
+import { costCenters, centerProblem, centerReport } from '../../domain/centers.js';
 import { uuid } from '../../core/ids.js';
 
 /**
@@ -135,6 +136,34 @@ export function createAccountingRepo({ db, store, getContext, clock, getSettings
       repo.invalidate();
     },
 
+    // ---------- مراكز التكلفة ----------
+    centers: () => costCenters(getSettings()),
+    /** مركز جديد أو تعديله: الاسم والتصنيفات المربوطة به (تصنيف لمركز واحد: يُنزع من غيره). */
+    async saveCenter({ id = null, name, categories = [] }) {
+      const list = costCenters(getSettings());
+      const err = centerProblem({ name }, list, id);
+      if (err) throw invalid(err, 'name');
+      const clean = String(name).trim().replace(/\s+/g, ' ').slice(0, 40);
+      const mine = new Set(categories);
+      const others = list.filter((c) => c.id !== id).map((c) => ({ ...c, categories: c.categories.filter((x) => !mine.has(x)) }));
+      const center = { id: id || uuid(), name: clean, categories: [...mine], active: true };
+      const next = id ? list.map((c) => (c.id === id ? center : others.find((o) => o.id === c.id))) : [...others, center];
+      await saveSettings({ costCenters: next });
+      return center;
+    },
+    /** إغلاق مركز: يختفي من الخيارات، وحركاته السابقة تبقى في تقريره. */
+    async closeCenter(id, active = false) {
+      await saveSettings({ costCenters: costCenters(getSettings()).map((c) => (c.id === id ? { ...c, active } : c)) });
+    },
+    /** ربح كل مركز في مدة. */
+    async centerReport(range = {}) {
+      const [invoices, lines, products, expenses, vouchers] = await Promise.all([
+        db.invoices.toArray(), db.invoice_lines.toArray(), db.products.toArray(), db.expenses.toArray(), db.vouchers.toArray(),
+      ]);
+      const accountTypes = new Map(repo.accounts().map((a) => [`acc:${a.id}`, a.type]));
+      return centerReport({ invoices, lines, products, expenses, vouchers, accountTypes }, repo.centers(), range);
+    },
+
     // ---------- السندات ----------
     /**
      * سند قبض أو صرف (بلا زبون ولا تاجر)، تحويل بين صندوقين، أو قيد يومية يدوي.
@@ -149,6 +178,7 @@ export function createAccountingRepo({ db, store, getContext, clock, getSettings
         note: v.note ? String(v.note).trim().slice(0, 200) || null : null,
         voucher_at: v.date || clock(),
         lines: v.type === 'journal' ? (v.lines || []).map((l) => ({ account: l.account, debit: l.debit || 0, credit: l.credit || 0 })) : null,
+        cost_center: v.cost_center || null,
       };
       const err = voucherProblem(row);
       if (err) throw invalid(err);
@@ -163,9 +193,9 @@ export function createAccountingRepo({ db, store, getContext, clock, getSettings
      * سند صرف لمصروف: يُسجَّل المصروف في المصاريف (فيدخل التقارير وصافي الربح كأي مصروف) ومعه سند برقمه.
      * method: من moneyChoices() أو null = من خارج الصندوق.
      */
-    async saveExpenseVoucher({ category, amount, method = null, note = null, party_name = null, date = null }) {
+    async saveExpenseVoucher({ category, amount, method = null, note = null, party_name = null, date = null, cost_center = null }) {
       const exp = {
-        category: String(category || '').trim() || null, amount, method_id: method ? method.id : null,
+        category: String(category || '').trim() || null, amount, method_id: method ? method.id : null, cost_center: cost_center || null,
         note: note ? String(note).trim().slice(0, 200) || null : null, spent_at: date || clock(),
       };
       const err = expenseProblem(exp);
@@ -177,7 +207,7 @@ export function createAccountingRepo({ db, store, getContext, clock, getSettings
         return w.put('vouchers', {
           type: 'payment', seq, number, status: 'final', amount, account: method ? method.id : null, contra: `exp:${exp.category}`,
           party_name: party_name ? String(party_name).trim().slice(0, 80) || null : null, note: exp.note, voucher_at: exp.spent_at,
-          ref_table: 'expenses', ref_id: e.id, device_id: getContext().deviceId ?? null,
+          ref_table: 'expenses', ref_id: e.id, cost_center: cost_center || null, device_id: getContext().deviceId ?? null,
         });
       });
       repo.invalidate();
@@ -247,7 +277,7 @@ export function createAccountingRepo({ db, store, getContext, clock, getSettings
       if (contra === 'supplier') return 'دفعة لتاجر';
       if (contra === 'capital') return 'رصيد كان موجودًا (أول المدة)';
       if (contra.startsWith('exp:')) return `مصروف: ${categoryName(contra.slice(4))}`;
-      const c = contraChoices(type, repo.accounts()).find((x) => x.key === contra);
+      const c = contraChoices(type, repo.accounts(), { tax: true }).find((x) => x.key === contra);
       return c ? c.label : null;
     },
 
