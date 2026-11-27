@@ -3,8 +3,9 @@
 import { sessionSummary, closingResult } from '../../domain/cash.js';
 import { startOfDay } from '../../core/queries.js';
 import { drawerExpenses } from '../../domain/expenses.js';
+import { makeChart, shopBoxes, drawerExtras } from '../../domain/accounting.js';
 
-export function createCashRepo({ db, store, getContext, clock }) {
+export function createCashRepo({ db, store, getContext, clock, getSettings = () => ({}) }) {
   const repo = {
     async openSession() {
       return (await db.cash_sessions.orderBy('opened_at').reverse().limit(10).toArray()).find((s) => !s.deleted && !s.closed_at) || null;
@@ -25,12 +26,17 @@ export function createCashRepo({ db, store, getContext, clock }) {
     },
     async summary() {
       const cur = await repo.current();
-      const [payments, methods, expenses] = await Promise.all([
+      const [payments, methods, expenses, vouchers, cheques] = await Promise.all([
         db.payments.where('created_at').aboveOrEqual(cur.since).toArray(), db.payment_methods.toArray(), db.expenses.toArray(),
+        db.vouchers.toArray(), db.cheques.toArray(),
       ]);
       // المصاريف المدفوعة نقدًا منذ فتح الصندوق تخرج من الدرج
       const cashIds = new Set(methods.filter((m) => m.kind === 'cash').map((m) => m.id));
-      return { ...cur, ...sessionSummary({ opening: cur.opening, payments, methodNames: new Map(methods.map((m) => [m.id, m.name])), expenses: drawerExpenses(expenses, cashIds, cur.since) }) };
+      // والسندات والتحويلات بين الصناديق والشيكات التي صُرفت في الدرج
+      const boxes = shopBoxes(getSettings());
+      const extra = drawerExtras({ vouchers, cheques }, makeChart({ methods, boxes }), cur.since);
+      const names = new Map([...methods.map((m) => [m.id, m.name]), ...boxes.map((b) => [b.id, b.name])]);
+      return { ...cur, ...sessionSummary({ opening: cur.opening, payments, methodNames: names, expenses: drawerExpenses(expenses, cashIds, cur.since), extraIn: extra.in, extraOut: extra.out }) };
     },
     async open(openingCash) {
       if (!Number.isSafeInteger(openingCash) || openingCash < 0) throw new Error('اكتب المبلغ الموجود في الدرج');

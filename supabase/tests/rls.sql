@@ -96,6 +96,29 @@ insert into cashier_payments (id, shop_id, direction, method_kind, amount, numbe
 values ('00000000-0000-0000-0000-0000000000f2', :S1, 'in', 'cash', 4000, 'A-V0001') on conflict (id) do nothing;
 do $$ begin assert (select period from cashier_expenses) = '2026-11' and (select number from cashier_payments) = 'A-V0001', 'salary period and receipt number stored'; end $$;
 
+-- السندات والشيكات (0010): آخر تعديل يفوز، أنواع وحالات معروفة، ولا حذف فعلي
+insert into cashier_vouchers (id, shop_id, number, seq, type, amount, account, contra, updated_at)
+values ('00000000-0000-0000-0000-0000000000c1', :S1, 'A-S0001', 1, 'payment', 50000, 'drawer', 'owner', '2026-01-01T10:00:00Z')
+on conflict (id) do update set status = excluded.status, updated_at = excluded.updated_at;
+insert into cashier_vouchers (id, shop_id, number, seq, type, amount, account, contra, status, updated_at)
+values ('00000000-0000-0000-0000-0000000000c1', :S1, 'A-S0001', 1, 'payment', 50000, 'drawer', 'owner', 'void', '2026-01-02T10:00:00Z')
+on conflict (id) do update set status = excluded.status, updated_at = excluded.updated_at;
+insert into cashier_vouchers (id, shop_id, number, seq, type, amount, account, contra, status, updated_at)
+values ('00000000-0000-0000-0000-0000000000c1', :S1, 'A-S0001', 1, 'payment', 50000, 'drawer', 'owner', 'final', '2025-12-31T10:00:00Z')
+on conflict (id) do update set status = excluded.status, updated_at = excluded.updated_at;
+do $$ begin assert (select status from cashier_vouchers) = 'void', 'voucher void wins over an older edit'; end $$;
+insert into cashier_cheques (id, shop_id, direction, number, bank, amount, due_date, party_type, party_name, updated_at)
+values ('00000000-0000-0000-0000-0000000000c2', :S1, 'in', '100245', 'بنك فلسطين', 120000, '2026-12-15', 'customer', 'أبو خالد', '2026-01-01T10:00:00Z')
+on conflict (id) do update set status = excluded.status, updated_at = excluded.updated_at;
+update cashier_cheques set status = 'cleared', status_at = now(), account = 'drawer', updated_at = '2026-01-03T10:00:00Z';
+do $$ begin assert (select status from cashier_cheques) = 'cleared', 'cheque status changes'; end $$;
+do $$ begin assert (select heads ? 'cashier_vouchers' and heads ? 'cashier_cheques' from cashier_shop_heads where shop_id = '11111111-1111-1111-1111-111111111111'), 'voucher and cheque heads tracked for pull'; end $$;
+select pg_temp.expect_error($q$delete from cashier_vouchers$q$, 'voucher hard delete');
+select pg_temp.expect_error($q$delete from cashier_cheques$q$, 'cheque hard delete');
+select pg_temp.expect_error($q$insert into cashier_vouchers (id, shop_id, number, seq, type, amount) values (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'A-X1', 1, 'gift', 1)$q$, 'bad voucher type');
+select pg_temp.expect_error($q$insert into cashier_cheques (id, shop_id, direction, amount, due_date) values (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'in', 0, '2026-12-01')$q$, 'cheque amount must be positive');
+select pg_temp.expect_error($q$insert into cashier_cheques (id, shop_id, direction, amount, due_date, status) values (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'in', 5, '2026-12-01', 'lost')$q$, 'bad cheque status');
+
 -- الأجهزة: A للجهاز الأول، B للثاني، ونفس الجهاز يحتفظ بحرفه
 do $$ begin
   assert public.cashier_register_device('11111111-1111-1111-1111-111111111111', 'dddddddd-0000-0000-0000-000000000001', 'جوال 1', 'A') = 'A', 'first device A';
@@ -120,6 +143,8 @@ do $$ begin assert (select count(*) from cashier_shops) = 1, 'B sees only own sh
 do $$ begin assert (select count(*) from cashier_inventory_movements) = 0, 'B sees no S1 movements'; end $$;
 do $$ begin assert (select count(*) from cashier_messages) = 0 and (select count(*) from cashier_expenses) = 0, 'B sees no S1 messages or expenses'; end $$;
 select pg_temp.expect_error($q$insert into cashier_messages (id, shop_id, kind, body) values (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'chat', 'hack')$q$, 'B writes a message into S1');
+do $$ begin assert (select count(*) from cashier_vouchers) = 0 and (select count(*) from cashier_cheques) = 0, 'B sees no S1 vouchers or cheques'; end $$;
+select pg_temp.expect_error($q$insert into cashier_cheques (id, shop_id, direction, amount, due_date) values (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'out', 5, '2026-12-01')$q$, 'B writes a cheque into S1');
 do $$ begin assert (select count(*) from storage.objects) = 0, 'B sees no S1 images'; end $$;
 do $$ begin assert (select count(*) from cashier_shop_heads where shop_id = '11111111-1111-1111-1111-111111111111') = 0, 'B sees no S1 heads'; end $$;
 select pg_temp.expect_error($q$insert into cashier_products (id, shop_id, name) values (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'hack')$q$, 'B writes into S1');
@@ -149,6 +174,8 @@ select pg_temp.check((select count(*) from cashier_products) = 1, 'expired shop 
 select pg_temp.expect_error($q$insert into cashier_products (id, shop_id, name) values (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'بعد الانتهاء')$q$, 'expired shop cannot insert');
 select pg_temp.expect_error($q$insert into cashier_inventory_movements (id, shop_id, product_id, type, qty) values (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', gen_random_uuid(), 'sale', -1000)$q$, 'expired shop cannot append');
 select pg_temp.expect_error($q$insert into cashier_messages (id, shop_id, kind, body) values (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'chat', 'بعد الانتهاء')$q$, 'expired shop cannot send messages');
+select pg_temp.expect_error($q$insert into cashier_vouchers (id, shop_id, number, seq, type, amount) values (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'A-S0002', 2, 'payment', 5)$q$, 'expired shop cannot write vouchers');
+select pg_temp.expect_error($q$update cashier_cheques set status = 'bounced', updated_at = now() where true$q$, 'expired shop cannot update cheques');
 select pg_temp.expect_error($q$update cashier_products set name = 'x', updated_at = now() where true$q$, 'expired shop cannot update');
 select pg_temp.expect_error($q$insert into storage.objects (bucket_id, name) values ('cashier-media', '11111111-1111-1111-1111-111111111111/products/z.webp')$q$, 'expired shop cannot upload');
 -- كود مزوَّر يُرفض، والكود الموقَّع يفتح المحل

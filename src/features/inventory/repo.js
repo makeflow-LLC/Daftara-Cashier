@@ -5,6 +5,7 @@ import { oldestUnpaidAt, ledgerView, effectiveEntries, balanceOf, editableEntry,
 import { signedQty, knownCost, stockValue } from '../../domain/stock.js';
 import { normalizeArabic, normalizeBarcode } from '../../domain/product.js';
 import { sum } from '../../domain/money.js';
+import { formatInvoiceNumber } from '../../domain/numbering.js';
 import { uuid } from '../../core/ids.js';
 
 export function createInventoryRepo({ db, store, getContext, clock }) {
@@ -23,12 +24,19 @@ export function createInventoryRepo({ db, store, getContext, clock }) {
     return (await db.payment_methods.toArray()).find((m) => m.kind === 'cash' && !m.deleted)?.id || null;
   }
 
-  async function writeSupplierPayment(w, { supplierId, amount, method, note, cashSessionId, cashId, entryAt = null }) {
+  /** رقم سند الصرف التالي من عدّاد هذا الجهاز (A-S0001) — داخل نفس معاملة الحفظ. */
+  async function nextPaymentNumber() {
+    const seq = await nextSeq('payment');
+    const prefix = getContext().prefix;
+    return formatInvoiceNumber(/^[A-Z]{1,3}$/.test(prefix || '') ? prefix : 'A', 'payment', seq);
+  }
+  async function writeSupplierPayment(w, { supplierId, amount, method, note, cashSessionId, cashId, entryAt = null, number = null }) {
     const transfer = !!method && method.kind === 'transfer';
     const pid = uuid();
     await w.append('payments', {
       id: pid, supplier_id: supplierId, direction: 'out', method_id: transfer ? method.id : cashId, method_kind: transfer ? 'transfer' : 'cash',
       amount, cash_session_id: transfer ? null : cashSessionId, note: 'دفعة لتاجر',
+      number: number || await nextPaymentNumber(), // كل دفعة لتاجر لها سند صرف برقم
     });
     return w.append('supplier_entries', {
       supplier_id: supplierId, type: 'payment', amount: -amount, payment_id: pid,
@@ -167,7 +175,8 @@ export function createInventoryRepo({ db, store, getContext, clock }) {
         if (entry.type === 'payment') {
           const orig = entry.payment_id ? await db.payments.get(entry.payment_id) : null;
           const method = orig && orig.method_kind === 'transfer' ? { id: orig.method_id, kind: 'transfer' } : null;
-          return writeSupplierPayment(w, { supplierId: entry.supplier_id, amount, method, note: cleanNote, cashSessionId, cashId, entryAt: entry.created_at });
+          // السند المعدَّل يحتفظ برقمه
+          return writeSupplierPayment(w, { supplierId: entry.supplier_id, amount, method, note: cleanNote, cashSessionId, cashId, entryAt: entry.created_at, number: orig ? orig.number : null });
         }
         const sign = entry.amount < 0 ? -1 : 1;
         return w.append('supplier_entries', { supplier_id: entry.supplier_id, type: entry.type, amount: sign * amount, note: cleanNote, created_at: entry.created_at });

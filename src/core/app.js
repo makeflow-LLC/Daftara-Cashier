@@ -28,6 +28,7 @@ import { createDues } from './dues.js';
 import { createExpenseRepo } from '../features/expenses/repo.js';
 import { createPayroll } from './payroll.js';
 import { createChat } from './chat.js';
+import { createAccountingRepo } from '../features/accounting/repo.js';
 
 const clock = makeClock();
 
@@ -131,9 +132,13 @@ export const app = {
     app.sales = createSaleRepo({ ...deps, clock });
     app.customers = createCustomerRepo(deps);
     app.inventory = createInventoryRepo({ ...deps, clock });
-    app.cash = createCashRepo({ ...deps, clock });
+    app.cash = createCashRepo({ ...deps, clock, getSettings: () => app.shop?.settings || {} });
     app.expenses = createExpenseRepo({ ...deps, clock });
     app.wallet = createWalletRepo({ ...deps, customers: app.customers });
+    app.accounting = createAccountingRepo({
+      ...deps, clock, getSettings: () => app.shop?.settings || {}, saveSettings: (patch) => app.updateShopSettings(patch),
+      inventory: app.inventory, customers: app.customers,
+    });
     if (app.ctx.shopId) await app.loadShop();
     app.license = createLicense({
       meta: app.meta, info: app.info, deviceId, shopCreatedAt: app.shop?.created_at || null,
@@ -150,6 +155,7 @@ export const app = {
     app.payroll = createPayroll(app, { toast: (...a) => bus.emit('toast', a) });
     app.chat = createChat(app, { toast: (...a) => bus.emit('toast', a) });
     bus.on('data', async (e) => {
+      app.accounting.invalidate(); // الدفاتر محسوبة من السجلات: أي تغيّر يعيد حسابها عند الطلب
       if (e.tables.includes('shops')) await app.loadShop();
       if (e.prefixChanged) app.ctx.prefix = e.prefixChanged;
     });
