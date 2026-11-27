@@ -118,7 +118,7 @@ export function renderCenters(el) {
           h('span', { class: 'row-sub' }, 'مبيعات ', num(plain(r.sales)), ' · تكلفة ', num(plain(r.cost)), ' · مصاريف ', num(plain(r.expenses)))),
         h('span', { class: `row-end strong ${r.net < 0 ? 'owed' : ''}` }, money(r.net))))),
       add,
-      h('p', { class: 'muted small' }, 'مبيعات المركز من تصنيفات أصنافه بعد الخصم والضريبة، ومصاريفه ما اخترته له عند تسجيلها. «بلا مركز»: كل ما لم يُنسب لمركز. اضغط المركز لتعديله.'));
+      h('p', { class: 'muted small' }, 'مبيعات المركز من تصنيفات أصنافه بعد الخصم والضريبة، وتكلفته بضاعته المباعة والتالفة، ومصاريفه ما اخترته له عند تسجيلها. «بلا مركز»: كل ما لم يُنسب لمركز. اضغط المركز لتعديله.'));
   }
   function doExport(type) {
     const rows = rep.rows.map((r) => [r.name, plain(r.sales), plain(r.cost), plain(r.expenses), plain(r.net)]);

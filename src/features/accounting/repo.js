@@ -157,11 +157,11 @@ export function createAccountingRepo({ db, store, getContext, clock, getSettings
     },
     /** ربح كل مركز في مدة. */
     async centerReport(range = {}) {
-      const [invoices, lines, products, expenses, vouchers] = await Promise.all([
-        db.invoices.toArray(), db.invoice_lines.toArray(), db.products.toArray(), db.expenses.toArray(), db.vouchers.toArray(),
+      const [invoices, lines, products, expenses, vouchers, movements] = await Promise.all([
+        db.invoices.toArray(), db.invoice_lines.toArray(), db.products.toArray(), db.expenses.toArray(), db.vouchers.toArray(), db.movements.toArray(),
       ]);
       const accountTypes = new Map(repo.accounts().map((a) => [`acc:${a.id}`, a.type]));
-      return centerReport({ invoices, lines, products, expenses, vouchers, accountTypes }, repo.centers(), range);
+      return centerReport({ invoices, lines, products, expenses, vouchers, movements, accountTypes }, repo.centers(), range);
     },
 
     // ---------- السندات ----------

@@ -227,6 +227,13 @@ test('cost centers: sales by category, expenses by choice, and the nets add up t
   // مجموع المراكز = صافي ربح المحل في قائمة الدخل
   const b = await t.accounting.books();
   assert.equal(rep.total.net, incomeStatement(b.entries, b.chart).net);
+  // تالف من الخضار يُحسب على مركزه، والمجموع يبقى مطابقًا لتقرير الأرباح (مع إيراد ومصروف السندات)
+  await t.inventory.damage(tomato.id, 2000);
+  const rep2 = await t.accounting.centerReport(ALL);
+  assert.equal(rep2.rows.find((r) => r.id === vegC.id).cost, 2500 + 500);
+  assert.equal(rep2.total.net, (await reportOf(t)).netProfit + 150 - 80);
+  t.accounting.invalidate(); // في التطبيق يفعلها أي تغيّر في البيانات (core/app.js)
+  assert.equal(rep2.total.net, incomeStatement((await t.accounting.books()).entries, b.chart).net);
   // مركز مغلق يختفي من الخيارات وتبقى حركاته في التقرير؛ وتصنيف يُنقل لمركز آخر
   await t.accounting.closeCenter(van.id);
   assert.ok(!t.accounting.centers().find((c) => c.id === van.id).active);

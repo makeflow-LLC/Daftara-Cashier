@@ -2,7 +2,8 @@
 // المراكز في settings.costCenters للمحل: [{ id, name, categories: [معرّفات تصنيفات], active }]
 //   إيراد المركز وتكلفة بضاعته: من مبيعات التصنيفات المربوطة به (كل تصنيف لمركز واحد).
 //   مصاريفه: كل مصروف أو سند اختير له المركز (expenses.cost_center، vouchers.cost_center).
-// ما ليس له مركز يظهر في سطر «بلا مركز»، فمجموع الصافي = صافي ربح المحل في المدة.
+//   التالف من أصنافه يُحسب عليه، ورسوم التحويل على «بلا مركز».
+// ما ليس له مركز يظهر في سطر «بلا مركز»، فمجموع الصافي = صافي الربح في تقرير الأرباح (مع إيرادات ومصاريف السندات).
 import { divRound, allocate } from './money.js';
 import { lineAmount } from './units.js';
 
@@ -34,11 +35,12 @@ export function centerProblem({ name }, existing = [], exceptId = null) {
 
 /**
  * ربح كل مركز في فترة [from, to).
- * data: { invoices, lines, products, expenses, vouchers, accountTypes: Map('acc:<id>' → نوع الحساب الخاص) }
+ * data: { invoices, lines, products, expenses, vouchers, movements, accountTypes: Map('acc:<id>' → نوع الحساب الخاص) }
  * يرجع { rows: [{ id, name, sales, cost, expenses, other, net }], total: { … } } — rows فيها «بلا مركز» أخيرًا إن كان له حركة.
  */
 export function centerReport(data, centers, { from = null, to = null } = {}) {
-  const { invoices = [], lines = [], products = [], expenses = [], vouchers = [], accountTypes = new Map() } = data;
+  const { invoices = [], lines = [], products = [], expenses = [], vouchers = [], movements = [], accountTypes = new Map() } = data;
+  const costOf = new Map(products.map((p) => [p.id, p.cost_price || 0]));
   const inRange = (d) => (!from || d >= from) && (!to || d < to);
   const active = new Set(centers.map((c) => c.id));
   const byCat = new Map();
@@ -59,6 +61,7 @@ export function centerReport(data, centers, { from = null, to = null } = {}) {
   for (const l of lines) { const x = inv.get(l.invoice_id); if (x) x.lines.push(l); }
   for (const { i, lines: ls } of inv.values()) {
     const sign = i.type === 'sale' ? 1 : -1;
+    if (i.type === 'sale' && i.fee_total) row(null).expenses += i.fee_total; // رسوم التحويل: على المحل كله
     const totals = ls.map((l) => l.total);
     const shares = allocate(i.discount || 0, totals);
     const base = Math.max(1, (i.subtotal || 0) - (i.discount || 0));
@@ -70,6 +73,11 @@ export function centerReport(data, centers, { from = null, to = null } = {}) {
       r.sales += sign * (net - (inclusive ? divRound(net * i.tax, base) : 0));
       r.cost += sign * lineAmount(l.unit_cost || 0, l.qty);
     });
+  }
+  // التالف: بتكلفته على مركز تصنيفه
+  for (const m of movements) {
+    if (m.type !== 'damage' || !inRange(m.created_at)) continue;
+    row(byCat.get(catOf.get(m.product_id))).cost += divRound(Math.abs(m.qty) * (m.unit_cost || costOf.get(m.product_id) || 0), 1000);
   }
   for (const e of expenses) {
     if (e.deleted || !inRange(e.spent_at || e.created_at)) continue;
