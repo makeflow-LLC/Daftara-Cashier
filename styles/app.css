@@ -1294,7 +1294,7 @@ body{font-weight:500}
 }
 
 /* جدول الحاسوب */
-.dt-wrap{background:#fff;border:2px solid var(--frame);border-radius:var(--radius-lg);overflow:hidden}
+.dt-wrap{background:#fff;border:2px solid var(--frame);border-radius:var(--radius-lg);overflow:hidden;overflow-x:auto}
 .dt{width:100%;border-collapse:collapse;font-size:15.5px}
 .dt th{padding:0;background:#f3f6f5;border-bottom:2px solid var(--frame);text-align:right;font-size:14px;font-weight:700;color:var(--color-muted);white-space:nowrap}
 .dt th.dt-plain{padding:12px 14px}
@@ -1325,15 +1325,19 @@ body{font-weight:500}
 
 /* الشاشة العريضة: بقية الصفحات — ملخص وأزرار في عمود، والجدول بجانبه؛ نماذج بعرض مريح؛ قوائم الإعدادات بعمودين */
 @media (min-width:1000px){
-  .page.split{display:grid;grid-template-columns:minmax(300px,380px) minmax(0,1fr);gap:var(--space-6);align-items:start}
-  .page.split > :first-child{position:sticky;top:72px}
-  .page.split > :last-child > .section:first-child > .section-title{margin-top:0}
   .page.cols-2 .list{display:grid;grid-template-columns:1fr 1fr}
   .page.cols-2 .list > .row{border-bottom:1.5px solid var(--color-hairline)}
   #view form.page,#view .page > form{max-width:760px}
   #view .page > .field,#view .page > .card,#view .page > .list:not(.g-list){max-width:760px}
   .page.cols-2 .list,.page.split .list{max-width:none !important}
   .sticky-save{left:auto;width:min(760px,calc(100% - var(--side-w)))}
+}
+/* عمودان فقط حين يتسع الجدول بجانب الملخص: تحت 1200px (حاسوب بتكبير الشاشة 125%) كان كشف الحساب يُقصّ
+   فيختفي عمودا «دفع» و«الرصيد» — فالملخص فوق والجدول تحته بالعرض كله */
+@media (min-width:1200px){
+  .page.split{display:grid;grid-template-columns:minmax(300px,380px) minmax(0,1fr);gap:var(--space-6);align-items:start}
+  .page.split > :first-child{position:sticky;top:72px}
+  .page.split > :last-child > .section:first-child > .section-title{margin-top:0}
 }
 .dt-dim td{opacity:.55}
 @media (min-width:1000px){
