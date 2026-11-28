@@ -140,7 +140,7 @@ export function renderLedger(el, params) {
         h('div', { class: 'hero-value' }, money(isMoney ? led.closing : Math.abs(led.closing))),
         h('div', { class: 'hero-mini-label' }, num(info.code), ' · ', ACCOUNT_TYPES[info.type].name, ' · ', range.label)),
       // صندوق أو حساب بنك: «كم فيه فعلًا؟» يصحّح رصيده برقم واحد (الدرج يُصحَّح بإغلاق الصندوق)
-      isMoney && key !== 'drawer' && app.can('cash') ? button('صحّح الرصيد: كم فيه فعلًا الآن؟', { kind: 'outline', block: true, icon: 'check', onclick: () => correctSheet(led.closing) }) : null,
+      isMoney && key !== 'drawer' && app.can('cash') ? button('صحّح الرصيد: كم فيه فعلًا الآن؟', { kind: 'outline', block: true, icon: 'check', onclick: async () => correctSheet(await app.accounting.balanceOf(key)) }) : null,
       led.rows.length ? exportBar(doExport) : null);
     if (!led.rows.length && !led.opening) { fill(body, emptyState('book', 'لا حركات على هذا الحساب في هذه المدة')); return; }
     const rows = [...led.rows].reverse();

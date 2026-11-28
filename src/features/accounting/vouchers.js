@@ -49,6 +49,7 @@ export async function voucherSheet(type, { onSaved = null, preset = {} } = {}) {
   // مركز التكلفة: لما يدخل الأرباح والخسائر فقط (مصروف، صرف آخر، إيراد آخر، حساب خاص) — لا لدفعات الزبائن والتجار والمسحوبات
   const center = centerPicker(null);
   const centerBox = h('div');
+  const metaBox = h('div');
   const wantsCenter = () => center.el && !['customer', 'supplier', 'owner', 'vat'].includes(target.key);
   const hint = h('span', { class: 'field-hint' });
 
@@ -56,6 +57,8 @@ export async function voucherSheet(type, { onSaved = null, preset = {} } = {}) {
     fill(targetChips, ...targets.map((t) => h('button', { class: `chip ${target === t ? 'on' : ''}`, type: 'button', onclick: () => { target = t; party = null; paint(); if (t.key === 'customer' || t.key === 'supplier') choose(); } }, icon(t.ic, 16), t.label)));
     hint.textContent = target.hint || '';
     fill(centerBox, wantsCenter() ? center.el : null);
+    // دفعة الزبون والتاجر تُسجَّل الآن في كشفيهما: لا تاريخ يُختار (ولا ملاحظة لدفعة الزبون)
+    fill(metaBox, target.key === 'customer' ? null : target.key === 'supplier' ? field('ملاحظة', note) : h('div', { class: 'grid-2' }, field('التاريخ', date.el), field('ملاحظة', note)));
     if (target.key === 'customer' || target.key === 'supplier') {
       fill(detail, h('button', { class: 'row row-tap picked-party', type: 'button', onclick: choose },
         h('span', { class: 'row-ic' }, icon(target.ic, 20)),
@@ -114,7 +117,7 @@ export async function voucherSheet(type, { onSaved = null, preset = {} } = {}) {
     field('المبلغ', amount.el),
     h('div', { class: 'field' }, h('span', { class: 'field-label' }, isIn ? 'أين دخل المال؟' : 'من أين دُفع؟'), picker.el),
     centerBox,
-    h('div', { class: 'grid-2' }, field('التاريخ', date.el), field('ملاحظة', note)),
+    metaBox,
     button(isIn ? 'حفظ سند القبض' : 'حفظ سند الصرف', { type: 'submit', block: true, size: 'lg', icon: 'check' }),
   ), { title: isIn ? 'سند قبض — مال دخل' : 'سند صرف — مال خرج' });
 

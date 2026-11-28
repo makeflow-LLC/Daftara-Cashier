@@ -11,7 +11,8 @@ import { formatQty, unit as unitOf, QTY_SCALE } from '../../domain/units.js';
 import { matchesInvoiceNumber } from '../../domain/numbering.js';
 import { normalizeArabic } from '../../domain/product.js';
 import { netLineTotals, refundSplit } from '../../domain/cart.js';
-import { divRound } from '../../domain/money.js';
+import { divRound, cappedReturn } from '../../domain/money.js';
+import { returnTax } from '../../domain/tax.js';
 import { formatMoney } from '../../domain/currency.js';
 import { app } from '../../core/app.js';
 import { showReceipt } from './receipt.js';
@@ -55,7 +56,7 @@ export function renderReturns(el) {
   q.addEventListener('input', paint);
 
   async function openInvoice(id) {
-    const { invoice, lines, rows, creditLeft } = await app.sales.returnable(id);
+    const { invoice, lines, rows, creditLeft, prior } = await app.sales.returnable(id);
     const cust = invoice.customer_id ? customers.get(invoice.customer_id) : null;
     const cur = invoice.currency;
     const nets = netLineTotals(invoice, lines);
@@ -69,7 +70,11 @@ export function renderReturns(el) {
     function amount() {
       let t = 0;
       rows.forEach((r) => { const qn = picks.get(r.line.id); const i = lines.indexOf(r.line); if (qn) t += qn === r.line.qty ? nets[i] : divRound(nets[i] * qn, r.line.qty); });
-      return t;
+      if (!t) return 0;
+      // نفس حساب الحفظ: لا يتجاوز ما بقي من الفاتورة، ومع الضريبة المضافة يُرد الصافي وضريبته
+      const base = (invoice.subtotal || 0) - (invoice.discount || 0);
+      const net = cappedReturn(t, base, prior.net, rows.every((r) => picks.get(r.line.id) === r.returnable));
+      return returnTax(invoice, base, net, prior).total;
     }
     function paintRows() {
       fill(body, h('div', { class: 'list' }, ...rows.map((r) => {

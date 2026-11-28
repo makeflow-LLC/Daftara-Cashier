@@ -10,7 +10,8 @@ import { feedback } from '../../ui/feedback.js';
 import { formatQty, packToBase, unit as unitOf, QTY_SCALE } from '../../domain/units.js';
 import { matchesInvoiceNumber } from '../../domain/numbering.js';
 import { normalizeArabic } from '../../domain/product.js';
-import { divRound } from '../../domain/money.js';
+import { divRound, cappedReturn } from '../../domain/money.js';
+import { purchaseReturnTax, purchaseBase } from '../../domain/inventory.js';
 import { formatMoney } from '../../domain/currency.js';
 import { app } from '../../core/app.js';
 import { showReceipt } from '../sale/receipt.js';
@@ -21,7 +22,7 @@ const when = (iso, year = false) => new Date(iso).toLocaleString('en-GB', { day:
 export async function purchaseReturnSheet(invoiceId, onDone = null) {
   let data;
   try { data = await app.inventory.purchaseReturnable(invoiceId); } catch (e) { toast(e.message || 'الفاتورة غير موجودة', { kind: 'error' }); return; }
-  const { invoice, rows, stock, supplier } = data;
+  const { invoice, lines, rows, stock, supplier, prior } = data;
   const cur = invoice.currency || 'ILS';
   const picks = new Map(rows.map((r) => [r.line.id, 0]));
   // الموجود من كل صنف بوحدة سطره: لا يُعاد ما بِيع
@@ -38,7 +39,8 @@ export async function purchaseReturnSheet(invoiceId, onDone = null) {
   const totalEl = h('div', { class: 'ret-total' });
   const chips = h('div', { class: 'chips' });
   const note = h('p', { class: 'ret-note' });
-  const amount = () => rows.reduce((t, r) => { const q = picks.get(r.line.id); return t + (q ? (q === r.line.qty ? r.line.total : divRound(r.line.total * q, r.line.qty)) : 0); }, 0);
+  // ما يردّه التاجر: ثمن البضاعة وضريبتها (نفس حساب الحفظ)
+  const amount = () => { const raw = rows.reduce((t, r) => { const q = picks.get(r.line.id); return t + (q ? (q === r.line.qty ? r.line.total : divRound(r.line.total * q, r.line.qty)) : 0); }, 0); if (!raw) return 0; const net = cappedReturn(raw, purchaseBase(invoice, lines), prior.net, rows.every((r) => picks.get(r.line.id) === r.returnable)); return net + purchaseReturnTax(invoice, lines, net, prior); };
 
   function paintRows() {
     fill(body, h('div', { class: 'list' }, ...rows.map((r) => {
@@ -54,7 +56,7 @@ export async function purchaseReturnSheet(invoiceId, onDone = null) {
           h('button', { type: 'button', 'aria-label': 'إنقاص', onclick: () => { picks.set(r.line.id, Math.max(0, q - step)); paintRows(); } }, icon('minus', 18)),
           h('span', { class: 'stepper-val num' }, formatQty(q)),
           h('button', { type: 'button', 'aria-label': 'زيادة', onclick: () => { picks.set(r.line.id, Math.min(max, q + step)); paintRows(); } }, icon('plus', 18)))
-          : h('span', { class: 'muted small' }, r.returnable ? 'بِيع كله' : 'أُعيد كله'));
+          : h('span', { class: 'muted small' }, r.returnable ? 'لم يبقَ منه هنا' : 'أُعيد كله'));
     })));
     fill(totalEl, h('span', null, 'قيمة المرتجع'), money(amount(), cur));
     paintNote();

@@ -146,7 +146,7 @@ export function createAccountingRepo({ db, store, getContext, clock, getSettings
       const clean = String(name).trim().replace(/\s+/g, ' ').slice(0, 40);
       const mine = new Set(categories);
       const others = list.filter((c) => c.id !== id).map((c) => ({ ...c, categories: c.categories.filter((x) => !mine.has(x)) }));
-      const center = { id: id || uuid(), name: clean, categories: [...mine], active: true };
+      const center = { id: id || uuid(), name: clean, categories: [...mine], active: id ? list.find((c) => c.id === id)?.active !== false : true };
       const next = id ? list.map((c) => (c.id === id ? center : others.find((o) => o.id === c.id))) : [...others, center];
       await saveSettings({ costCenters: next });
       return center;
@@ -251,12 +251,15 @@ export function createAccountingRepo({ db, store, getContext, clock, getSettings
       };
       const liveC = liveOf(ce), liveS = liveOf(se);
       const deadExp = new Set(exps.filter((e) => e.deleted).map((e) => e.id));
+      const expById = new Map(exps.map((e) => [e.id, e]));
       const out = [];
       for (const v of vs) {
         if (v.deleted) continue;
+        // سند مصروف: المبلغ والبند والصندوق من المصروف نفسه كما هو الآن (قد عُدّل من صفحة المصاريف)
+        const x = v.ref_table === 'expenses' ? expById.get(v.ref_id) : null;
         out.push({
-          key: `v:${v.id}`, source: 'voucher', id: v.id, type: v.type, number: v.number, date: v.voucher_at || v.created_at, amount: v.amount,
-          party: v.party_name || null, accountId: v.account, toId: v.to_account, contra: v.contra, note: v.note, lines: v.lines, ref_table: v.ref_table,
+          key: `v:${v.id}`, source: 'voucher', id: v.id, type: v.type, number: v.number, date: x ? x.spent_at : v.voucher_at || v.created_at, amount: x ? x.amount : v.amount,
+          party: v.party_name || null, accountId: x ? x.method_id : v.account, toId: v.to_account, contra: x ? `exp:${x.category}` : v.contra, note: x ? x.note : v.note, lines: v.lines, ref_table: v.ref_table,
           cancelled: v.status === 'void' || (v.ref_table === 'expenses' && deadExp.has(v.ref_id)), partyId: null,
         });
       }
@@ -322,18 +325,19 @@ export function createAccountingRepo({ db, store, getContext, clock, getSettings
      * حدث على شيك: clear (صُرف: accountId = الصندوق) | bounce (رجع) | endorse (جُيّر: supplierId, supplierName) | cancel (أُلغي).
      */
     async chequeAction(id, action, { accountId = null, supplierId = null, supplierName = null } = {}) {
-      const c = await repo.cheque(id);
-      if (!c) throw invalid('الشيك غير موجود');
-      if (!chequeActions(c).includes(action) || action === 'remove') throw invalid('لا يصح هذا مع حالة الشيك الآن');
       if (action === 'clear' && !accountId) throw invalid('اختر الصندوق');
       if (action === 'endorse' && !supplierId) throw invalid('اختر التاجر');
       const now = clock();
-      const ent = action === 'clear' ? { customer: [], supplier: [] } : chequeEntries(action, c, { supplierId });
       const patch = action === 'clear' ? { status: 'cleared', account: accountId }
         : action === 'bounce' ? { status: 'bounced' }
           : action === 'endorse' ? { status: 'endorsed', endorsed_to: supplierId, endorsed_name: supplierName || null }
             : { status: 'cancelled' };
       const saved = await store.write(async (w) => {
+        // الحالة تُقرأ داخل المعاملة: ضغطتان سريعتان لا تكتبان الحدث مرتين
+        const c = await db.cheques.get(id);
+        if (!c || c.deleted) throw invalid('الشيك غير موجود');
+        if (!chequeActions(c).includes(action) || action === 'remove') throw invalid('لا يصح هذا مع حالة الشيك الآن');
+        const ent = action === 'clear' ? { customer: [], supplier: [] } : chequeEntries(action, c, { supplierId });
         for (const e of ent.customer) await w.append('customer_entries', e);
         for (const e of ent.supplier) await w.append('supplier_entries', e);
         return w.patch('cheques', id, { ...patch, status_at: now });
@@ -343,9 +347,15 @@ export function createAccountingRepo({ db, store, getContext, clock, getSettings
     },
     /** تراجع عن آخر حدث: يعود الشيك «بانتظار الصرف»، وتُلغى القيود التي كتبها ذلك الحدث (يبقى قيد الاستلام الأول). */
     async chequeUndo(id) {
-      const c = await repo.cheque(id);
-      if (!c || c.status === 'pending') return c;
       await store.write(async (w) => {
+        const c = await db.cheques.get(id);
+        if (!c || c.deleted || c.status === 'pending') return;
+        // شيك مجيَّر ثم رجع: التراجع يلغي الرجوع وحده ويعيده «مجيَّرًا» (التجيير باقٍ)
+        if (c.status === 'bounced' && c.endorsed_to) {
+          await undoEntries(w, c, false, (e) => e.amount > 0);
+          await w.patch('cheques', id, { status: 'endorsed' });
+          return;
+        }
         await undoEntries(w, c, false);
         await w.patch('cheques', id, { status: 'pending', status_at: null, account: null, endorsed_to: null, endorsed_name: null });
       });
@@ -354,10 +364,10 @@ export function createAccountingRepo({ db, store, getContext, clock, getSettings
     },
     /** شيك سُجّل خطأ (ولم يُصرف): يُحذف ويُلغى أثره من كشف الزبون أو التاجر. */
     async removeCheque(id) {
-      const c = await repo.cheque(id);
-      if (!c) return;
-      if (c.status !== 'pending') throw invalid('الشيك لم يعد بانتظار الصرف');
       await store.write(async (w) => {
+        const c = await db.cheques.get(id);
+        if (!c || c.deleted) return;
+        if (c.status !== 'pending') throw invalid('الشيك لم يعد بانتظار الصرف');
         await undoEntries(w, c, true);
         await w.patch('cheques', id, { deleted: true });
       });
@@ -392,7 +402,7 @@ export function createAccountingRepo({ db, store, getContext, clock, getSettings
   };
 
   /** يلغي قيود الشيك في كشوف الزبائن والتجار: كلها (all) أو ما بعد قيد الاستلام الأول فقط. */
-  async function undoEntries(w, c, all) {
+  async function undoEntries(w, c, all, only = null) {
     for (const table of ['customer_entries', 'supplier_entries']) {
       const rows = (await db.table(table).toArray()).filter((e) => e.payment_id === c.id).sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
       const gone = cancelledIds(rows);
@@ -401,6 +411,7 @@ export function createAccountingRepo({ db, store, getContext, clock, getSettings
       const first = live.find((e) => e.amount < 0 && ((table === 'customer_entries' && c.direction === 'in') || (table === 'supplier_entries' && c.direction === 'out')));
       for (const e of live) {
         if (!all && e === first) continue;
+        if (only && !only(e)) continue;
         await w.append(table, chequeUndoEntry(e));
       }
     }

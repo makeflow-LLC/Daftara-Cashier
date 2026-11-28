@@ -1,10 +1,10 @@
 // منطق البيع النقي: السلة، الخصومات، الدفع المقسّم والرسوم، الباقي، الآجل، والمرتجع.
 // كل المبالغ أعداد صحيحة بأصغر وحدة (أغورة)، والكميات بالألف. لا DOM ولا قاعدة بيانات.
-import { divRound, percentOf, allocate, sum, assertInt } from './money.js';
+import { divRound, percentOf, allocate, sum, assertInt, cappedReturn } from './money.js';
 import { lineAmount, packToBase, QTY_SCALE } from './units.js';
 import { signedQty, knownCost } from './stock.js';
 import { formatInvoiceNumber } from './numbering.js';
-import { taxOn, taxShare, taxOnTop } from './tax.js';
+import { taxOn, returnTax } from './tax.js';
 
 // ---------- السطور ----------
 /**
@@ -254,10 +254,14 @@ export function buildReturn(original, originalLines, picks, refund, env) {
     };
   });
   // ضريبة الفاتورة الأصلية تعود بحصة ما رُجع: الشاملة جزء من المبلغ، والمضافة تُرد فوقه
-  const net = sum(lines, (l) => l.total);
+  // المرتجعات الجزئية المتتالية لا تردّ أكثر من الفاتورة، والأخير يأخذ الباقي تمامًا (فرق القرش على آخر سطر)
   const base = (original.subtotal || 0) - (original.discount || 0);
-  const tax = taxShare(original.tax || 0, net, base);
-  const total = net + taxShare(taxOnTop(original), net, base);
+  const raw = sum(lines, (l) => l.total);
+  const net = env.prior ? cappedReturn(raw, base, env.prior.net, !!env.completes) : raw;
+  if (net !== raw) lines[lines.length - 1].total = Math.max(0, lines[lines.length - 1].total + net - raw);
+  const rt = returnTax(original, base, net, env.prior || {});
+  const tax = rt.tax;
+  const total = rt.total;
   const cost = sum(lines, (l) => lineAmount(l.unit_cost, l.qty));
   const split = refundSplit(total, refund, original.customer_id ? env.creditLeft || 0 : 0);
   const invoice = {

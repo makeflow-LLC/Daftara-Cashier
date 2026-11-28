@@ -200,6 +200,15 @@ async function run(seed, steps, taxMode) {
       assert.ok((i.tax || 0) >= 0 && (i.tax || 0) <= i.total, `tax within total ${i.number} — ${where}`);
       if (i.type === 'sale') assert.ok(i.paid >= 0 && i.paid <= i.total, `paid within total ${i.number} — ${where}`);
     }
+    // المرتجعات لا تردّ أكثر من الفاتورة ولا من ضريبتها (بيعًا وشراءً)
+    const back = new Map();
+    for (const i of inv) if ((i.type === 'sale_return' || i.type === 'purchase_return') && i.original_invoice_id) {
+      const x = back.get(i.original_invoice_id) || { total: 0, tax: 0 }; x.total += i.total; x.tax += i.tax || 0; back.set(i.original_invoice_id, x);
+    }
+    for (const [id, x] of back) {
+      const o = await db.invoices.get(id);
+      assert.ok(x.total <= o.total && x.tax <= (o.tax || 0), `returns exceed invoice ${o.number}: ${x.total}/${o.total} tax ${x.tax}/${o.tax} — ${where}`);
+    }
     return b;
   }
 

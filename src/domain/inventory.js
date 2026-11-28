@@ -1,10 +1,10 @@
 // منطق المخزون النقي: فاتورة الشراء، التنبيهات (نفد، منخفض، ينتهي قريبًا، راكد)، الجرد، ورسالة طلب البضاعة.
-import { sum, divRound, assertInt } from './money.js';
+import { sum, divRound, assertInt, cappedReturn } from './money.js';
 import { lineAmount, packToBase, formatQty, unit as unitOf, QTY_SCALE } from './units.js';
 import { signedQty, stockLevel, stockValue } from './stock.js';
 import { formatInvoiceNumber } from './numbering.js';
 import { DEFAULT_LOW_STOCK_THRESHOLD, EXPIRY_WARNING_DAYS, DEAD_STOCK_DAYS } from './features.js';
-import { netOfTax, taxShare } from './tax.js';
+import { netOfTax, taxShare, taxOn } from './tax.js';
 
 const DAY = 86400000;
 
@@ -31,9 +31,10 @@ export function purchaseTax(lines, tax = null) {
   const entered = purchaseTotal(lines);
   if (!tax || !tax.rate || (tax.mode !== 'inclusive' && tax.mode !== 'exclusive')) return { lines, subtotal: entered, tax: 0, total: entered };
   if (tax.mode === 'exclusive') { const t = divRound(entered * tax.rate, 10000); return { lines, subtotal: entered, tax: t, total: entered + t }; }
+  // الضريبة من إجمالي الفاتورة (لا من تقريب كل وحدة ثم ضربه بالكمية)؛ وتكلفة الوحدة قبل الضريبة لكل سطر
+  const t = taxOn(entered, tax.rate, true);
   const net = lines.map((l) => ({ ...l, unit_cost: netOfTax(l.unit_cost, tax.rate) }));
-  const subtotal = purchaseTotal(net);
-  return { lines: net, subtotal, tax: entered - subtotal, total: entered };
+  return { lines: net, subtotal: t.net, tax: t.tax, total: entered };
 }
 
 /**
@@ -92,6 +93,18 @@ export function purchaseReturnable(originalLines, previousReturnLines = []) {
 }
 
 /**
+ * ضريبة مرتجع شراء صافيه net: حصته من ضريبة الفاتورة، تراكميًا مع مرتجعاتها السابقة (prior: { net, tax }).
+ * الأساس صافي الفاتورة كما سُجّل (subtotal = total − الضريبة)؛ مجموع السطور قد يختلف عنه بقروش التقريب.
+ */
+export function purchaseBase(original, originalLines) {
+  return original.subtotal || sum(originalLines, (l) => l.total);
+}
+export function purchaseReturnTax(original, originalLines, net, prior = {}) {
+  const base = purchaseBase(original, originalLines);
+  return Math.max(0, taxShare(original.tax || 0, (prior.net || 0) + net, base) - (prior.tax || 0));
+}
+
+/**
  * مرتجع شراء من فاتورة: picks = [{ line, qty }] (الكمية بالألف بوحدة السطر).
  * refund: 'credit' يُخصم مما عليك للتاجر (يلزم تاجر) | 'cash' ردّ لك ثمنها نقدًا (يدخل الدرج).
  * البضاعة تخرج من حيث دخلت (المحل أو المخزن) بتكلفة شرائها. stockOf(product_id) → الموجود بالوحدة الأساسية (اختياري).
@@ -118,8 +131,11 @@ export function buildPurchaseReturn(original, originalLines, picks, refund, env)
   // لا يُعاد ما بِيع: الموجود في مكانه يجب أن يكفي
   if (env.stockOf) for (const l of lines) if (need.get(l.product_id) > env.stockOf(l.product_id)) throw new Error(`«${l.name}»: الموجود أقل مما تعيده`);
   // ضريبة الشراء تعود بحصة ما أُعيد: التاجر يردّ ثمن البضاعة مع ضريبتها
-  const net = sum(lines, (l) => l.total);
-  const tax = taxShare(original.tax || 0, net, original.subtotal || 0);
+  // المرتجعات الجزئية المتتالية لا تردّ أكثر من الفاتورة، والأخير يأخذ الباقي تمامًا (فرق القرش على آخر سطر)
+  const raw = sum(lines, (l) => l.total);
+  const net = env.prior ? cappedReturn(raw, purchaseBase(original, originalLines), env.prior.net, !!env.completes) : raw;
+  if (net !== raw) lines[lines.length - 1].total = Math.max(0, lines[lines.length - 1].total + net - raw);
+  const tax = purchaseReturnTax(original, originalLines, net, env.prior || {});
   const total = net + tax;
   const cash = refund === 'cash' ? total : 0;
   const invoice = {

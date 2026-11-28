@@ -60,3 +60,24 @@ export function taxOnTop(invoice) {
   if (!tax) return 0;
   return Math.min(tax, Math.max(0, (invoice.total || 0) - ((invoice.subtotal || 0) - (invoice.discount || 0))));
 }
+
+/**
+ * ضريبة مرتجع من فاتورة (بيع أو شراء) وما يُرد فوق صافيه، محسوبة تراكميًا: حصة كل ما رُجع حتى الآن ناقص ما رُدّ
+ * في المرتجعات السابقة — فمجموع المرتجعات الجزئية لا يتجاوز ضريبة الفاتورة ولا ينقص عنها بقرش.
+ * base: صافي الفاتورة قبل الضريبة المضافة (subtotal − discount). net: صافي هذا المرتجع.
+ * prior: مجموع المرتجعات السابقة { net, tax, top } (top = ما رُدّ فوق الصافي).
+ * يرجع { tax, top, total: net + top }.
+ */
+export function returnTax(original, base, net, prior = {}) {
+  const pn = prior.net || 0, pt = prior.tax || 0, pp = prior.top || 0;
+  const tax = Math.max(0, taxShare(original.tax || 0, pn + net, base) - pt);
+  const top = Math.max(0, taxShare(taxOnTop(original), pn + net, base) - pp);
+  return { tax, top, total: net + top };
+}
+
+/** مجموع مرتجعات سابقة (فواتير مرتجع) بصيغة prior لـ returnTax. */
+export function priorReturns(returns = []) {
+  let net = 0, tax = 0, top = 0;
+  for (const r of returns) { net += r.subtotal || 0; tax += r.tax || 0; top += (r.total || 0) - (r.subtotal || 0); }
+  return { net, tax, top };
+}

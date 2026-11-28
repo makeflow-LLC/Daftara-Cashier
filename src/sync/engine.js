@@ -116,8 +116,8 @@ export function createSyncEngine({ db, api, getContext, emit = () => {}, now = (
 
   /**
    * عمود لا يعرفه الخادم بعد (لم يُشغَّل setup.sql الجديد) يُرفع السجل بدونه. حتى لا تضيع قيمته هناك:
-   * نتذكر السجلات التي حملت فيه قيمة (meta stripped:<جدول>)، وحين يقبل الخادم السجلات كاملة نعيدها إلى الطابور
-   * فتُرفع بقيمتها. لجداول «آخر تعديل يفوز» فقط (الإضافة لا تُحدَّث).
+   * نتذكر السجلات التي حملت فيه قيمة (meta stripped:<جدول>)، ونعيد رفعها بعد السحب في تشغيل لاحق (resendStripped)
+   * فتصل بقيمتها متى حُدّث الخادم. لجداول «آخر تعديل يفوز» فقط (الإضافة لا تُحدَّث).
    */
   async function rememberStripped(name, t, live) {
     const key = `stripped:${name}`;
@@ -129,17 +129,37 @@ export function createSyncEngine({ db, api, getContext, emit = () => {}, now = (
       await meta.set(key, [...new Set([...old, ...ids])].slice(-5000));
       return;
     }
-    const waiting = await meta.get(key, null);
-    if (!waiting || !waiting.length) return;
-    await db.meta.delete(key);
-    for (const id of waiting) {
-      if (await db.outbox.where('key').equals(`${name}:${id}`).first()) continue;
-      const row = await db.table(name).get(id);
-      if (!row) continue;
-      // وقت تعديل جديد: حتى تفوز النسخة الكاملة على كل الأجهزة التي سحبت الناقصة
-      await db.table(name).put({ ...row, updated_at: now() });
-      await db.outbox.add({ key: `${name}:${id}`, table: name, id, rev: 1, tries: 0 });
+  }
+
+  /**
+   * بعد السحب (فالجهاز يحمل أحدث نسخة من كل سجل، ولا يُمحى تعديل جهاز آخر): السجلات التي رُفعت ناقصة تعود إلى
+   * الطابور بوقت تعديل جديد وتُرفع. مرة في كل تشغيل لكل جدول: إن بقي الخادم بلا العمود عادت إلى القائمة وحدها.
+   */
+  const retried = new Set();
+  async function resendStripped() {
+    let n = 0;
+    for (const t of TABLES) {
+      if (t.mode !== 'lww' || retried.has(t.name)) continue;
+      const key = `stripped:${t.name}`;
+      const waiting = await meta.get(key, null);
+      if (!waiting || !waiting.length) continue;
+      const miss = missingCols.get(t.name);
+      if (miss && miss.size) continue; // عرفنا في هذا التشغيل أن الخادم ما زال بلا العمود
+      retried.add(t.name);
+      await db.meta.delete(key);
+      for (const id of waiting) {
+        if (await db.outbox.where('key').equals(`${t.name}:${id}`).first()) continue;
+        const row = await db.table(t.name).get(id);
+        if (!row) continue;
+        // وقت تعديل جديد: حتى تفوز النسخة الكاملة على كل الأجهزة التي سحبت الناقصة
+        // (وأحدث من وقته الحالي ولو كانت ساعة جهاز آخر متقدمة، وإلا رفضها الخادم كتعديل أقدم)
+        const at = new Date(Math.max(Date.parse(now()), (Date.parse(row.updated_at) || 0) + 1)).toISOString();
+        await db.table(t.name).put({ ...row, updated_at: at });
+        await db.outbox.add({ key: `${t.name}:${id}`, table: t.name, id, rev: 1, tries: 0 });
+        n++;
+      }
     }
+    return n;
   }
 
   async function pushGroup(name, entries) {
@@ -273,8 +293,9 @@ export function createSyncEngine({ db, api, getContext, emit = () => {}, now = (
       await ensureRemoteShop(ctx);
       // الترخيص: الخادم يرفض كتابة محل بلا اشتراك سارٍ، فلا نرفع (يبقى الطابور كما هو حتى التجديد) ونسحب فقط
       const canPush = gate ? await gate({ api, ctx }) : true;
-      const pushed = canPush ? await push() : 0;
+      let pushed = canPush ? await push() : 0;
       const pulled = await pull(ctx);
+      if (canPush && await resendStripped()) pushed += await push();
       const pending = await db.outbox.count();
       const dead = await db.outbox.filter((e) => !!e.dead).count();
       const at = now();

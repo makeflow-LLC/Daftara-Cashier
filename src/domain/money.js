@@ -96,3 +96,13 @@ export function allocate(amountMinor, weights) {
   for (const i of order) { if (left <= 0) break; raw[i].q += 1; left -= 1; }
   return raw.map((x) => sign * x.q || 0);
 }
+
+/**
+ * صافي مرتجع جزئي بعد مرتجعات سابقة: لا يتجاوز ما بقي من الفاتورة، ومع اكتمال الإرجاع يساوي الباقي تمامًا
+ * (تقريب كل مرتجع وحده قد يزيد المجموع قرشًا أو ينقصه).
+ * net: مجموع سطور هذا المرتجع، base: صافي الفاتورة كلها، priorNet: صافي ما رُجع سابقًا، completes: هذا المرتجع يُكمل كل ما بقي.
+ */
+export function cappedReturn(net, base, priorNet = 0, completes = false) {
+  const left = Math.max(0, base - priorNet);
+  return completes ? left : Math.min(net, left);
+}
