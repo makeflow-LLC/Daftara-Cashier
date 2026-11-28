@@ -72,7 +72,8 @@ export function renderAccounting(el) {
         tile('clipboard', 'قيود اليومية', 'violet', go('/accounting/journal')),
         tile('chart', 'قائمة الدخل والميزانية', 'amber', go('/accounting/statements')),
         tile('tag', 'مراكز التكلفة', 'teal', go('/accounting/centers')),
-        tile('receipt', 'تقرير الضريبة', 'pink', go('/accounting/tax'))) : null,
+        // تقرير الضريبة لمن يعمل بها فقط (الإعدادات ← الضريبة)
+        app.shop?.settings?.tax?.enabled ? tile('receipt', 'تقرير الضريبة', 'pink', go('/accounting/tax')) : null) : null,
     );
   }
 

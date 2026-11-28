@@ -77,7 +77,8 @@ export function renderBoxes(el) {
     );
     const item = (m) => {
       const box = m.custom ? boxes.find((b) => b.id === m.id) : null;
-      const sub = m.kind === 'drawer' ? 'نقد البيع — يُغلق من «الصندوق»' : m.custom ? (m.kind === 'bank' ? 'حساب بنك' : 'صندوق نقد') : 'طريقة دفع (تحويل)';
+      // رصيد سالب = خرج منه أكثر مما سُجّل أنه دخله (غالبًا مال كان فيه قبل استعمال التطبيق): يُصحَّح برقم واحد
+      const sub = m.kind === 'drawer' ? 'نقد البيع — يُغلق من «الصندوق»' : m.balance < 0 ? 'الرصيد لا يطابق؟ اضغط ثم «صحّح الرصيد»' : m.custom ? (m.kind === 'bank' ? 'حساب بنك' : 'صندوق نقد') : 'طريقة دفع (تحويل)';
       return h('div', { class: 'row row-split' },
         h('button', { class: 'row-tap row-body', type: 'button', onclick: () => navigate(`/accounting/ledger?account=${encodeURIComponent(m.key)}`) },
           h('span', { class: 'row-ic' }, icon(KIND_ICON[m.kind] || 'bank', 22)),
