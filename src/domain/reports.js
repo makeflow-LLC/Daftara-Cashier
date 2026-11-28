@@ -75,7 +75,8 @@ export function buildReport({ invoices, lines, payments, products = [], categori
   const purchaseTax = sum(purchases, taxOf) - sum(inPeriod.filter((i) => i.type === 'purchase_return'), taxOf);
   const profit = net - taxTotal - costTotal - feeTotal;
   // حصة كل سطر من ضريبة فاتورته (للربح حسب الصنف والتصنيف)
-  const invTax = new Map([...sales, ...returns].filter((i) => i.tax).map((i) => [i.id, [i.tax, Math.max(1, (i.subtotal || 0) - (i.discount || 0))]]));
+  // فقط حين السعر يشمل الضريبة؛ المضافة فوق الفاتورة ليست في السطور. المقام مجموع السطور (قبل خصم الفاتورة) كالبسط
+  const invTax = new Map([...sales, ...returns].filter((i) => i.tax && i.total <= (i.subtotal || 0) - (i.discount || 0)).map((i) => [i.id, [i.tax, Math.max(1, i.subtotal || 0)]]));
   const lineTax = (l) => { const x = invTax.get(l.invoice_id); return x ? Math.round((l.total * x[0]) / x[1]) : 0; };
 
   // حسب اليوم

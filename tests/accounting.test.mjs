@@ -481,9 +481,20 @@ test('cheques: a bounced cheque returns the debt; an endorsed one pays the suppl
   assert.equal(bal(b, 'cheques_in'), 0);
   // تراجع عن الرجوع الأخير: يعود مجيَّرًا؟ لا — يعود «بانتظار الصرف» وتُلغى قيود التجيير والرجوع
   await t.accounting.chequeUndo(c2.id);
-  assert.equal((await t.accounting.cheque(c2.id)).status, 'pending');
+  assert.equal((await t.accounting.cheque(c2.id)).status, 'endorsed');
   assert.equal((await t.customers.get(customer.id)).balance, 4000);
+  assert.equal((await t.inventory.supplier(supplier.id)).balance, 15000);
+  // تراجع ثانٍ يلغي التجيير: يعود «بانتظار الصرف»
+  await t.accounting.chequeUndo(c2.id);
+  assert.equal((await t.accounting.cheque(c2.id)).status, 'pending');
   assert.equal((await t.inventory.supplier(supplier.id)).balance, 20000);
+  // ضغطتان متزامنتان على «رجع» لا تضاعفان الدين: الثانية تُرفض
+  const dbl = await t.accounting.saveCheque({ direction: 'in', amount: 700, due_date: '2026-12-09', party_type: 'customer', party_id: customer.id, party_name: 'أم أحمد' });
+  const res = await Promise.allSettled([t.accounting.chequeAction(dbl.id, 'bounce'), t.accounting.chequeAction(dbl.id, 'bounce')]);
+  assert.deepEqual(res.map((r) => r.status).sort(), ['fulfilled', 'rejected']);
+  assert.equal((await t.customers.get(customer.id)).balance, 4000);
+  await t.accounting.chequeUndo(dbl.id);
+  await t.accounting.removeCheque(dbl.id);
   b = await t.accounting.books();
   assertBalanced(b);
   assert.equal(bal(b, 'cheques_in'), 5000);

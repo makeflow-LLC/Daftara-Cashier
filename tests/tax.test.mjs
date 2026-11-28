@@ -287,3 +287,105 @@ test('sync: a column the server does not know yet is sent again once it does (in
   assert.equal(server.tables.get('cashier_expenses').get(exp.id).cost_center, centre);
   assert.equal(await t.db.meta.get('stripped:invoices'), undefined);
 });
+
+// ---------- ما كشفته المراجعة ----------
+test('review: partial returns in several steps give back exactly the invoice tax, never more', async () => {
+  const t = await setup();
+  const tax = { rate: 1600, inclusive: false };
+  const { product } = await t.products.save({ name: 'علكة', sell_price: 5, cost_price: 2 });
+  await t.products.save({ ...product }, { qty: 50000 });
+  // 3 × 0.05 = 0.15 + ضريبة 0.02 = 0.17
+  const sale = await t.sales.checkout({ lines: [makeLine(product, { qty: 3000, avgCost: 2 })], payments: [{ kind: 'cash', method_id: t.cashMethod.id, amount: 17 }], tax });
+  assert.deepEqual([sale.invoice.tax, sale.invoice.total], [2, 17]);
+  let back = 0, backTax = 0;
+  for (let i = 0; i < 3; i++) {
+    const r = await t.sales.returnable(sale.invoice.id);
+    const done = await t.sales.processReturn(sale.invoice.id, [{ line: r.rows[0].line, qty: 1000 }], 'cash');
+    back += done.invoice.total; backTax += done.invoice.tax;
+  }
+  assert.deepEqual([back, backTax], [17, 2]);
+  const b = await t.accounting.books();
+  assert.equal(bal(b, 'vat'), 0);
+  assert.equal(bal(b, DRAWER), 0);
+  // والشراء كذلك: 3 بسعر 0.33 شامل، تُعاد واحدة واحدة
+  const supplier = await t.inventory.saveSupplier({ name: 'تاجر' });
+  const buy = await t.inventory.savePurchase({ lines: [purchaseLine(product, { qty: 3000, unitCost: 33 })], supplierId: supplier.id, paid: 'credit', tax: { rate: 1600, mode: 'inclusive' } });
+  let pb = 0, pt = 0;
+  for (let i = 0; i < 3; i++) {
+    const r = await t.inventory.purchaseReturnable(buy.invoice.id);
+    const done = await t.inventory.returnPurchase(buy.invoice.id, [{ line: r.rows[0].line, qty: 1000 }], 'credit');
+    pb += done.total; pt += done.invoice.tax;
+  }
+  assert.equal(pt, buy.invoice.tax);
+  assert.equal((await t.inventory.supplier(supplier.id)).balance, buy.invoice.total - pb);
+  t.accounting.invalidate();
+  assert.equal(bal(await t.accounting.books(), 'vat'), 0);
+});
+
+test('review: purchase tax comes from the invoice total, not from a rounded unit times the quantity', () => {
+  // 1000 × 0.50 شاملة 16%: الضريبة 68.97 لا 70.00
+  const a = purchaseTax([{ unit_cost: 50, qty: 1000000, name: 'x' }], { rate: 1600, mode: 'inclusive' });
+  assert.deepEqual([a.total, a.tax, a.subtotal], [50000, 6897, 43103]);
+  const b = purchaseTax([{ unit_cost: 100, qty: 100000, name: 'x' }], { rate: 1600, mode: 'inclusive' });
+  assert.deepEqual([b.total, b.tax], [10000, 1379]);
+});
+
+test('review: item profit with tax added on top is not reduced by the tax; net worth subtracts tax owed', async () => {
+  const t = await setup();
+  const { product } = await t.products.save({ name: 'سكر', sell_price: 1000, cost_price: 600 });
+  await t.products.save({ ...product }, { qty: 20000 });
+  await t.sales.checkout({ lines: [makeLine(product, { qty: 5000, avgCost: 600 })], discount: { type: 'amount', value: 500 }, payments: [{ kind: 'cash', method_id: t.cashMethod.id, amount: 5220 }], tax: { rate: 1600, inclusive: false } });
+  const report = await reportOf(t);
+  assert.equal(report.profit, 4500 - 3000);
+  assert.equal(report.best[0].profit, 5000 - 3000); // ربح الصنف قبل خصم الفاتورة كما كان دائمًا، وبلا طرح ضريبة ليست في السطر
+  // شاملة: حصة السطر من الضريبة تُطرح
+  const t2 = await setup();
+  const { product: p2 } = await t2.products.save({ name: 'سكر', sell_price: 1160, cost_price: 600 });
+  await t2.products.save({ ...p2 }, { qty: 20000 });
+  await t2.sales.checkout({ lines: [makeLine(p2, { qty: 5000, avgCost: 600 })], payments: [{ kind: 'cash', method_id: t2.cashMethod.id, amount: 5800 }], tax: { rate: 1600, inclusive: true } });
+  assert.equal((await reportOf(t2)).best[0].profit, 5000 - 3000);
+  const b = await t2.accounting.books();
+  const { position, balanceSheet } = await import('../src/domain/accounting.js');
+  const pos = position(b.entries, b.chart);
+  const bs = balanceSheet(b.entries, b.chart);
+  assert.equal(pos.tax, 800);
+  assert.equal(pos.net, bs.totals.assets - bs.totals.liabilities);
+});
+
+test('review: an expense edited after its voucher shows the new amount on the voucher; a closed centre stays closed when edited', async () => {
+  const t = await setup();
+  const v = await t.accounting.saveExpenseVoucher({ category: 'maintenance', amount: 5000, method: { id: t.cashMethod.id, kind: 'cash' } });
+  await t.expenses.save({ id: v.ref_id, category: 'rent', amount: 9000, method: null });
+  const item = (await t.accounting.vouchers())[0];
+  assert.deepEqual([item.amount, item.contra, item.accountId], [9000, 'exp:rent', null]);
+  const c = await t.accounting.saveCenter({ name: 'سيارة' });
+  await t.accounting.closeCenter(c.id);
+  await t.accounting.saveCenter({ id: c.id, name: 'سيارة التوزيع' });
+  assert.equal(t.accounting.centers()[0].active, false);
+});
+
+test('review: stripped columns are re-sent after the pull, so another device\'s newer edit is not overwritten', async () => {
+  const server = createFakeServer();
+  const t = await setup();
+  const session = { current: null };
+  const real = server.api(session);
+  let known = false;
+  const old = { ...real, rest: { ...real.rest, async upsert(name, rows, opts) {
+    if (!known && name === 'cashier_expenses' && rows.some((r) => 'cost_center' in r)) throw new HttpError(400, { code: 'PGRST204', message: "Could not find the 'cost_center' column of 'cashier_expenses' in the schema cache" }, name);
+    return real.rest.upsert(name, rows, opts);
+  } } };
+  await t.store.put('shops', { id: t.ctx.shopId, name: 'بقالة', shop_type: 'grocery' });
+  const centre = uuid();
+  const exp = await t.expenses.save({ category: 'rent', amount: 500, method: null, cost_center: centre });
+  await createSyncEngine({ db: t.db, api: old, getContext: () => t.ctx, emit: () => {} }).run();
+  // جهاز آخر عدّل المصروف (المبلغ 700) بعد ذلك، والخادم حُدّث
+  const row = server.tables.get('cashier_expenses').get(exp.id);
+  await real.rest.upsert('cashier_expenses', [{ ...row, amount: 700, updated_at: new Date(Date.now() + 60000).toISOString() }]);
+  known = true;
+  // تشغيل جديد بلا أي مصروف جديد: السحب أولًا يأخذ 700، ثم يُعاد الرفع بمركز التكلفة — ولا يعود المبلغ 500
+  await createSyncEngine({ db: t.db, api: old, getContext: () => t.ctx, emit: () => {} }).run();
+  const after = server.tables.get('cashier_expenses').get(exp.id);
+  assert.deepEqual([after.amount, after.cost_center], [700, centre]);
+  assert.equal((await t.db.expenses.get(exp.id)).amount, 700);
+  assert.equal(await t.db.outbox.count(), 0);
+});

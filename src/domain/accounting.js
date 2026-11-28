@@ -628,14 +628,15 @@ export function position(entries, chart) {
   const cash = money.reduce((a, m) => a + m.balance, 0);
   const p = {
     cash, receivables: get('ar'), chequesIn: get('cheques_in'), inventory: get('inventory'),
-    payables: -get('ap'), chequesOut: -get('cheques_out'), other: 0,
+    payables: -get('ap'), chequesOut: -get('cheques_out'), tax: -get('vat'), other: 0,
   };
   for (const [key, v] of bal) {
     const a = chart.info(key);
     if (a.custom && a.type === 'asset') p.other += v;
     if (a.custom && a.type === 'liability') p.other += v;
   }
-  p.net = p.cash + p.receivables + p.chequesIn + p.inventory + p.other - p.payables - p.chequesOut;
+  // الضريبة المحصَّلة ليست للمحل: تُطرح (وإن كانت له عند الدائرة تُضاف)
+  p.net = p.cash + p.receivables + p.chequesIn + p.inventory + p.other - p.payables - p.chequesOut - p.tax;
   return { ...p, money };
 }
 

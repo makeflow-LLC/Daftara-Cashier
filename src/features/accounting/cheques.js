@@ -99,13 +99,16 @@ export async function openCheque(id, onChanged = null) {
   const customer = isIn && c.party_type === 'customer' && c.party_id ? await app.db.customers.get(c.party_id) : null;
   const accountName = c.status === 'cleared' ? await app.accounting.moneyName(c.account) : null;
   const changed = () => { if (onChanged) onChanged(); };
+  let acting = false;
   const act = async (close, fn, message) => {
+    if (acting) return;
+    acting = true;
     try {
       await fn();
       feedback.ok(); close();
       toast(message, { kind: 'ok', ms: 4500, undo: async () => { await app.accounting.chequeUndo(c.id); changed(); } });
       changed();
-    } catch (err) { feedback.error(); toast(err.errors?.amount || 'تعذّر الحفظ', { kind: 'error' }); }
+    } catch (err) { acting = false; feedback.error(); toast(err.errors?.amount || 'تعذّر الحفظ', { kind: 'error' }); }
   };
 
   openSheet((close) => {

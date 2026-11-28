@@ -107,12 +107,14 @@ export function createInventoryRepo({ db, store, getContext, clock }) {
         stock.set(l.product_id, s ? Math.max(0, s.qty) : 0);
       }
       const supplier = invoice.supplier_id ? await db.suppliers.get(invoice.supplier_id) : null;
-      return { invoice, lines, rows: purchaseReturnable(lines, prev), stock, supplier };
+      // prior: صافي وضريبة مرتجعاتها السابقة (ضريبة المرتجع التالي تُحسب تراكميًا)
+      const prior = { net: returns.reduce((a, r) => a + (r.subtotal || 0), 0), tax: returns.reduce((a, r) => a + (r.tax || 0), 0) };
+      return { invoice, lines, rows: purchaseReturnable(lines, prev), stock, supplier, prior };
     },
     /** picks: [{ line, qty }] ؛ refund: 'credit' (ينزل مما عليك له) | 'cash' (ردّ ثمنها نقدًا). */
     async returnPurchase(invoiceId, picks, refund) {
       const ctx = getContext();
-      const { invoice, lines, rows, stock } = await repo.purchaseReturnable(invoiceId);
+      const { invoice, lines, rows, stock, prior } = await repo.purchaseReturnable(invoiceId);
       for (const p of picks) {
         const row = rows.find((r) => r.line.id === p.line.id);
         if (!row || p.qty > row.returnable) throw invalid({ qty: 'الكمية أكبر مما يمكن إعادته' });
@@ -121,9 +123,10 @@ export function createInventoryRepo({ db, store, getContext, clock }) {
       try {
         return await store.write(async (w) => {
           const seq = await nextSeq('purchase_return');
+          const done = new Map(picks.map((p) => [p.line.id, p.qty]));
           const r = buildPurchaseReturn(invoice, lines, picks.map((p) => ({ line: lines.find((l) => l.id === p.line.id), qty: p.qty })), refund, {
             newId: uuid, now: clock(), prefix: ctx.prefix || 'A', seq, cashSessionId, cashMethodId: cashId, deviceId: ctx.deviceId,
-            stockOf: (pid) => stock.get(pid) || 0,
+            stockOf: (pid) => stock.get(pid) || 0, prior, completes: rows.every((x) => (done.get(x.line.id) || 0) === x.returnable),
           });
           await w.put('invoices', r.invoice);
           for (const l of r.lines) await w.append('invoice_lines', l);

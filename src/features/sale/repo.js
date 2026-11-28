@@ -1,7 +1,14 @@
 // حفظ البيع والمرتجع والسلال المعلّقة على الجهاز. كل بيع معاملة واحدة: الفاتورة وسطورها والدفعات
 // وحركات المخزون وقيد دين الزبون — إما كلها أو لا شيء. رقم الفاتورة من عدّاد هذا الجهاز (A-0001…).
 import { buildSale, buildReturn, returnableLines, creditLeft, buildVoid, voidProblem } from '../../domain/cart.js';
+import { priorReturns } from '../../domain/tax.js';
 import { uuid } from '../../core/ids.js';
+
+/** هل يُكمل هذا المرتجع كل ما بقي من الفاتورة؟ */
+export function completesReturn(rows, picks) {
+  const q = new Map(picks.map((p) => [p.line.id, p.qty]));
+  return rows.every((r) => (q.get(r.line.id) || 0) === r.returnable);
+}
 
 export function createSaleRepo({ db, store, getContext, clock }) {
   async function nextSeq(type) {
@@ -145,12 +152,13 @@ export function createSaleRepo({ db, store, getContext, clock }) {
       const prev = [];
       for (const r of returns) prev.push(...(await db.invoice_lines.where('invoice_id').equals(r.id).toArray()));
       // creditLeft: ما بقي دينًا من هذه الفاتورة — المرتجع يُخصم منه أولًا (refund = 'auto')
-      return { invoice, lines, rows: returnableLines(lines, prev), creditLeft: invoice.customer_id ? creditLeft(invoice, returns) : 0 };
+      // prior: ما رُدّ في مرتجعاتها السابقة (لضريبة المرتجع التالي: تُحسب تراكميًا)
+      return { invoice, lines, rows: returnableLines(lines, prev), creditLeft: invoice.customer_id ? creditLeft(invoice, returns) : 0, prior: priorReturns(returns) };
     },
     /** picks: [{ line, qty }] ؛ refund: 'auto' (كما دُفعت: من الدين أولًا) | 'cash' | 'credit' */
     async processReturn(invoiceId, picks, refund) {
       const ctx = getContext();
-      const { invoice, lines, rows, creditLeft: left } = await repo.returnable(invoiceId);
+      const { invoice, lines, rows, creditLeft: left, prior } = await repo.returnable(invoiceId);
       for (const p of picks) {
         const row = rows.find((r) => r.line.id === p.line.id);
         if (!row || p.qty > row.returnable) throw new Error('الكمية أكبر مما يمكن إرجاعه');
@@ -160,7 +168,7 @@ export function createSaleRepo({ db, store, getContext, clock }) {
       return store.write(async (w) => {
         const seq = await nextSeq('sale_return');
         const r = buildReturn(invoice, lines, picks.map((p) => ({ line: lines.find((l) => l.id === p.line.id), qty: p.qty })), refund, {
-          newId: uuid, now: clock(), prefix: ctx.prefix || 'A', seq, cashSessionId, cashMethodId: cash?.id, deviceId: ctx.deviceId, creditLeft: left,
+          newId: uuid, now: clock(), prefix: ctx.prefix || 'A', seq, cashSessionId, cashMethodId: cash?.id, deviceId: ctx.deviceId, creditLeft: left, prior, completes: completesReturn(rows, picks),
         });
         await writeAll(w, r);
         return { invoice: r.invoice, total: r.total, credit: r.credit, cash: r.cash };

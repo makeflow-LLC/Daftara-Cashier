@@ -92,6 +92,9 @@ export async function renderPurchase(el, params) {
 
   function addProduct(product, pack = null) {
     const line = purchaseLine(product, { pack });
+    // تكلفة الصنف محفوظة قبل الضريبة؛ وفاتورة التاجر «شاملة الضريبة» تُكتب أسعارها بها: نقترح السعر الشامل حتى لا تُخصم الضريبة مرتين
+    const tx = taxConfig(app.shop?.settings);
+    if (tx && (localStorage.getItem('cashier-purchase-tax') || 'inclusive') === 'inclusive') line.unit_cost = Math.round((line.unit_cost * (10000 + tx.rate)) / 10000);
     const i = draft.lines.findIndex((l) => l.key === line.key);
     if (i >= 0) { editLine(i); return; }
     draft.lines = [...draft.lines, line];

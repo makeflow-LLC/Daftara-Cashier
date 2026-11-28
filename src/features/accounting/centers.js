@@ -121,9 +121,9 @@ export function renderCenters(el) {
       h('p', { class: 'muted small' }, 'مبيعات المركز من تصنيفات أصنافه بعد الخصم والضريبة، وتكلفته بضاعته المباعة والتالفة، ومصاريفه ما اخترته له عند تسجيلها. «بلا مركز»: كل ما لم يُنسب لمركز. اضغط المركز لتعديله.'));
   }
   function doExport(type) {
-    const rows = rep.rows.map((r) => [r.name, plain(r.sales), plain(r.cost), plain(r.expenses), plain(r.net)]);
-    rows.push(['المجموع', plain(rep.total.sales), plain(rep.total.cost), plain(rep.total.expenses), plain(rep.total.net)]);
-    exportSections({ type, title: 'مراكز التكلفة', sub: `${app.shop.name} — ${range.label}`, name: 'cost-centers', sections: [{ title: 'ربح كل مركز', head: ['المركز', 'المبيعات', 'التكلفة', 'المصاريف', 'الصافي'], rows }] });
+    const rows = rep.rows.map((r) => [r.name, plain(r.sales), plain(r.cost), plain(r.other), plain(r.expenses), plain(r.net)]);
+    rows.push(['المجموع', plain(rep.total.sales), plain(rep.total.cost), plain(rep.total.other), plain(rep.total.expenses), plain(rep.total.net)]);
+    exportSections({ type, title: 'مراكز التكلفة', sub: `${app.shop.name} — ${range.label}`, name: 'cost-centers', sections: [{ title: 'ربح كل مركز', head: ['المركز', 'المبيعات', 'التكلفة', 'إيرادات أخرى', 'المصاريف', 'الصافي'], rows }] });
   }
   load();
   const off = bus.on('data', load);

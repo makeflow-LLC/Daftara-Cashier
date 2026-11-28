@@ -44,7 +44,8 @@ export function renderAccounting(el) {
         p.chequesIn ? line('cheque', 'شيكات لك لم تُصرف', p.chequesIn, go('/accounting/cheques')) : null,
         books ? line('box', 'البضاعة بسعر التكلفة', p.inventory, app.can('purchases') ? go('/inventory') : null) : null,
         app.can('purchases') ? line('truck', 'عليك للتجار', p.payables, go('/suppliers'), p.payables > 0 ? 'owed' : '') : null,
-        p.chequesOut ? line('cheque', 'شيكات عليك لم تُصرف', p.chequesOut, go('/accounting/cheques?dir=out'), 'owed') : null),
+        p.chequesOut ? line('cheque', 'شيكات عليك لم تُصرف', p.chequesOut, go('/accounting/cheques?dir=out'), 'owed') : null,
+        p.tax ? line('receipt', p.tax > 0 ? 'ضريبة عليك للدائرة' : 'ضريبة لك عند الدائرة', Math.abs(p.tax), books ? go('/accounting/tax') : null, p.tax > 0 ? 'owed' : '') : null),
     );
     fill(tools,
       h('h2', { class: 'section-title' }, 'ماذا تريد أن تسجّل؟'),
@@ -72,7 +73,8 @@ export function renderAccounting(el) {
         tile('clipboard', 'قيود اليومية', 'violet', go('/accounting/journal')),
         tile('chart', 'قائمة الدخل والميزانية', 'amber', go('/accounting/statements')),
         tile('tag', 'مراكز التكلفة', 'teal', go('/accounting/centers')),
-        tile('receipt', 'تقرير الضريبة', 'pink', go('/accounting/tax'))) : null,
+        // تقرير الضريبة لمن يعمل بها فقط (الإعدادات ← الضريبة)
+        app.shop?.settings?.tax?.enabled ? tile('receipt', 'تقرير الضريبة', 'pink', go('/accounting/tax')) : null) : null,
     );
   }
 
